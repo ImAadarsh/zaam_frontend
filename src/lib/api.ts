@@ -34,6 +34,11 @@ export async function login(payload: { email: string; password: string }) {
   };
 }
 
+export async function getGoogleAuthUrl() {
+  const { data } = await axios.get(`${API_BASE}/api/iam/auth/google/url`);
+  return data as { authUrl: string };
+}
+
 function authHeaders() {
   const s = getSession();
   return { Authorization: `Bearer ${s?.accessToken ?? ''}` };
@@ -72,6 +77,10 @@ export async function createRole(payload: { organizationId: string; name: string
   const { data } = await axios.post(`${API_BASE}/api/iam/roles`, payload, { headers: authHeaders() });
   return data as { data: any };
 }
+export async function updateRole(id: string, payload: { name?: string; code?: string; permissions?: any }) {
+  const { data } = await axios.patch(`${API_BASE}/api/iam/roles/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
 export async function assignRole(payload: { userId: string; roleId: string; businessUnitId?: string; locationId?: string }) {
   const { data } = await axios.post(`${API_BASE}/api/iam/roles/assign`, payload, { headers: authHeaders() });
   return data as { data: any };
@@ -87,6 +96,44 @@ export async function createApiKey(payload: { organizationId: string; name: stri
 export async function listAuditLogs(limit = 50) {
   const { data } = await axios.get(`${API_BASE}/api/iam/audit-logs?limit=${limit}`, { headers: authHeaders() });
   return data as { data: any[] };
+}
+
+// ORGANIZATIONS
+export async function listOrganizations() {
+  const { data } = await axios.get(`${API_BASE}/api/iam/organizations`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getOrganization(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/iam/organizations/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createOrganization(payload: {
+  name: string;
+  legalName?: string;
+  taxId?: string;
+  registrationNumber?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  logoUrl?: string;
+  status?: 'active' | 'inactive' | 'suspended';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/iam/organizations`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateOrganization(id: string, payload: {
+  name?: string;
+  legalName?: string;
+  taxId?: string;
+  registrationNumber?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  logoUrl?: string;
+  status?: 'active' | 'inactive' | 'suspended';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/iam/organizations/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
 }
 
 // PROFILE
@@ -108,6 +155,13 @@ export async function changePassword(payload: { currentPassword: string; newPass
   const session = getSession();
   if (!session?.user?.id) throw new Error('No user session found');
   const { data } = await axios.patch(`${API_BASE}/api/iam/users/${session.user.id}/password`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function setPassword(payload: { password: string }) {
+  const session = getSession();
+  if (!session?.user?.id) throw new Error('No user session found');
+  const { data } = await axios.post(`${API_BASE}/api/iam/users/${session.user.id}/password`, payload, { headers: authHeaders() });
   return data as { data: any };
 }
 

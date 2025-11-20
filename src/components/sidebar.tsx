@@ -1,9 +1,9 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2 } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { clearSession } from '@/lib/auth';
+import { clearSession, getSession } from '@/lib/auth';
 import { useUI } from '@/lib/ui';
 import { useEffect } from 'react';
 
@@ -13,6 +13,13 @@ export function Sidebar() {
   const isIAM = root === 'iam';
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUI();
+  const session = getSession();
+  const userRoles = session?.user?.roles || [];
+  
+  // Helper to check if user has required roles
+  const hasRole = (requiredRoles: string[]) => {
+    return requiredRoles.some(role => userRoles.includes(role));
+  };
 
   function doLogout() {
     clearSession();
@@ -57,10 +64,17 @@ export function Sidebar() {
             <>
               <div className="mt-6 mb-2 text-[10px] uppercase tracking-widest font-semibold text-white/40 px-3">Identity & Access</div>
               <Item href="/iam/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/iam/dashboard'} />
-              <Item href="/iam/users" icon={<Users size={18} />} label="Users" active={pathname?.startsWith('/iam/users')} />
-              <Item href="/iam/roles" icon={<Shield size={18} />} label="Roles" active={pathname?.startsWith('/iam/roles')} />
-              <Item href="/iam/api-keys" icon={<KeySquare size={18} />} label="API Keys" active={pathname?.startsWith('/iam/api-keys')} />
-              <Item href="/iam/audit-logs" icon={<FileClock size={18} />} label="Audit Logs" active={pathname?.startsWith('/iam/audit-logs')} />
+              <Item href="/iam/organizations" icon={<Building2 size={18} />} label="Organizations" active={pathname?.startsWith('/iam/organizations')} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
+                <>
+                  <Item href="/iam/users" icon={<Users size={18} />} label="Users" active={pathname?.startsWith('/iam/users')} />
+                  <Item href="/iam/roles" icon={<Shield size={18} />} label="Roles" active={pathname?.startsWith('/iam/roles')} />
+                  <Item href="/iam/audit-logs" icon={<FileClock size={18} />} label="Audit Logs" active={pathname?.startsWith('/iam/audit-logs')} />
+                </>
+              )}
+              {hasRole(['SUPER_ADMIN']) && (
+                <Item href="/iam/api-keys" icon={<KeySquare size={18} />} label="API Keys" active={pathname?.startsWith('/iam/api-keys')} />
+              )}
             </>
           )}
         </nav>
@@ -108,10 +122,17 @@ export function Sidebar() {
                 <>
                   <div className="mt-6 mb-2 text-[10px] uppercase tracking-widest font-semibold text-white/40 px-3">Identity & Access</div>
                   <Item href="/iam/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/iam/dashboard'} />
-                  <Item href="/iam/users" icon={<Users size={18} />} label="Users" active={pathname?.startsWith('/iam/users')} />
-                  <Item href="/iam/roles" icon={<Shield size={18} />} label="Roles" active={pathname?.startsWith('/iam/roles')} />
-                  <Item href="/iam/api-keys" icon={<KeySquare size={18} />} label="API Keys" active={pathname?.startsWith('/iam/api-keys')} />
-                  <Item href="/iam/audit-logs" icon={<FileClock size={18} />} label="Audit Logs" active={pathname?.startsWith('/iam/audit-logs')} />
+                  <Item href="/iam/organizations" icon={<Building2 size={18} />} label="Organizations" active={pathname?.startsWith('/iam/organizations')} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
+                    <>
+                      <Item href="/iam/users" icon={<Users size={18} />} label="Users" active={pathname?.startsWith('/iam/users')} />
+                      <Item href="/iam/roles" icon={<Shield size={18} />} label="Roles" active={pathname?.startsWith('/iam/roles')} />
+                      <Item href="/iam/audit-logs" icon={<FileClock size={18} />} label="Audit Logs" active={pathname?.startsWith('/iam/audit-logs')} />
+                    </>
+                  )}
+                  {hasRole(['SUPER_ADMIN']) && (
+                    <Item href="/iam/api-keys" icon={<KeySquare size={18} />} label="API Keys" active={pathname?.startsWith('/iam/api-keys')} />
+                  )}
                 </>
               )}
             </nav>

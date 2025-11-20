@@ -3,12 +3,13 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listRoles, createRole, assignRole, listUsers } from '@/lib/api';
+import { listRoles, createRole, assignRole, listUsers, updateRole } from '@/lib/api';
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
+import { useRoleCheck } from '@/hooks/use-role-check';
 import { RichDataTable } from '@/components/rich-data-table';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, UserPlus } from 'lucide-react';
+import { Plus, UserPlus, Settings, Check } from 'lucide-react';
 
 type Role = {
   id: string;
@@ -20,16 +21,20 @@ type Role = {
 export default function RolesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN']);
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
+  const [showPermissions, setShowPermissions] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [createForm, setCreateForm] = useState({ name: '', code: '' });
   const [assignForm, setAssignForm] = useState({ userId: '', roleId: '' });
+  const [pagePermissions, setPagePermissions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !hasAccess) return;
     if (!session?.accessToken) {
       router.replace('/login');
       return;
@@ -45,7 +50,7 @@ export default function RolesPage() {
         setLoading(false);
       }
     })();
-  }, [hydrated, router, session?.accessToken]);
+  }, [hydrated, hasAccess, router, session?.accessToken]);
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -77,6 +82,50 @@ export default function RolesPage() {
     }
   }
 
+  // IAM Pages configuration
+  const iamPages = [
+    { path: '/iam/dashboard', label: 'Dashboard (Overview)', key: 'iam.dashboard' },
+    { path: '/iam/users', label: 'Users', key: 'iam.users' },
+    { path: '/iam/roles', label: 'Roles', key: 'iam.roles' },
+    { path: '/iam/audit-logs', label: 'Audit Logs', key: 'iam.audit-logs' },
+    { path: '/iam/api-keys', label: 'API Keys', key: 'iam.api-keys' },
+  ];
+
+  function openPermissionsEditor(role: Role) {
+    setSelectedRole(role);
+    // Load existing permissions from role.permissions
+    const permissions = role.permissions || {};
+    const pages: Record<string, boolean> = {};
+    iamPages.forEach(page => {
+      pages[page.key] = permissions.pages?.includes(page.key) || false;
+    });
+    setPagePermissions(pages);
+    setShowPermissions(true);
+  }
+
+  async function savePermissions() {
+    if (!selectedRole) return;
+    try {
+      const pageKeys = Object.entries(pagePermissions)
+        .filter(([_, enabled]) => enabled)
+        .map(([key, _]) => key);
+      
+      const permissions = {
+        ...(selectedRole.permissions || {}),
+        pages: pageKeys
+      };
+      
+      await updateRole(selectedRole.id, { permissions });
+      // Update local state
+      setRoles(roles.map(r => r.id === selectedRole.id ? { ...r, permissions } : r));
+      setShowPermissions(false);
+      setSelectedRole(null);
+      toast.success('Permissions updated');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message ?? 'Failed to update permissions');
+    }
+  }
+
   const columns = useMemo<ColumnDef<Role>[]>(() => [
     {
       accessorKey: 'code',
@@ -88,9 +137,25 @@ export default function RolesPage() {
       header: 'Name',
       cell: (info) => <span className="font-medium">{info.getValue() as string}</span>,
     },
+    {
+      id: 'actions',
+      header: 'Actions',
+      cell: (info) => {
+        const role = info.row.original;
+        return (
+          <button
+            onClick={() => openPermissionsEditor(role)}
+            className="btn btn-outline btn-sm flex items-center gap-2"
+          >
+            <Settings size={14} />
+            Edit Pages
+          </button>
+        );
+      },
+    },
   ], []);
 
-  if (!hydrated || !session?.accessToken) return null;
+  if (!hydrated || !hasAccess || !session?.accessToken) return null;
 
   return (
     <div className="min-h-screen app-surface">
@@ -181,6 +246,81 @@ export default function RolesPage() {
                     <button type="submit" className="btn btn-primary">Assign Role</button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {showPermissions && selectedRole && (
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="w-full max-w-2xl rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-semibold">Edit Page Permissions</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Role: <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{selectedRole.code}</span> - {selectedRole.name}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowPermissions(false);
+                      setSelectedRole(null);
+                      setPagePermissions({});
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    ×
+                  </button>
+                </div>
+                
+                <div className="space-y-3 mb-6">
+                  <p className="text-sm text-muted-foreground mb-4">Select which pages this role can access:</p>
+                  {iamPages.map((page) => (
+                    <label
+                      key={page.key}
+                      className="flex items-center gap-3 p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group"
+                    >
+                      <div className="relative flex items-center justify-center w-5 h-5">
+                        <input
+                          type="checkbox"
+                          checked={pagePermissions[page.key] || false}
+                          onChange={(e) => {
+                            setPagePermissions({
+                              ...pagePermissions,
+                              [page.key]: e.target.checked
+                            });
+                          }}
+                          className="w-5 h-5 rounded border-2 border-border checked:bg-primary checked:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                        />
+                        {pagePermissions[page.key] && (
+                          <Check size={14} className="absolute text-white pointer-events-none" strokeWidth={3} />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{page.label}</div>
+                        <div className="text-xs text-muted-foreground font-mono">{page.path}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => {
+                      setShowPermissions(false);
+                      setSelectedRole(null);
+                      setPagePermissions({});
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={savePermissions}
+                  >
+                    Save Permissions
+                  </button>
+                </div>
               </div>
             </div>
           )}

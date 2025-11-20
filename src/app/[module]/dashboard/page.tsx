@@ -43,7 +43,7 @@ export default function ModuleDashboardPage() {
           const [usersRes, rolesRes, auditRes] = await Promise.all([
             listUsers(),
             listRoles(),
-            listAuditLogs().catch(() => ({ data: [] }))
+            listAuditLogs(200).catch(() => ({ data: [] })) // Fetch more logs for better weekly data
           ]);
 
           const users = usersRes.data || [];
@@ -63,13 +63,77 @@ export default function ModuleDashboardPage() {
             auditLogs: audits.length
           });
 
-          // Generate user growth data (last 6 months)
-          const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          const userGrowth = months.map((month, index) => ({
-            month,
-            users: Math.floor(users.length * (0.5 + (index * 0.1))),
-            active: Math.floor(users.length * (0.4 + (index * 0.1)))
-          }));
+          // Generate user growth data (last 6 months) - Based on actual user creation dates if available
+          const now = new Date();
+          const last6Months = Array.from({ length: 6 }, (_, i) => {
+            const date = new Date(now);
+            date.setMonth(date.getMonth() - (5 - i));
+            date.setDate(1); // Start of month
+            date.setHours(0, 0, 0, 0);
+            return date;
+          });
+
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const userGrowth = last6Months.map(date => {
+            const monthName = monthNames[date.getMonth()];
+            const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+            monthStart.setHours(0, 0, 0, 0);
+            const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+            monthEnd.setHours(23, 59, 59, 999);
+
+            // Count users created in this month (not cumulative)
+            const usersInMonth = users.filter((u: any) => {
+              const dateValue = u.createdAt || u.created_at;
+              if (!dateValue) return false;
+              
+              try {
+                const userDate = new Date(dateValue);
+                if (isNaN(userDate.getTime())) return false;
+                
+                // Normalize to start of day for comparison
+                const normalizedUserDate = new Date(userDate);
+                normalizedUserDate.setHours(0, 0, 0, 0);
+                const normalizedMonthStart = new Date(monthStart);
+                normalizedMonthStart.setHours(0, 0, 0, 0);
+                const normalizedMonthEnd = new Date(monthEnd);
+                normalizedMonthEnd.setHours(23, 59, 59, 999);
+                
+                return normalizedUserDate >= normalizedMonthStart && normalizedUserDate <= normalizedMonthEnd;
+              } catch {
+                return false;
+              }
+            }).length;
+
+            // Count active users created in this month
+            const activeInMonth = users.filter((u: any) => {
+              const dateValue = u.createdAt || u.created_at;
+              if (!dateValue) return false;
+              
+              try {
+                const userDate = new Date(dateValue);
+                if (isNaN(userDate.getTime())) return false;
+                
+                const normalizedUserDate = new Date(userDate);
+                normalizedUserDate.setHours(0, 0, 0, 0);
+                const normalizedMonthStart = new Date(monthStart);
+                normalizedMonthStart.setHours(0, 0, 0, 0);
+                const normalizedMonthEnd = new Date(monthEnd);
+                normalizedMonthEnd.setHours(23, 59, 59, 999);
+                
+                return normalizedUserDate >= normalizedMonthStart && 
+                       normalizedUserDate <= normalizedMonthEnd && 
+                       (u.status === 'active' || u.status === undefined);
+              } catch {
+                return false;
+              }
+            }).length;
+
+            return {
+              month: monthName,
+              users: usersInMonth,
+              active: activeInMonth
+            };
+          });
 
           // Users by role distribution
           const roleCount: any = {};
@@ -82,13 +146,65 @@ export default function ModuleDashboardPage() {
             value
           }));
 
-          // Activity by day (last 7 days)
-          const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-          const activityByDay = days.map(day => ({
-            day,
-            logins: Math.floor(Math.random() * 50) + 20,
-            actions: Math.floor(Math.random() * 100) + 50
-          }));
+          // Activity by day (last 7 days) - Real data from audit logs
+          const last7Days = Array.from({ length: 7 }, (_, i) => {
+            const date = new Date(now);
+            date.setDate(date.getDate() - (6 - i));
+            date.setHours(0, 0, 0, 0); // Start of day
+            return date;
+          });
+
+          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const activityByDay = last7Days.map(date => {
+            const dayName = dayNames[date.getDay()];
+            const dateStr = date.toISOString().split('T')[0];
+            
+            // Set start and end of day for comparison
+            const dayStart = new Date(date);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(date);
+            dayEnd.setHours(23, 59, 59, 999);
+            
+            // Filter audit logs for this day (handle both createdAt and created_at)
+            const dayLogs = audits.filter((log: any) => {
+              const logDateValue = log.createdAt || log.created_at;
+              if (!logDateValue) return false;
+              
+              try {
+                const logDate = new Date(logDateValue);
+                if (isNaN(logDate.getTime())) return false;
+                
+                // Normalize log date to start of day for comparison
+                const normalizedLogDate = new Date(logDate);
+                
+                // Check if log is within this day (00:00:00 to 23:59:59)
+                return normalizedLogDate >= dayStart && normalizedLogDate <= dayEnd;
+              } catch {
+                return false;
+              }
+            });
+
+            // Count logins (auth.login, auth.google actions)
+            const logins = dayLogs.filter((log: any) => {
+              const action = log.action || '';
+              return action.includes('auth.login') || action.includes('auth.google') || action.includes('auth.googleCallback');
+            }).length;
+
+            // Count other actions (all non-login actions)
+            const actions = dayLogs.filter((log: any) => {
+              const action = log.action || '';
+              return !action.includes('auth.login') && 
+                     !action.includes('auth.google') && 
+                     !action.includes('auth.googleCallback');
+            }).length;
+
+            return {
+              day: dayName,
+              date: dateStr,
+              logins,
+              actions
+            };
+          });
 
           // Status distribution
           const statusCount: any = {};
@@ -101,11 +217,21 @@ export default function ModuleDashboardPage() {
             value
           }));
 
+          // Ensure we always have data for charts (prevent empty arrays that break rendering)
           setChartData({
-            userGrowth,
-            usersByRole,
-            activityByDay,
-            statusDistribution
+            userGrowth: userGrowth.length > 0 ? userGrowth : last6Months.map((date, i) => ({
+              month: monthNames[date.getMonth()],
+              users: 0,
+              active: 0
+            })),
+            usersByRole: usersByRole.length > 0 ? usersByRole : [{ name: 'No Data', value: 0 }],
+            activityByDay: activityByDay.length > 0 ? activityByDay : last7Days.map((date, i) => ({
+              day: dayNames[date.getDay()],
+              date: date.toISOString().split('T')[0],
+              logins: 0,
+              actions: 0
+            })),
+            statusDistribution: statusDistribution.length > 0 ? statusDistribution : [{ name: 'No Data', value: 0 }]
           });
 
         } catch (error) {

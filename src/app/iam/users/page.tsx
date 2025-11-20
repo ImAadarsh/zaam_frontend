@@ -7,6 +7,7 @@ import { listUsers, createUser, updateUser, deleteUser } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
+import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal, Pencil, Trash2, Plus } from 'lucide-react';
 
@@ -24,6 +25,7 @@ type User = {
 export default function UsersPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN']);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<User[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -32,7 +34,7 @@ export default function UsersPage() {
   const [confirmDel, setConfirmDel] = useState<User | null>(null);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !hasAccess) return;
     if (!session?.accessToken) {
       router.replace('/login');
       return;
@@ -41,13 +43,21 @@ export default function UsersPage() {
       try {
         const res = await listUsers();
         setItems(res.data);
-      } catch {
-        toast.error('Failed to load users');
+      } catch (e: any) {
+        const status = e?.response?.status;
+        if (status === 403) {
+          toast.error('You do not have permission to view users. Please contact an administrator.');
+        } else if (status === 401) {
+          toast.error('Session expired. Please login again.');
+          router.replace('/login');
+        } else {
+          toast.error('Failed to load users');
+        }
       } finally {
         setLoading(false);
       }
     })();
-  }, [hydrated, router, session?.accessToken]);
+  }, [hydrated, hasAccess, router, session?.accessToken]);
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -131,7 +141,7 @@ export default function UsersPage() {
     },
   ], []);
 
-  if (!hydrated || !session?.accessToken) return null;
+  if (!hydrated || !hasAccess || !session?.accessToken) return null;
 
   return (
     <div className="min-h-screen app-surface">

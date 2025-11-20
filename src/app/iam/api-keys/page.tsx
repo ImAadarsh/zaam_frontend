@@ -6,16 +6,18 @@ import { Header } from '@/components/header';
 import { createApiKey } from '@/lib/api';
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
+import { useRoleCheck } from '@/hooks/use-role-check';
 
 export default function ApiKeysPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
+  const { hasAccess } = useRoleCheck(['SUPER_ADMIN']);
   const [created, setCreated] = useState<{ name: string; key: string; keyPrefix: string } | null>(null);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !hasAccess) return;
     if (!session?.accessToken) router.replace('/login');
-  }, [hydrated, router, session?.accessToken]);
+  }, [hydrated, hasAccess, router, session?.accessToken]);
 
   async function onCreate() {
     if (!session) return;
@@ -29,7 +31,7 @@ export default function ApiKeysPage() {
     }
   }
 
-  if (!hydrated || !session?.accessToken) return null;
+  if (!hydrated || !hasAccess || !session?.accessToken) return null;
 
   return (
     <div className="min-h-screen app-surface">
