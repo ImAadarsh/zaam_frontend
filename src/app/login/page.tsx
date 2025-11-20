@@ -18,7 +18,7 @@ export default function LoginPage() {
     try {
       const res = await login({ email, password });
       setSession(res.accessToken, res.refreshToken, res.user);
-      router.replace('/dashboard');
+      router.replace('/modules');
     } catch (e: any) {
       const message =
         e?.response?.data?.error?.message ??
@@ -116,7 +116,7 @@ export default function LoginPage() {
             </button>
           </form>
           <p className="text-xs text-zaam-grey mt-6 text-center">
-            Tip: Use the email admin@zaam.co.uk and password 1@zaamZaam to login.
+            Tip: Use the email: <b>admin@zaam.co.uk</b> <br /> and password: <b>ChangeMe!123</b> to login.
           </p>
         </div>
       </div>

@@ -89,4 +89,26 @@ export async function listAuditLogs(limit = 50) {
   return data as { data: any[] };
 }
 
+// PROFILE
+export async function getCurrentUser() {
+  const session = getSession();
+  if (!session?.user?.id) throw new Error('No user session found');
+  const { data } = await axios.get(`${API_BASE}/api/iam/users/${session.user.id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCurrentUser(payload: Partial<{ email: string; username: string | null; firstName: string | null; lastName: string | null }>) {
+  const session = getSession();
+  if (!session?.user?.id) throw new Error('No user session found');
+  const { data } = await axios.patch(`${API_BASE}/api/iam/users/${session.user.id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function changePassword(payload: { currentPassword: string; newPassword: string }) {
+  const session = getSession();
+  if (!session?.user?.id) throw new Error('No user session found');
+  const { data } = await axios.patch(`${API_BASE}/api/iam/users/${session.user.id}/password`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
 

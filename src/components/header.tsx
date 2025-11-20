@@ -1,8 +1,10 @@
-import { Sun, MoonStar, Menu, ChevronDown, Sparkles } from 'lucide-react';
+import { Sun, MoonStar, Menu, ChevronDown, Sparkles, User, LogOut } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import Image from 'next/image';
 import { useUI } from '@/lib/ui';
 import { useState } from 'react';
+import { getSession, clearSession } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
 
 export type HeaderAction = {
   label: string;
@@ -14,6 +16,14 @@ export function Header({ title, actions }: { title: string; actions?: HeaderActi
   const { theme, setTheme } = useTheme();
   const { toggleSidebar } = useUI();
   const [showActions, setShowActions] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const router = useRouter();
+  const session = getSession();
+
+  const handleLogout = () => {
+    clearSession();
+    router.replace('/login');
+  };
 
   return (
     <header className="sticky top-0 z-20 h-16 backdrop-blur-xl bg-white/70 dark:bg-[#0f0f0f]/70 border-b border-border/50 flex items-center justify-between px-4 md:px-6 shadow-sm transition-all duration-300">
@@ -63,14 +73,74 @@ export function Header({ title, actions }: { title: string; actions?: HeaderActi
             )}
           </div>
         )}
-        <button
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          aria-label="Toggle theme"
-        >
-          <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-amber-500" />
-          <MoonStar className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-indigo-400" />
-        </button>
+
+        {/* User Menu */}
+        <div className="relative">
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label="User menu"
+          >
+            <User className="h-[1.2rem] w-[1.2rem]" />
+          </button>
+          {showUserMenu && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setShowUserMenu(false)} />
+              <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-xl z-40 py-2 animate-in fade-in zoom-in-95">
+                <div className="px-4 py-3 border-b border-border">
+                  <div className="text-sm font-medium text-foreground">
+                    {session?.user?.firstName || session?.user?.email?.split('@')[0] || 'User'}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {session?.user?.email}
+                  </div>
+                </div>
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      router.push('/profile');
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
+                  >
+                    <User size={16} />
+                    View Profile
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTheme(theme === 'dark' ? 'light' : 'dark');
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
+                  >
+                    {theme === 'dark' ? (
+                      <>
+                        <Sun size={16} className="text-amber-500" />
+                        Light Mode
+                      </>
+                    ) : (
+                      <>
+                        <MoonStar size={16} className="text-indigo-400" />
+                        Dark Mode
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="border-t border-border pt-1">
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      handleLogout();
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors flex items-center gap-2 text-red-600 dark:text-red-400"
+                  >
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </header>
   );

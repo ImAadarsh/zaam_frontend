@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -66,6 +66,13 @@ export function Sidebar() {
         </nav>
         <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
           <Link
+            href="/profile"
+            className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-white/60 hover:text-white hover:bg-white/5 transition-all duration-200"
+          >
+            <User size={18} className="group-hover:text-primary transition-colors" />
+            <span className="font-medium text-sm">Profile</span>
+          </Link>
+          <Link
             href="/modules"
             className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-white/60 hover:text-white hover:bg-white/5 transition-all duration-200"
           >
@@ -109,6 +116,13 @@ export function Sidebar() {
               )}
             </nav>
             <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
+              <Link
+                href="/profile"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-white/60 hover:text-white hover:bg-white/5 transition"
+              >
+                <User size={18} />
+                <span className="font-medium">Profile</span>
+              </Link>
               <Link
                 href="/modules"
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-white/60 hover:text-white hover:bg-white/5 transition"
