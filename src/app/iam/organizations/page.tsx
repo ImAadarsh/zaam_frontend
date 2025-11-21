@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listOrganizations, createOrganization, updateOrganization, getCurrentUser } from '@/lib/api';
+import { listOrganizations, createOrganization, updateOrganization, createOrganizationWithLogo, getCurrentUser } from '@/lib/api';
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
 import { Plus, Building2, Edit2, Save, X } from 'lucide-react';
@@ -31,6 +31,8 @@ export default function OrganizationsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Organization>>({});
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
@@ -73,27 +75,60 @@ export default function OrganizationsPage() {
       logoUrl: org.logoUrl || '',
       status: org.status
     });
+    setLogoFile(null);
+    setLogoPreview(org.logoUrl || null);
   }
 
   function cancelEdit() {
     setEditingId(null);
     setFormData({});
+    setLogoFile(null);
+    setLogoPreview(null);
+  }
+
+  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Invalid file type. Please upload an image (JPEG, PNG, WebP, or SVG)');
+        return;
+      }
+      
+      // Validate file size (2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('File size must be less than 2MB');
+        return;
+      }
+
+      setLogoFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   }
 
   async function handleSave(id: string | null) {
     try {
       if (id) {
         // Update existing
-        await updateOrganization(id, formData);
+        const res = await updateOrganization(id, formData, logoFile || undefined);
         toast.success('Organization updated');
-        setOrganizations(orgs => orgs.map(o => o.id === id ? { ...o, ...formData } : o));
+        setOrganizations(orgs => orgs.map(o => o.id === id ? res.data : o));
       } else {
         // Create new
-        const res = await createOrganization(formData as any);
+        const res = await createOrganization(formData as any, logoFile || undefined);
         setOrganizations([res.data, ...organizations]);
         toast.success('Organization created');
         setShowCreate(false);
         setFormData({});
+        setLogoFile(null);
+        setLogoPreview(null);
       }
       cancelEdit();
     } catch (e: any) {
@@ -117,7 +152,12 @@ export default function OrganizationsPage() {
           title="IAM · Organizations"
           actions={
             isSuperAdmin
-              ? [{ label: 'New Organization', onClick: () => { setShowCreate(true); setFormData({ status: 'active' }); }, icon: <Plus size={16} /> }]
+              ? [{ label: 'New Organization', onClick: () => { 
+                  setShowCreate(true); 
+                  setFormData({ status: 'active' }); 
+                  setLogoFile(null);
+                  setLogoPreview(null);
+                }, icon: <Plus size={16} /> }]
               : []
           }
         />
@@ -130,7 +170,12 @@ export default function OrganizationsPage() {
               </p>
             </div>
             {isSuperAdmin && (
-              <button className="btn btn-primary" onClick={() => { setShowCreate(true); setFormData({ status: 'active' }); }}>
+              <button className="btn btn-primary" onClick={() => { 
+                setShowCreate(true); 
+                setFormData({ status: 'active' }); 
+                setLogoFile(null);
+                setLogoPreview(null);
+              }}>
                 <Plus size={16} className="mr-2" />
                 New Organization
               </button>
@@ -216,14 +261,30 @@ export default function OrganizationsPage() {
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                           />
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1.5">Logo URL</label>
-                          <input
-                            className="input"
-                            type="url"
-                            value={formData.logoUrl || ''}
-                            onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
-                          />
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium mb-1.5">Logo</label>
+                          <div className="flex items-center gap-4">
+                            {(logoPreview || formData.logoUrl) && (
+                              <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-border bg-muted">
+                                <img
+                                  src={logoPreview || formData.logoUrl || ''}
+                                  alt="Logo preview"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                                onChange={handleLogoChange}
+                                className="input"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Upload a logo (JPEG, PNG, WebP, or SVG). Max 2MB.
+                              </p>
+                            </div>
+                          </div>
                         </div>
                         {isSuperAdmin && (
                           <div>
@@ -252,7 +313,16 @@ export default function OrganizationsPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-4">
+                      {org.logoUrl && (
+                        <div className="w-16 h-16 rounded-lg overflow-hidden border border-border bg-muted flex-shrink-0">
+                          <img
+                            src={org.logoUrl}
+                            alt={`${org.name} logo`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-lg font-semibold">{org.name}</h3>
@@ -355,14 +425,30 @@ export default function OrganizationsPage() {
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Logo URL</label>
-                      <input
-                        className="input"
-                        type="url"
-                        value={formData.logoUrl || ''}
-                        onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
-                      />
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Logo</label>
+                      <div className="flex items-center gap-4">
+                        {logoPreview && (
+                          <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-border bg-muted">
+                            <img
+                              src={logoPreview}
+                              alt="Logo preview"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                            onChange={handleLogoChange}
+                            className="input"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Upload a logo (JPEG, PNG, WebP, or SVG). Max 2MB.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Status</label>

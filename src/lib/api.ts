@@ -53,7 +53,7 @@ export async function getUser(id: string) {
   const { data } = await axios.get(`${API_BASE}/api/iam/users/${id}`, { headers: authHeaders() });
   return data as { data: any };
 }
-export async function createUser(payload: { organizationId: string; email: string; username?: string; firstName?: string; lastName?: string; status?: string }) {
+export async function createUser(payload: { organizationId: string; email: string; username?: string; firstName?: string; lastName?: string; password?: string; roleId: string; status?: string }) {
   const { data } = await axios.post(`${API_BASE}/api/iam/users`, payload, { headers: authHeaders() });
   return data as { data: any };
 }
@@ -117,7 +117,10 @@ export async function createOrganization(payload: {
   email?: string;
   logoUrl?: string;
   status?: 'active' | 'inactive' | 'suspended';
-}) {
+}, logoFile?: File) {
+  if (logoFile) {
+    return createOrganizationWithLogo(payload, logoFile);
+  }
   const { data } = await axios.post(`${API_BASE}/api/iam/organizations`, payload, { headers: authHeaders() });
   return data as { data: any };
 }
@@ -131,8 +134,62 @@ export async function updateOrganization(id: string, payload: {
   email?: string;
   logoUrl?: string;
   status?: 'active' | 'inactive' | 'suspended';
-}) {
-  const { data } = await axios.patch(`${API_BASE}/api/iam/organizations/${id}`, payload, { headers: authHeaders() });
+}, logoFile?: File) {
+  const formData = new FormData();
+  
+  // Add logo file if provided
+  if (logoFile) {
+    formData.append('logo', logoFile);
+  }
+  
+  // Add other fields as JSON string (or append individually)
+  Object.keys(payload).forEach(key => {
+    const value = payload[key as keyof typeof payload];
+    if (value !== undefined && value !== null) {
+      formData.append(key, value.toString());
+    }
+  });
+
+  const { data } = await axios.patch(`${API_BASE}/api/iam/organizations/${id}`, formData, {
+    headers: {
+      ...authHeaders(),
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  return data as { data: any };
+}
+
+export async function createOrganizationWithLogo(payload: {
+  name: string;
+  legalName?: string;
+  taxId?: string;
+  registrationNumber?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  status?: 'active' | 'inactive' | 'suspended';
+}, logoFile?: File) {
+  const formData = new FormData();
+  
+  // Add logo file if provided
+  if (logoFile) {
+    formData.append('logo', logoFile);
+  }
+  
+  // Add other fields
+  Object.keys(payload).forEach(key => {
+    const value = payload[key as keyof typeof payload];
+    if (value !== undefined && value !== null) {
+      formData.append(key, value.toString());
+    }
+  });
+
+  const { data } = await axios.post(`${API_BASE}/api/iam/organizations`, formData, {
+    headers: {
+      ...authHeaders(),
+      'Content-Type': 'multipart/form-data'
+    }
+  });
   return data as { data: any };
 }
 

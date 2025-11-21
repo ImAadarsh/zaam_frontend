@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listUsers, createUser, updateUser, deleteUser } from '@/lib/api';
+import { listUsers, createUser, updateUser, deleteUser, listOrganizations, listRoles } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
@@ -19,6 +19,18 @@ type User = {
   lastName?: string;
   status: 'active' | 'inactive' | 'suspended' | 'locked';
   organizationId: string;
+  organization?: {
+    id: string;
+    name: string;
+  };
+  roleAssignments?: Array<{
+    id: string;
+    role: {
+      id: string;
+      name: string;
+      code: string;
+    };
+  }>;
   [key: string]: any;
 };
 
@@ -29,7 +41,17 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<User[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ email: '', username: '', firstName: '', lastName: '' });
+  const [form, setForm] = useState({ 
+    email: '', 
+    username: '', 
+    firstName: '', 
+    lastName: '', 
+    organizationId: '',
+    roleId: '',
+    password: '1@Zaam-ERP'
+  });
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
   const [editing, setEditing] = useState<User | null>(null);
   const [confirmDel, setConfirmDel] = useState<User | null>(null);
 
@@ -41,8 +63,19 @@ export default function UsersPage() {
     }
     (async () => {
       try {
-        const res = await listUsers();
-        setItems(res.data);
+        const [usersRes, orgsRes, rolesRes] = await Promise.all([
+          listUsers(),
+          listOrganizations(),
+          listRoles()
+        ]);
+        setItems(usersRes.data);
+        setOrganizations(orgsRes.data || []);
+        setRoles(rolesRes.data || []);
+        
+        // Set default organization to current user's organization
+        if (session?.user?.organizationId) {
+          setForm(prev => ({ ...prev, organizationId: session.user.organizationId }));
+        }
       } catch (e: any) {
         const status = e?.response?.status;
         if (status === 403) {
@@ -57,23 +90,37 @@ export default function UsersPage() {
         setLoading(false);
       }
     })();
-  }, [hydrated, hasAccess, router, session?.accessToken]);
+  }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!session) return;
+    if (!form.organizationId || !form.roleId) {
+      toast.error('Please select organization and role');
+      return;
+    }
     try {
       const res = await createUser({
-        organizationId: session.user.organizationId,
+        organizationId: form.organizationId,
+        roleId: form.roleId,
         email: form.email,
         username: form.username || undefined,
         firstName: form.firstName || undefined,
         lastName: form.lastName || undefined,
+        password: form.password && form.password.trim() ? form.password : undefined, // Use default if empty
         status: 'active'
       });
       setItems([res.data, ...items]);
       setShowCreate(false);
-      setForm({ email: '', username: '', firstName: '', lastName: '' });
+      setForm({ 
+        email: '', 
+        username: '', 
+        firstName: '', 
+        lastName: '',
+        organizationId: session.user.organizationId,
+        roleId: '',
+        password: '1@Zaam-ERP'
+      });
       toast.success('User created');
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message ?? 'Create failed');
@@ -96,6 +143,42 @@ export default function UsersPage() {
       header: 'Name',
       accessorFn: (row) => [row.firstName, row.lastName].filter(Boolean).join(' '),
       cell: (info) => info.getValue() || <span className="text-muted-foreground italic">-</span>,
+    },
+    {
+      id: 'organization',
+      header: 'Organization',
+      accessorFn: (row) => row.organization?.name || '-',
+      cell: (info) => {
+        const org = info.row.original.organization;
+        return org ? (
+          <span className="font-medium">{org.name}</span>
+        ) : (
+          <span className="text-muted-foreground italic">-</span>
+        );
+      },
+    },
+    {
+      id: 'roles',
+      header: 'Roles',
+      accessorFn: (row) => row.roleAssignments?.map((ra: any) => ra.role?.name || ra.role?.code).join(', ') || '-',
+      cell: (info) => {
+        const roles = info.row.original.roleAssignments;
+        if (!roles || roles.length === 0) {
+          return <span className="text-muted-foreground italic">-</span>;
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {roles.map((ra: any, idx: number) => (
+              <span
+                key={idx}
+                className="px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+              >
+                {ra.role?.name || ra.role?.code || 'Unknown'}
+              </span>
+            ))}
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'status',
@@ -183,7 +266,33 @@ export default function UsersPage() {
                 <form onSubmit={onCreate} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
-                      <label className="block text-sm font-medium mb-1.5">Email</label>
+                      <label className="block text-sm font-medium mb-1.5">Organization *</label>
+                      <select 
+                        className="select" 
+                        required
+                        value={form.organizationId} 
+                        onChange={(e) => setForm({ ...form, organizationId: e.target.value })}>
+                        <option value="">Select organization</option>
+                        {organizations.map((org) => (
+                          <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Role *</label>
+                      <select 
+                        className="select" 
+                        required
+                        value={form.roleId} 
+                        onChange={(e) => setForm({ ...form, roleId: e.target.value })}>
+                        <option value="">Select role</option>
+                        {roles.map((role) => (
+                          <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Email *</label>
                       <input className="input" type="email" required
                         value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                     </div>
@@ -202,9 +311,39 @@ export default function UsersPage() {
                       <input className="input"
                         value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
                     </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Password</label>
+                      <input 
+                        className="input" 
+                        type="password"
+                        value={form.password} 
+                        onChange={(e) => setForm({ ...form, password: e.target.value })} 
+                        placeholder="1@Zaam-ERP"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Default password: 1@Zaam-ERP (leave empty to use default)
+                      </p>
+                    </div>
                   </div>
                   <div className="flex justify-end gap-3 pt-4">
-                    <button type="button" className="btn btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
+                    <button 
+                      type="button" 
+                      className="btn btn-outline" 
+                      onClick={() => {
+                        setShowCreate(false);
+                        setForm({ 
+                          email: '', 
+                          username: '', 
+                          firstName: '', 
+                          lastName: '',
+                          organizationId: session?.user?.organizationId || '',
+                          roleId: '',
+                          password: '1@Zaam-ERP'
+                        });
+                      }}
+                    >
+                      Cancel
+                    </button>
                     <button type="submit" className="btn btn-primary">Create User</button>
                   </div>
                 </form>
