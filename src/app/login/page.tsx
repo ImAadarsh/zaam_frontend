@@ -1,12 +1,12 @@
 'use client';
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { login, getGoogleAuthUrl } from '@/lib/api';
 import { setSession } from '@/lib/auth';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
@@ -68,9 +68,9 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-zaam-black via-zaam-charcoal to-black" />
         {/* Gold radial glow */}
         <div className="pointer-events-none absolute -top-24 -left-24 h-[420px] w-[420px] rounded-full opacity-30"
-             style={{ background: 'radial-gradient(closest-side, #D4A017, transparent)' }} />
+          style={{ background: 'radial-gradient(closest-side, #D4A017, transparent)' }} />
         <div className="pointer-events-none absolute -bottom-24 -right-24 h-[520px] w-[520px] rounded-full opacity-20"
-             style={{ background: 'radial-gradient(closest-side, #D4A017, transparent)' }} />
+          style={{ background: 'radial-gradient(closest-side, #D4A017, transparent)' }} />
         {/* Brand mark with blend to hide white bg of JPEG */}
         <div className="relative z-10 text-center px-10">
           <div className="mx-auto mb-6">
@@ -144,7 +144,7 @@ export default function LoginPage() {
               {loading ? 'Signing in...' : 'Login'}
             </button>
           </form>
-          
+
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border"></div>
@@ -195,6 +195,18 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }
 

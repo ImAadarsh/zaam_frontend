@@ -109,13 +109,13 @@ export async function getOrganization(id: string) {
 }
 export async function createOrganization(payload: {
   name: string;
-  legalName?: string;
-  taxId?: string;
-  registrationNumber?: string;
-  website?: string;
-  phone?: string;
-  email?: string;
-  logoUrl?: string;
+  legalName?: string | null;
+  taxId?: string | null;
+  registrationNumber?: string | null;
+  website?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  logoUrl?: string | null;
   status?: 'active' | 'inactive' | 'suspended';
 }, logoFile?: File) {
   if (logoFile) {
@@ -126,22 +126,22 @@ export async function createOrganization(payload: {
 }
 export async function updateOrganization(id: string, payload: {
   name?: string;
-  legalName?: string;
-  taxId?: string;
-  registrationNumber?: string;
-  website?: string;
-  phone?: string;
-  email?: string;
-  logoUrl?: string;
+  legalName?: string | null;
+  taxId?: string | null;
+  registrationNumber?: string | null;
+  website?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  logoUrl?: string | null;
   status?: 'active' | 'inactive' | 'suspended';
 }, logoFile?: File) {
   const formData = new FormData();
-  
+
   // Add logo file if provided
   if (logoFile) {
     formData.append('logo', logoFile);
   }
-  
+
   // Add other fields as JSON string (or append individually)
   Object.keys(payload).forEach(key => {
     const value = payload[key as keyof typeof payload];
@@ -161,21 +161,21 @@ export async function updateOrganization(id: string, payload: {
 
 export async function createOrganizationWithLogo(payload: {
   name: string;
-  legalName?: string;
-  taxId?: string;
-  registrationNumber?: string;
-  website?: string;
-  phone?: string;
-  email?: string;
+  legalName?: string | null;
+  taxId?: string | null;
+  registrationNumber?: string | null;
+  website?: string | null;
+  phone?: string | null;
+  email?: string | null;
   status?: 'active' | 'inactive' | 'suspended';
 }, logoFile?: File) {
   const formData = new FormData();
-  
+
   // Add logo file if provided
   if (logoFile) {
     formData.append('logo', logoFile);
   }
-  
+
   // Add other fields
   Object.keys(payload).forEach(key => {
     const value = payload[key as keyof typeof payload];
