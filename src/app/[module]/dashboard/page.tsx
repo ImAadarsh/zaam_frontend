@@ -6,8 +6,8 @@ import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { getSession } from '@/lib/auth';
 import { StatCard } from '@/components/stat-card';
-import { listUsers, listRoles, listAuditLogs } from '@/lib/api';
-import { Users, Shield, Key, FileText, UserCog, TrendingUp, Activity } from 'lucide-react';
+import { listUsers, listRoles, listAuditLogs, listOrganizations, listBusinessUnits, listLocations, listApiKeys } from '@/lib/api';
+import { Users, Shield, Key, FileText, UserCog, TrendingUp, Activity, Building2, Briefcase, MapPin } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const COLORS = ['#D4A017', '#E5B84A', '#F0D07C', '#8B7012', '#A68A1A'];
@@ -21,7 +21,13 @@ export default function ModuleDashboardPage() {
     totalAdmins: 0,
     totalRoles: 0,
     apiKeys: 0,
-    auditLogs: 0
+    auditLogs: 0,
+    totalOrganizations: 0,
+    activeOrganizations: 0,
+    totalBusinessUnits: 0,
+    activeBusinessUnits: 0,
+    totalLocations: 0,
+    activeLocations: 0
   });
   const [chartData, setChartData] = useState({
     userGrowth: [] as any[],
@@ -40,27 +46,53 @@ export default function ModuleDashboardPage() {
     if (params.module === 'iam') {
       (async () => {
         try {
-          const [usersRes, rolesRes, auditRes] = await Promise.all([
+          const [usersRes, rolesRes, auditRes, organizationsRes, businessUnitsRes, locationsRes, apiKeysRes] = await Promise.all([
             listUsers(),
             listRoles(),
-            listAuditLogs(200).catch(() => ({ data: [] })) // Fetch more logs for better weekly data
+            listAuditLogs(200).catch(() => ({ data: [] })), // Fetch more logs for better weekly data
+            listOrganizations().catch(() => ({ data: [] })),
+            listBusinessUnits().catch(() => ({ data: [] })),
+            listLocations().catch(() => ({ data: [] })),
+            listApiKeys().catch(() => ({ data: [] }))
           ]);
 
           const users = usersRes.data || [];
           const roles = rolesRes.data || [];
           const audits = auditRes.data || [];
+          const organizations = organizationsRes.data || [];
+          const businessUnits = businessUnitsRes.data || [];
+          const locations = locationsRes.data || [];
+          const apiKeys = apiKeysRes.data || [];
 
           const admins = users.filter((u: any) =>
             u.roles?.some((r: any) => r.code?.toLowerCase().includes('admin')) ||
             u.email?.includes('admin')
           ).length;
 
+          const activeOrgs = organizations.filter((o: any) => 
+            o.status === 'active'
+          ).length;
+
+          const activeBusinessUnits = businessUnits.filter((bu: any) => 
+            bu.status === 'active'
+          ).length;
+
+          const activeLocations = locations.filter((l: any) => 
+            l.status === 'active'
+          ).length;
+
           setStats({
             totalUsers: users.length,
             totalAdmins: admins,
             totalRoles: roles.length,
-            apiKeys: 0,
-            auditLogs: audits.length
+            apiKeys: apiKeys.length,
+            auditLogs: audits.length,
+            totalOrganizations: organizations.length,
+            activeOrganizations: activeOrgs,
+            totalBusinessUnits: businessUnits.length,
+            activeBusinessUnits: activeBusinessUnits,
+            totalLocations: locations.length,
+            activeLocations: activeLocations
           });
 
           // Generate user growth data (last 6 months) - Based on actual user creation dates if available
@@ -259,7 +291,7 @@ export default function ModuleDashboardPage() {
           {params.module === 'iam' ? (
             <>
               {/* Stats Cards */}
-              <section className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              <section className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 <StatCard
                   title="Total Users"
                   value={loading ? '...' : stats.totalUsers.toString()}
@@ -289,6 +321,24 @@ export default function ModuleDashboardPage() {
                   value={loading ? '...' : stats.auditLogs.toString()}
                   hint="Total entries"
                   icon={<FileText size={20} />}
+                />
+                <StatCard
+                  title="Active Organizations"
+                  value={loading ? '...' : stats.activeOrganizations.toString()}
+                  hint="Active organizations"
+                  icon={<Building2 size={20} />}
+                />
+                <StatCard
+                  title="Active Business Units"
+                  value={loading ? '...' : stats.activeBusinessUnits.toString()}
+                  hint="Active business units"
+                  icon={<Briefcase size={20} />}
+                />
+                <StatCard
+                  title="Active Locations"
+                  value={loading ? '...' : stats.activeLocations.toString()}
+                  hint="Active locations"
+                  icon={<MapPin size={20} />}
                 />
               </section>
 

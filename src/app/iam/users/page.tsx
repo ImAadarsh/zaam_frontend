@@ -3,13 +3,13 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listUsers, createUser, updateUser, deleteUser, listOrganizations, listRoles } from '@/lib/api';
+import { listUsers, createUser, updateUser, deleteUser, listOrganizations, listRoles, listBusinessUnits, listLocations, assignRole, unassignRole } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Pencil, Trash2, Plus } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Plus, X } from 'lucide-react';
 
 type User = {
   id: string;
@@ -30,6 +30,16 @@ type User = {
       name: string;
       code: string;
     };
+    businessUnit?: {
+      id: string;
+      code: string;
+      name: string;
+    } | null;
+    location?: {
+      id: string;
+      code: string;
+      name: string;
+    } | null;
   }>;
   [key: string]: any;
 };
@@ -47,12 +57,29 @@ export default function UsersPage() {
     firstName: '', 
     lastName: '', 
     organizationId: '',
+    businessUnitId: '',
+    locationId: '',
     roleId: '',
     password: '1@Zaam-ERP'
   });
   const [organizations, setOrganizations] = useState<any[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [editing, setEditing] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState({
+    email: '',
+    username: '',
+    firstName: '',
+    lastName: '',
+    organizationId: '',
+    businessUnitId: '',
+    locationId: '',
+    roleId: '',
+    status: 'active' as 'active' | 'inactive' | 'suspended' | 'locked'
+  });
+  const [editBusinessUnits, setEditBusinessUnits] = useState<any[]>([]);
+  const [editLocations, setEditLocations] = useState<any[]>([]);
   const [confirmDel, setConfirmDel] = useState<User | null>(null);
 
   useEffect(() => {
@@ -75,6 +102,17 @@ export default function UsersPage() {
         // Set default organization to current user's organization
         if (session?.user?.organizationId) {
           setForm(prev => ({ ...prev, organizationId: session.user.organizationId }));
+          // Load business units and locations for default org
+          try {
+            const [busRes, locsRes] = await Promise.all([
+              listBusinessUnits(session.user.organizationId),
+              listLocations(undefined, session.user.organizationId)
+            ]);
+            setBusinessUnits(busRes.data || []);
+            setLocations(locsRes.data || []);
+          } catch (e) {
+            console.error('Failed to load business units/locations:', e);
+          }
         }
       } catch (e: any) {
         const status = e?.response?.status;
@@ -95,8 +133,8 @@ export default function UsersPage() {
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!session) return;
-    if (!form.organizationId || !form.roleId) {
-      toast.error('Please select organization and role');
+    if (!form.organizationId || !form.businessUnitId || !form.locationId || !form.roleId) {
+      toast.error('Please select organization, business unit, location, and role');
       return;
     }
     try {
@@ -108,8 +146,11 @@ export default function UsersPage() {
         firstName: form.firstName || undefined,
         lastName: form.lastName || undefined,
         password: form.password && form.password.trim() ? form.password : undefined, // Use default if empty
+        businessUnitId: form.businessUnitId,
+        locationId: form.locationId,
         status: 'active'
       });
+      
       setItems([res.data, ...items]);
       setShowCreate(false);
       setForm({ 
@@ -117,7 +158,9 @@ export default function UsersPage() {
         username: '', 
         firstName: '', 
         lastName: '',
-        organizationId: session.user.organizationId,
+        organizationId: session.user.organizationId || '',
+        businessUnitId: '',
+        locationId: '',
         roleId: '',
         password: '1@Zaam-ERP'
       });
@@ -126,6 +169,68 @@ export default function UsersPage() {
       toast.error(e?.response?.data?.error?.message ?? 'Create failed');
     }
   }
+
+  // Load business units when organization changes (create form)
+  useEffect(() => {
+    if (form.organizationId) {
+      listBusinessUnits(form.organizationId).then(res => {
+        setBusinessUnits(res.data || []);
+        setForm(prev => ({ ...prev, businessUnitId: '', locationId: '' }));
+      }).catch(e => {
+        console.error('Failed to load business units:', e);
+        setBusinessUnits([]);
+      });
+    } else {
+      setBusinessUnits([]);
+      setLocations([]);
+    }
+  }, [form.organizationId]);
+
+  // Load locations when business unit changes (create form)
+  useEffect(() => {
+    if (form.businessUnitId) {
+      listLocations(form.businessUnitId).then(res => {
+        setLocations(res.data || []);
+        setForm(prev => ({ ...prev, locationId: '' }));
+      }).catch(e => {
+        console.error('Failed to load locations:', e);
+        setLocations([]);
+      });
+    } else {
+      setLocations([]);
+    }
+  }, [form.businessUnitId]);
+
+  // Load business units when organization changes (edit form)
+  useEffect(() => {
+    if (editForm.organizationId) {
+      listBusinessUnits(editForm.organizationId).then(res => {
+        setEditBusinessUnits(res.data || []);
+        setEditForm(prev => ({ ...prev, businessUnitId: '', locationId: '' }));
+      }).catch(e => {
+        console.error('Failed to load business units:', e);
+        setEditBusinessUnits([]);
+      });
+    } else {
+      setEditBusinessUnits([]);
+      setEditLocations([]);
+    }
+  }, [editForm.organizationId]);
+
+  // Load locations when business unit changes (edit form)
+  useEffect(() => {
+    if (editForm.businessUnitId) {
+      listLocations(editForm.businessUnitId).then(res => {
+        setEditLocations(res.data || []);
+        setEditForm(prev => ({ ...prev, locationId: '' }));
+      }).catch(e => {
+        console.error('Failed to load locations:', e);
+        setEditLocations([]);
+      });
+    } else {
+      setEditLocations([]);
+    }
+  }, [editForm.businessUnitId]);
 
   const columns = useMemo<ColumnDef<User>[]>(() => [
     {
@@ -159,22 +264,65 @@ export default function UsersPage() {
     },
     {
       id: 'roles',
-      header: 'Roles',
+      header: 'Roles & Assignments',
       accessorFn: (row) => row.roleAssignments?.map((ra: any) => ra.role?.name || ra.role?.code).join(', ') || '-',
       cell: (info) => {
-        const roles = info.row.original.roleAssignments;
-        if (!roles || roles.length === 0) {
+        const roleAssignments = info.row.original.roleAssignments;
+        if (!roleAssignments || roleAssignments.length === 0) {
           return <span className="text-muted-foreground italic">-</span>;
         }
         return (
-          <div className="flex flex-wrap gap-1">
-            {roles.map((ra: any, idx: number) => (
-              <span
+          <div className="flex flex-col gap-2">
+            {roleAssignments.map((ra: any, idx: number) => (
+              <div
                 key={idx}
-                className="px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                className="px-3 py-2 rounded-lg text-xs border border-border bg-card/50 relative group"
               >
-                {ra.role?.name || ra.role?.code || 'Unknown'}
-              </span>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Are you sure you want to remove the role "${ra.role?.name || ra.role?.code}" from this user?`)) {
+                      try {
+                        await unassignRole({
+                          userId: info.row.original.id,
+                          roleAssignmentId: ra.id
+                        });
+                        toast.success('Role assignment removed');
+                        // Reload users
+                        const usersRes = await listUsers();
+                        setItems(usersRes.data);
+                      } catch (e: any) {
+                        toast.error(e?.response?.data?.error?.message ?? 'Failed to remove role assignment');
+                      }
+                    }
+                  }}
+                  className="absolute top-1 right-1 p-1 hover:bg-red-50 rounded text-muted-foreground hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                  title="Remove role assignment"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+                <div className="font-semibold text-foreground mb-1 pr-6">
+                  {ra.role?.name || ra.role?.code || 'Unknown Role'}
+                </div>
+                <div className="space-y-1 text-muted-foreground">
+                  {ra.businessUnit ? (
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium">BU:</span>
+                      <span>{ra.businessUnit.code} - {ra.businessUnit.name}</span>
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground/70 italic">No Business Unit</div>
+                  )}
+                  {ra.location ? (
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium">Loc:</span>
+                      <span>{ra.location.code} - {ra.location.name}</span>
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground/70 italic">No Location</div>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         );
@@ -207,7 +355,42 @@ export default function UsersPage() {
         <div className="flex items-center gap-2">
           <button
             className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-primary transition-colors"
-            onClick={() => setEditing(row.original)}
+            onClick={async () => {
+              const user = row.original;
+              // Get the first role assignment to pre-populate form
+              const roleAssignment = user.roleAssignments?.[0];
+              setEditForm({
+                email: user.email,
+                username: user.username || '',
+                firstName: user.firstName || '',
+                lastName: user.lastName || '',
+                organizationId: user.organizationId || user.organization?.id || '',
+                businessUnitId: roleAssignment?.businessUnit?.id || '',
+                locationId: roleAssignment?.location?.id || '',
+                roleId: roleAssignment?.role?.id || '',
+                status: user.status
+              });
+              // Load business units and locations for the organization
+              if (user.organizationId || user.organization?.id) {
+                const orgId = user.organizationId || user.organization?.id;
+                try {
+                  const [busRes, locsRes] = await Promise.all([
+                    listBusinessUnits(orgId),
+                    listLocations(undefined, orgId)
+                  ]);
+                  setEditBusinessUnits(busRes.data || []);
+                  if (roleAssignment?.businessUnit?.id) {
+                    const locRes = await listLocations(roleAssignment.businessUnit.id);
+                    setEditLocations(locRes.data || []);
+                  } else {
+                    setEditLocations(locsRes.data || []);
+                  }
+                } catch (e) {
+                  console.error('Failed to load business units/locations:', e);
+                }
+              }
+              setEditing(user);
+            }}
             title="Edit"
           >
             <Pencil className="h-4 w-4" />
@@ -271,10 +454,38 @@ export default function UsersPage() {
                         className="select" 
                         required
                         value={form.organizationId} 
-                        onChange={(e) => setForm({ ...form, organizationId: e.target.value })}>
+                        onChange={(e) => setForm({ ...form, organizationId: e.target.value, businessUnitId: '', locationId: '' })}>
                         <option value="">Select organization</option>
                         {organizations.map((org) => (
                           <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Business Unit *</label>
+                      <select 
+                        className="select" 
+                        required
+                        disabled={!form.organizationId}
+                        value={form.businessUnitId} 
+                        onChange={(e) => setForm({ ...form, businessUnitId: e.target.value, locationId: '' })}>
+                        <option value="">{form.organizationId ? 'Select business unit' : 'Select organization first'}</option>
+                        {businessUnits.map((bu) => (
+                          <option key={bu.id} value={bu.id}>{bu.code} - {bu.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Location *</label>
+                      <select 
+                        className="select" 
+                        required
+                        disabled={!form.businessUnitId}
+                        value={form.locationId} 
+                        onChange={(e) => setForm({ ...form, locationId: e.target.value })}>
+                        <option value="">{form.businessUnitId ? 'Select location' : 'Select business unit first'}</option>
+                        {locations.map((loc) => (
+                          <option key={loc.id} value={loc.id}>{loc.code} - {loc.name}</option>
                         ))}
                       </select>
                     </div>
@@ -337,6 +548,8 @@ export default function UsersPage() {
                           firstName: '', 
                           lastName: '',
                           organizationId: session?.user?.organizationId || '',
+                          businessUnitId: '',
+                          locationId: '',
                           roleId: '',
                           password: '1@Zaam-ERP'
                         });
@@ -353,22 +566,55 @@ export default function UsersPage() {
 
           {editing && (
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="w-full max-w-lg rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200">
+              <div className="w-full max-w-2xl rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-lg font-semibold mb-4">Edit User</h3>
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (!editForm.organizationId || !editForm.businessUnitId || !editForm.locationId || !editForm.roleId) {
+                      toast.error('Please select organization, business unit, location, and role');
+                      return;
+                    }
                     try {
+                      // Update user basic info
                       const payload = {
-                        email: editing.email,
-                        username: editing.username ?? null,
-                        firstName: editing.firstName ?? null,
-                        lastName: editing.lastName ?? null,
-                        status: editing.status
+                        email: editForm.email,
+                        username: editForm.username || null,
+                        firstName: editForm.firstName || null,
+                        lastName: editForm.lastName || null,
+                        status: editForm.status
                       };
                       const res = await updateUser(editing.id, payload);
-                      setItems(items.map((it) => (it.id === editing.id ? res.data : it)));
+                      
+                      // Update role assignment
+                      try {
+                        await assignRole({
+                          userId: editing.id,
+                          roleId: editForm.roleId,
+                          businessUnitId: editForm.businessUnitId,
+                          locationId: editForm.locationId
+                        });
+                      } catch (roleErr: any) {
+                        console.error('Failed to update role assignment:', roleErr);
+                        const errorMsg = roleErr?.message || roleErr?.response?.data?.error?.message || 'Unknown error';
+                        toast.error(`Role assignment failed: ${errorMsg}`);
+                      }
+                      
+                      // Reload users to get updated data
+                      const usersRes = await listUsers();
+                      setItems(usersRes.data);
                       setEditing(null);
+                      setEditForm({
+                        email: '',
+                        username: '',
+                        firstName: '',
+                        lastName: '',
+                        organizationId: '',
+                        businessUnitId: '',
+                        locationId: '',
+                        roleId: '',
+                        status: 'active'
+                      });
                       toast.success('User updated');
                     } catch (e: any) {
                       toast.error(e?.response?.data?.error?.message ?? 'Update failed');
@@ -378,38 +624,105 @@ export default function UsersPage() {
                 >
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
-                      <label className="block text-sm font-medium mb-1.5">Email</label>
+                      <label className="block text-sm font-medium mb-1.5">Organization *</label>
+                      <select 
+                        className="select" 
+                        required
+                        value={editForm.organizationId} 
+                        onChange={(e) => setEditForm({ ...editForm, organizationId: e.target.value, businessUnitId: '', locationId: '' })}>
+                        <option value="">Select organization</option>
+                        {organizations.map((org) => (
+                          <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Business Unit *</label>
+                      <select 
+                        className="select" 
+                        required
+                        disabled={!editForm.organizationId}
+                        value={editForm.businessUnitId} 
+                        onChange={(e) => setEditForm({ ...editForm, businessUnitId: e.target.value, locationId: '' })}>
+                        <option value="">{editForm.organizationId ? 'Select business unit' : 'Select organization first'}</option>
+                        {editBusinessUnits.map((bu) => (
+                          <option key={bu.id} value={bu.id}>{bu.code} - {bu.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Location *</label>
+                      <select 
+                        className="select" 
+                        required
+                        disabled={!editForm.businessUnitId}
+                        value={editForm.locationId} 
+                        onChange={(e) => setEditForm({ ...editForm, locationId: e.target.value })}>
+                        <option value="">{editForm.businessUnitId ? 'Select location' : 'Select business unit first'}</option>
+                        {editLocations.map((loc) => (
+                          <option key={loc.id} value={loc.id}>{loc.code} - {loc.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Role *</label>
+                      <select 
+                        className="select" 
+                        required
+                        value={editForm.roleId} 
+                        onChange={(e) => setEditForm({ ...editForm, roleId: e.target.value })}>
+                        <option value="">Select role</option>
+                        {roles.map((role) => (
+                          <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Email *</label>
                       <input className="input" type="email" required
-                        value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
+                        value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">First name</label>
                       <input className="input"
-                        value={editing.firstName ?? ''} onChange={(e) => setEditing({ ...editing, firstName: e.target.value })} />
+                        value={editForm.firstName} onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })} />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Last name</label>
                       <input className="input"
-                        value={editing.lastName ?? ''} onChange={(e) => setEditing({ ...editing, lastName: e.target.value })} />
+                        value={editForm.lastName} onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })} />
                     </div>
                     <div className="col-span-2">
                       <label className="block text-sm font-medium mb-1.5">Username</label>
                       <input className="input"
-                        value={editing.username ?? ''} onChange={(e) => setEditing({ ...editing, username: e.target.value })} />
+                        value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} />
                     </div>
                     <div className="col-span-2">
                       <label className="block text-sm font-medium mb-1.5">Status</label>
                       <select className="select"
-                        value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value as any })}>
-                        <option value="active">active</option>
-                        <option value="inactive">inactive</option>
-                        <option value="suspended">suspended</option>
-                        <option value="locked">locked</option>
+                        value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="locked">Locked</option>
                       </select>
                     </div>
                   </div>
-                  <div className="flex justify-end gap-3 pt-4">
-                    <button type="button" className="btn btn-outline" onClick={() => setEditing(null)}>Cancel</button>
+                  <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                    <button type="button" className="btn btn-outline" onClick={() => {
+                      setEditing(null);
+                      setEditForm({
+                        email: '',
+                        username: '',
+                        firstName: '',
+                        lastName: '',
+                        organizationId: '',
+                        businessUnitId: '',
+                        locationId: '',
+                        roleId: '',
+                        status: 'active'
+                      });
+                    }}>Cancel</button>
                     <button type="submit" className="btn btn-primary">Save Changes</button>
                   </div>
                 </form>

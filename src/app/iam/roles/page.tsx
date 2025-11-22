@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listRoles, createRole, assignRole, listUsers, updateRole } from '@/lib/api';
+import { listRoles, createRole, assignRole, listUsers, updateRole, listOrganizations, listBusinessUnits, listLocations } from '@/lib/api';
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
@@ -30,7 +30,10 @@ export default function RolesPage() {
   const [showPermissions, setShowPermissions] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [createForm, setCreateForm] = useState({ name: '', code: '' });
-  const [assignForm, setAssignForm] = useState({ userId: '', roleId: '' });
+  const [assignForm, setAssignForm] = useState({ userId: '', roleId: '', organizationId: '', businessUnitId: '', locationId: '' });
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
   const [pagePermissions, setPagePermissions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -41,9 +44,26 @@ export default function RolesPage() {
     }
     (async () => {
       try {
-        const [r, u] = await Promise.all([listRoles(), listUsers()]);
+        const [r, u, orgs] = await Promise.all([listRoles(), listUsers(), listOrganizations()]);
         setRoles(r.data);
         setUsers(u.data);
+        setOrganizations(orgs.data || []);
+        
+        // Set default organization to current user's organization
+        if (session?.user?.organizationId) {
+          setAssignForm(prev => ({ ...prev, organizationId: session.user.organizationId }));
+          // Load business units and locations for default org
+          try {
+            const [busRes, locsRes] = await Promise.all([
+              listBusinessUnits(session.user.organizationId),
+              listLocations(undefined, session.user.organizationId)
+            ]);
+            setBusinessUnits(busRes.data || []);
+            setLocations(locsRes.data || []);
+          } catch (e) {
+            console.error('Failed to load business units/locations:', e);
+          }
+        }
       } catch {
         toast.error('Failed to load roles');
       } finally {
@@ -72,15 +92,55 @@ export default function RolesPage() {
 
   async function onAssign(e: React.FormEvent) {
     e.preventDefault();
+    if (!assignForm.organizationId || !assignForm.businessUnitId || !assignForm.locationId) {
+      toast.error('Please select organization, business unit, and location');
+      return;
+    }
     try {
-      await assignRole({ userId: assignForm.userId, roleId: assignForm.roleId });
+      await assignRole({ 
+        userId: assignForm.userId, 
+        roleId: assignForm.roleId,
+        businessUnitId: assignForm.businessUnitId,
+        locationId: assignForm.locationId
+      });
       setShowAssign(false);
-      setAssignForm({ userId: '', roleId: '' });
+      setAssignForm({ userId: '', roleId: '', organizationId: session?.user?.organizationId || '', businessUnitId: '', locationId: '' });
       toast.success('Role assigned');
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message ?? 'Assign failed');
     }
   }
+
+  // Load business units when organization changes
+  useEffect(() => {
+    if (assignForm.organizationId) {
+      listBusinessUnits(assignForm.organizationId).then(res => {
+        setBusinessUnits(res.data || []);
+        setAssignForm(prev => ({ ...prev, businessUnitId: '', locationId: '' }));
+      }).catch(e => {
+        console.error('Failed to load business units:', e);
+        setBusinessUnits([]);
+      });
+    } else {
+      setBusinessUnits([]);
+      setLocations([]);
+    }
+  }, [assignForm.organizationId]);
+
+  // Load locations when business unit changes
+  useEffect(() => {
+    if (assignForm.businessUnitId) {
+      listLocations(assignForm.businessUnitId).then(res => {
+        setLocations(res.data || []);
+        setAssignForm(prev => ({ ...prev, locationId: '' }));
+      }).catch(e => {
+        console.error('Failed to load locations:', e);
+        setLocations([]);
+      });
+    } else {
+      setLocations([]);
+    }
+  }, [assignForm.businessUnitId]);
 
   // IAM Pages configuration
   const iamPages = [
@@ -218,31 +278,71 @@ export default function RolesPage() {
 
           {showAssign && (
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="w-full max-w-lg rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200">
+              <div className="w-full max-w-2xl rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-lg font-semibold mb-4">Assign Role to User</h3>
                 <form onSubmit={onAssign} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">User</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Organization *</label>
+                      <select className="select" required
+                        value={assignForm.organizationId} 
+                        onChange={(e) => setAssignForm({ ...assignForm, organizationId: e.target.value, businessUnitId: '', locationId: '' })}>
+                        <option value="">Select organization</option>
+                        {organizations.map((org) => (
+                          <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Business Unit *</label>
+                      <select className="select" required
+                        disabled={!assignForm.organizationId}
+                        value={assignForm.businessUnitId} 
+                        onChange={(e) => setAssignForm({ ...assignForm, businessUnitId: e.target.value, locationId: '' })}>
+                        <option value="">{assignForm.organizationId ? 'Select business unit' : 'Select organization first'}</option>
+                        {businessUnits.map((bu) => (
+                          <option key={bu.id} value={bu.id}>{bu.code} - {bu.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Location *</label>
+                      <select className="select" required
+                        disabled={!assignForm.businessUnitId}
+                        value={assignForm.locationId} 
+                        onChange={(e) => setAssignForm({ ...assignForm, locationId: e.target.value })}>
+                        <option value="">{assignForm.businessUnitId ? 'Select location' : 'Select business unit first'}</option>
+                        {locations.map((loc) => (
+                          <option key={loc.id} value={loc.id}>{loc.code} - {loc.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">User *</label>
                     <select className="select" required
                       value={assignForm.userId} onChange={(e) => setAssignForm({ ...assignForm, userId: e.target.value })}>
                       <option value="">Select user</option>
                       {users.map((u) => (
-                        <option key={u.id} value={u.id}>{u.email}</option>
+                          <option key={u.id} value={u.id}>{u.email} {u.firstName || u.lastName ? `(${u.firstName || ''} ${u.lastName || ''})`.trim() : ''}</option>
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Role</label>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Role *</label>
                     <select className="select" required
                       value={assignForm.roleId} onChange={(e) => setAssignForm({ ...assignForm, roleId: e.target.value })}>
                       <option value="">Select role</option>
                       {roles.map((r) => (
-                        <option key={r.id} value={r.id}>{r.code}</option>
+                          <option key={r.id} value={r.id}>{r.code} - {r.name}</option>
                       ))}
                     </select>
+                    </div>
                   </div>
-                  <div className="flex justify-end gap-3 pt-4">
-                    <button type="button" className="btn btn-outline" onClick={() => setShowAssign(false)}>Cancel</button>
+                  <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                    <button type="button" className="btn btn-outline" onClick={() => {
+                      setShowAssign(false);
+                      setAssignForm({ userId: '', roleId: '', organizationId: session?.user?.organizationId || '', businessUnitId: '', locationId: '' });
+                    }}>Cancel</button>
                     <button type="submit" className="btn btn-primary">Assign Role</button>
                   </div>
                 </form>

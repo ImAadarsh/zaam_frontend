@@ -9,7 +9,7 @@
     "lint": "next lint",
     "clean": "rm -rf .next node_modules/.cache",
     "clean:all": "rm -rf .next node_modules/.cache && npm run dev",
-    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
     "pm2:restart": "pm2 restart zaam-panels",
     "pm2:stop": "pm2 stop zaam-panels",
     "pm2:logs": "pm2 logs zaam-panels"

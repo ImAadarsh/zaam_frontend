@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2 } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { clearSession, getSession } from '@/lib/auth';
+import { clearSession } from '@/lib/auth';
+import { useSession } from '@/hooks/use-session';
 import { useUI } from '@/lib/ui';
 import { useEffect } from 'react';
 
@@ -13,11 +14,12 @@ export function Sidebar() {
   const isIAM = root === 'iam';
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUI();
-  const session = getSession();
+  const { session, hydrated } = useSession();
   const userRoles = session?.user?.roles || [];
   
   // Helper to check if user has required roles
   const hasRole = (requiredRoles: string[]) => {
+    if (!hydrated) return false; // Don't check roles until hydrated to avoid hydration mismatch
     return requiredRoles.some(role => userRoles.includes(role));
   };
 
