@@ -6,7 +6,7 @@ import {
 export const modules = [
   { slug: 'iam', name: 'Identity & Access', icon: Shield, color: '#D4A017',
     description: 'Users, Roles, API Keys, Audit' },
-  { slug: 'catalog', name: 'Product & Catalog', icon: Package2, color: '#0A0A0A',
+  { slug: 'catalog', name: 'Product & Catalog', icon: Package2, color: '#D4A017',
     description: 'Products, Variants, Pricing, Channels' },
   { slug: 'inventory', name: 'Inventory', icon: Boxes, color: '#0A0A0A',
     description: 'Warehouses, Bins, Stock, ASN/GRN' },

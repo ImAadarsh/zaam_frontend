@@ -6,8 +6,8 @@ import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { getSession } from '@/lib/auth';
 import { StatCard } from '@/components/stat-card';
-import { listUsers, listRoles, listAuditLogs, listOrganizations, listBusinessUnits, listLocations, listApiKeys } from '@/lib/api';
-import { Users, Shield, Key, FileText, UserCog, TrendingUp, Activity, Building2, Briefcase, MapPin } from 'lucide-react';
+import { listUsers, listRoles, listAuditLogs, listOrganizations, listBusinessUnits, listLocations, listApiKeys, listCatalogItems, listVariants, listPriceLists, listTaxCodes } from '@/lib/api';
+import { Users, Shield, Key, FileText, UserCog, TrendingUp, Activity, Building2, Briefcase, MapPin, Package2, Tag, DollarSign, Receipt } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const COLORS = ['#D4A017', '#E5B84A', '#F0D07C', '#8B7012', '#A68A1A'];
@@ -27,7 +27,15 @@ export default function ModuleDashboardPage() {
     totalBusinessUnits: 0,
     activeBusinessUnits: 0,
     totalLocations: 0,
-    activeLocations: 0
+    activeLocations: 0,
+    // Catalog stats
+    totalCatalogItems: 0,
+    activeCatalogItems: 0,
+    totalVariants: 0,
+    activeVariants: 0,
+    totalPriceLists: 0,
+    activePriceLists: 0,
+    totalTaxCodes: 0
   });
   const [chartData, setChartData] = useState({
     userGrowth: [] as any[],
@@ -43,7 +51,143 @@ export default function ModuleDashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    if (params.module === 'iam') {
+    if (params.module === 'catalog') {
+      (async () => {
+        try {
+          const s = getSession();
+          const [itemsRes, variantsRes, priceListsRes, taxCodesRes] = await Promise.all([
+            listCatalogItems({ organizationId: s?.user?.organizationId }).catch(() => ({ data: [] })),
+            listVariants().catch(() => ({ data: [] })),
+            listPriceLists({ organizationId: s?.user?.organizationId }).catch(() => ({ data: [] })),
+            listTaxCodes({ organizationId: s?.user?.organizationId }).catch(() => ({ data: [] }))
+          ]);
+
+          const items = itemsRes.data || [];
+          const variants = variantsRes.data || [];
+          const priceLists = priceListsRes.data || [];
+          const taxCodes = taxCodesRes.data || [];
+
+          const activeItems = items.filter((item: any) => item.status === 'active').length;
+          const activeVariants = variants.filter((v: any) => v.status === 'active').length;
+          const activePriceLists = priceLists.filter((pl: any) => pl.status === 'active').length;
+
+          setStats({
+            totalCatalogItems: items.length,
+            activeCatalogItems: activeItems,
+            totalVariants: variants.length,
+            activeVariants: activeVariants,
+            totalPriceLists: priceLists.length,
+            activePriceLists: activePriceLists,
+            totalTaxCodes: taxCodes.length,
+            // IAM stats (not used for catalog)
+            totalUsers: 0,
+            totalAdmins: 0,
+            totalRoles: 0,
+            apiKeys: 0,
+            auditLogs: 0,
+            totalOrganizations: 0,
+            activeOrganizations: 0,
+            totalBusinessUnits: 0,
+            activeBusinessUnits: 0,
+            totalLocations: 0,
+            activeLocations: 0
+          });
+
+          // Generate catalog growth data (last 6 months)
+          const now = new Date();
+          const last6Months = Array.from({ length: 6 }, (_, i) => {
+            const date = new Date(now);
+            date.setMonth(date.getMonth() - (5 - i));
+            date.setDate(1);
+            date.setHours(0, 0, 0, 0);
+            return date;
+          });
+
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const catalogGrowth = last6Months.map(date => {
+            const monthName = monthNames[date.getMonth()];
+            const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+            monthStart.setHours(0, 0, 0, 0);
+            const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+            monthEnd.setHours(23, 59, 59, 999);
+
+            const itemsInMonth = items.filter((item: any) => {
+              const dateValue = item.createdAt || item.created_at;
+              if (!dateValue) return false;
+              try {
+                const itemDate = new Date(dateValue);
+                if (isNaN(itemDate.getTime())) return false;
+                const normalizedItemDate = new Date(itemDate);
+                normalizedItemDate.setHours(0, 0, 0, 0);
+                return normalizedItemDate >= monthStart && normalizedItemDate <= monthEnd;
+              } catch {
+                return false;
+              }
+            }).length;
+
+            const activeInMonth = items.filter((item: any) => {
+              const dateValue = item.createdAt || item.created_at;
+              if (!dateValue) return false;
+              try {
+                const itemDate = new Date(dateValue);
+                if (isNaN(itemDate.getTime())) return false;
+                const normalizedItemDate = new Date(itemDate);
+                normalizedItemDate.setHours(0, 0, 0, 0);
+                return normalizedItemDate >= monthStart && 
+                       normalizedItemDate <= monthEnd && 
+                       item.status === 'active';
+              } catch {
+                return false;
+              }
+            }).length;
+
+            return {
+              month: monthName,
+              users: itemsInMonth,
+              active: activeInMonth
+            };
+          });
+
+          // Status distribution
+          const statusCount: any = {};
+          items.forEach((item: any) => {
+            const status = item.status || 'unknown';
+            statusCount[status] = (statusCount[status] || 0) + 1;
+          });
+          const statusDistribution = Object.entries(statusCount).map(([name, value]) => ({
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            value
+          }));
+
+          // Category distribution
+          const categoryCount: any = {};
+          items.forEach((item: any) => {
+            const category = item.category || 'Uncategorized';
+            categoryCount[category] = (categoryCount[category] || 0) + 1;
+          });
+          const categoryDistribution = Object.entries(categoryCount).slice(0, 5).map(([name, value]) => ({
+            name,
+            value
+          }));
+
+          setChartData({
+            userGrowth: catalogGrowth.length > 0 ? catalogGrowth : last6Months.map((date) => ({
+              month: monthNames[date.getMonth()],
+              users: 0,
+              active: 0
+            })),
+            usersByRole: categoryDistribution.length > 0 ? categoryDistribution : [{ name: 'No Data', value: 0 }],
+            activityByDay: [],
+            statusDistribution: statusDistribution.length > 0 ? statusDistribution : [{ name: 'No Data', value: 0 }]
+          });
+
+        } catch (error) {
+          console.error('Failed to load catalog stats:', error);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    } else if (params.module === 'iam') {
       (async () => {
         try {
           const [usersRes, rolesRes, auditRes, organizationsRes, businessUnitsRes, locationsRes, apiKeysRes] = await Promise.all([
@@ -466,6 +610,166 @@ export default function ModuleDashboardPage() {
                   <div className="flex items-center gap-2 mb-6">
                     <Users size={20} className="text-primary" />
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">User Status</h3>
+                  </div>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={chartData.statusDistribution} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                      <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                      <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" fontSize={12} width={80} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Bar dataKey="value" fill="#D4A017" radius={[0, 8, 8, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+            </>
+          ) : params.module === 'catalog' ? (
+            <>
+              {/* Stats Cards */}
+              <section className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <StatCard
+                  title="Total Products"
+                  value={loading ? '...' : stats.totalCatalogItems.toString()}
+                  hint="Catalog items"
+                  icon={<Package2 size={20} />}
+                />
+                <StatCard
+                  title="Active Products"
+                  value={loading ? '...' : stats.activeCatalogItems.toString()}
+                  hint="Active items"
+                  icon={<Package2 size={20} />}
+                />
+                <StatCard
+                  title="Total Variants"
+                  value={loading ? '...' : stats.totalVariants.toString()}
+                  hint="Product variants"
+                  icon={<Tag size={20} />}
+                />
+                <StatCard
+                  title="Active Variants"
+                  value={loading ? '...' : stats.activeVariants.toString()}
+                  hint="Active variants"
+                  icon={<Tag size={20} />}
+                />
+                <StatCard
+                  title="Price Lists"
+                  value={loading ? '...' : stats.totalPriceLists.toString()}
+                  hint="Pricing tiers"
+                  icon={<DollarSign size={20} />}
+                />
+                <StatCard
+                  title="Tax Codes"
+                  value={loading ? '...' : stats.totalTaxCodes.toString()}
+                  hint="Tax configurations"
+                  icon={<Receipt size={20} />}
+                />
+              </section>
+
+              {/* Quick Actions */}
+              <section className="grid gap-4 grid-cols-1">
+                <div className="rounded-2xl border border-border bg-card p-6">
+                  <div className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">Quick Actions</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <a href="/catalog/items" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <Package2 size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Catalog Items</div>
+                      <div className="text-xs text-muted-foreground mt-1">Manage products</div>
+                    </a>
+                    <a href="/catalog/variants" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <Tag size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Variants</div>
+                      <div className="text-xs text-muted-foreground mt-1">Manage variants</div>
+                    </a>
+                    <a href="/catalog/price-lists" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <DollarSign size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Price Lists</div>
+                      <div className="text-xs text-muted-foreground mt-1">Manage pricing</div>
+                    </a>
+                    <a href="/catalog/tax-codes" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <Receipt size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Tax Codes</div>
+                      <div className="text-xs text-muted-foreground mt-1">Manage taxes</div>
+                    </a>
+                  </div>
+                </div>
+              </section>
+
+              {/* Charts Section */}
+              <section className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+                {/* Catalog Growth Chart */}
+                <div className="rounded-2xl border border-border bg-card p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <TrendingUp size={20} className="text-primary" />
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">Product Growth</h3>
+                  </div>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <AreaChart data={chartData.userGrowth}>
+                      <defs>
+                        <linearGradient id="colorCatalog" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#D4A017" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#D4A017" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                      <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                      />
+                      <Area type="monotone" dataKey="users" stroke="#D4A017" fillOpacity={1} fill="url(#colorCatalog)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="active" stroke="#E5B84A" fillOpacity={0.5} fill="#E5B84A" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Category Distribution */}
+                <div className="rounded-2xl border border-border bg-card p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <Package2 size={20} className="text-primary" />
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">By Category</h3>
+                  </div>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie
+                        data={chartData.usersByRole}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => percent !== undefined ? `${name}: ${(percent * 100).toFixed(0)}%` : name}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {chartData.usersByRole.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Status Distribution */}
+                <div className="rounded-2xl border border-border bg-card p-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <Package2 size={20} className="text-primary" />
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">Product Status</h3>
                   </div>
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={chartData.statusDistribution} layout="vertical">

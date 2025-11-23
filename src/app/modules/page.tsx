@@ -95,7 +95,7 @@ export default function ModulesPage() {
                   title={m.name}
                   description={m.description}
                   Icon={m.icon}
-                  featured={m.slug === 'iam'}
+                  featured={m.slug === 'iam' || m.slug === 'catalog'}
                 />
               ))}
             </div>

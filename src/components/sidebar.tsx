@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2 } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -12,6 +12,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const root = (pathname || '/').split('/')[1] || '';
   const isIAM = root === 'iam';
+  const isCatalog = root === 'catalog';
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUI();
   const { session, hydrated } = useSession();
@@ -64,7 +65,10 @@ export function Sidebar() {
           <Item href="/dashboard" icon={<LayoutDashboard size={20} />} label="Global Dashboard" active={pathname === '/dashboard'} />
           {isIAM && (
             <>
-              <div className="mt-6 mb-2 text-[10px] uppercase tracking-widest font-semibold text-white/40 px-3">Identity & Access</div>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Identity & Access</div>
+              </div>
               <Item href="/iam/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/iam/dashboard'} />
               <Item href="/iam/organizations" icon={<Building2 size={18} />} label="Organizations" active={pathname?.startsWith('/iam/organizations')} />
               {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
@@ -76,6 +80,36 @@ export function Sidebar() {
               )}
               {hasRole(['SUPER_ADMIN']) && (
                 <Item href="/iam/api-keys" icon={<KeySquare size={18} />} label="API Keys" active={pathname?.startsWith('/iam/api-keys')} />
+              )}
+            </>
+          )}
+          {isCatalog && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Product & Catalog</div>
+              </div>
+              <Item href="/catalog/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/catalog/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'SALES_REP']) && (
+                <>
+                  <Item href="/catalog/items" icon={<Package2 size={18} />} label="Catalog Items" active={pathname?.startsWith('/catalog/items')} />
+                  <Item href="/catalog/variants" icon={<Tag size={18} />} label="Variants" active={pathname?.startsWith('/catalog/variants')} />
+                  <Item href="/catalog/product-media" icon={<ImageIcon size={18} />} label="Product Media" active={pathname?.startsWith('/catalog/product-media')} />
+                  <Item href="/catalog/bundles" icon={<Package size={18} />} label="Bundles" active={pathname?.startsWith('/catalog/bundles')} />
+                  <Item href="/catalog/channel-mappings" icon={<Share2 size={18} />} label="Channel Mappings" active={pathname?.startsWith('/catalog/channel-mappings')} />
+                </>
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'FINANCE']) && (
+                <>
+                  <Item href="/catalog/price-lists" icon={<DollarSign size={18} />} label="Price Lists" active={pathname?.startsWith('/catalog/price-lists')} />
+                  <Item href="/catalog/promotional-prices" icon={<Tag size={18} />} label="Promotional Prices" active={pathname?.startsWith('/catalog/promotional-prices')} />
+                </>
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
+                <Item href="/catalog/tax-codes" icon={<Receipt size={18} />} label="Tax Codes" active={pathname?.startsWith('/catalog/tax-codes')} />
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
+                <Item href="/catalog/compliance-documents" icon={<FileText size={18} />} label="Compliance Documents" active={pathname?.startsWith('/catalog/compliance-documents')} />
               )}
             </>
           )}
@@ -122,7 +156,10 @@ export function Sidebar() {
               <Item href="/dashboard" icon={<LayoutDashboard size={20} />} label="Global Dashboard" active={pathname === '/dashboard'} />
               {isIAM && (
                 <>
-                  <div className="mt-6 mb-2 text-[10px] uppercase tracking-widest font-semibold text-white/40 px-3">Identity & Access</div>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Identity & Access</div>
+                  </div>
                   <Item href="/iam/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/iam/dashboard'} />
                   <Item href="/iam/organizations" icon={<Building2 size={18} />} label="Organizations" active={pathname?.startsWith('/iam/organizations')} />
                   {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
@@ -134,6 +171,36 @@ export function Sidebar() {
                   )}
                   {hasRole(['SUPER_ADMIN']) && (
                     <Item href="/iam/api-keys" icon={<KeySquare size={18} />} label="API Keys" active={pathname?.startsWith('/iam/api-keys')} />
+                  )}
+                </>
+              )}
+              {isCatalog && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Product & Catalog</div>
+                  </div>
+                  <Item href="/catalog/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/catalog/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'SALES_REP']) && (
+                    <>
+                      <Item href="/catalog/items" icon={<Package2 size={18} />} label="Catalog Items" active={pathname?.startsWith('/catalog/items')} />
+                      <Item href="/catalog/variants" icon={<Tag size={18} />} label="Variants" active={pathname?.startsWith('/catalog/variants')} />
+                      <Item href="/catalog/product-media" icon={<ImageIcon size={18} />} label="Product Media" active={pathname?.startsWith('/catalog/product-media')} />
+                      <Item href="/catalog/bundles" icon={<Package size={18} />} label="Bundles" active={pathname?.startsWith('/catalog/bundles')} />
+                      <Item href="/catalog/channel-mappings" icon={<Share2 size={18} />} label="Channel Mappings" active={pathname?.startsWith('/catalog/channel-mappings')} />
+                    </>
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'FINANCE']) && (
+                    <>
+                      <Item href="/catalog/price-lists" icon={<DollarSign size={18} />} label="Price Lists" active={pathname?.startsWith('/catalog/price-lists')} />
+                      <Item href="/catalog/promotional-prices" icon={<Tag size={18} />} label="Promotional Prices" active={pathname?.startsWith('/catalog/promotional-prices')} />
+                    </>
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
+                    <Item href="/catalog/tax-codes" icon={<Receipt size={18} />} label="Tax Codes" active={pathname?.startsWith('/catalog/tax-codes')} />
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
+                    <Item href="/catalog/compliance-documents" icon={<FileText size={18} />} label="Compliance Documents" active={pathname?.startsWith('/catalog/compliance-documents')} />
                   )}
                 </>
               )}

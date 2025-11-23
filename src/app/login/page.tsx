@@ -150,7 +150,7 @@ function LoginContent() {
               <div className="w-full border-t border-border"></div>
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white/85 backdrop-blur-md px-2 text-muted-foreground">Or continue with</span>
+              <span className="bg-white/85 backdrop-blur-md px-2 text-muted-foreground rounded-full py-1">Or continue with</span>
             </div>
           </div>
 
