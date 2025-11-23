@@ -236,7 +236,15 @@ export default function ModuleDashboardPage() {
             totalBusinessUnits: businessUnits.length,
             activeBusinessUnits: activeBusinessUnits,
             totalLocations: locations.length,
-            activeLocations: activeLocations
+            activeLocations: activeLocations,
+            // Catalog stats (not used for IAM)
+            totalCatalogItems: 0,
+            activeCatalogItems: 0,
+            totalVariants: 0,
+            activeVariants: 0,
+            totalPriceLists: 0,
+            activePriceLists: 0,
+            totalTaxCodes: 0
           });
 
           // Generate user growth data (last 6 months) - Based on actual user creation dates if available

@@ -366,7 +366,7 @@ export default function CatalogItemsPage() {
       <div className="min-h-screen app-surface">
         <Sidebar />
         <div className="flex flex-col overflow-hidden lg:ml-[280px]">
-          <Header />
+          <Header title="Catalog · Items" />
           <main className="flex-1 overflow-auto p-4 md:p-6">
             <div className="flex items-center justify-center h-full">
               <div className="text-muted-foreground">Loading...</div>
@@ -382,7 +382,7 @@ export default function CatalogItemsPage() {
       <div className="min-h-screen app-surface">
         <Sidebar />
         <div className="flex flex-col overflow-hidden lg:ml-[280px]">
-          <Header />
+          <Header title="Catalog · Items" />
           <main className="flex-1 overflow-auto p-4 md:p-6">
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -400,7 +400,7 @@ export default function CatalogItemsPage() {
     <div className="min-h-screen app-surface">
       <Sidebar />
       <div className="flex flex-col overflow-hidden lg:ml-[280px]">
-        <Header />
+        <Header title="Catalog · Items" />
         <main className="flex-1 overflow-auto p-4 md:p-6">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-6">
