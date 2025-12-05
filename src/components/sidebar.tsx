@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -13,6 +13,7 @@ export function Sidebar() {
   const root = (pathname || '/').split('/')[1] || '';
   const isIAM = root === 'iam';
   const isCatalog = root === 'catalog';
+  const isInventory = root === 'inventory';
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUI();
   const { session, hydrated } = useSession();
@@ -113,6 +114,37 @@ export function Sidebar() {
               )}
             </>
           )}
+          {isInventory && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Inventory</div>
+              </div>
+              <Item href="/inventory/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/inventory/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
+                <>
+                  <Item href="/inventory/warehouses" icon={<Warehouse size={18} />} label="Warehouses" active={pathname?.startsWith('/inventory/warehouses')} />
+                  <Item href="/inventory/bins" icon={<Boxes size={18} />} label="Bins" active={pathname?.startsWith('/inventory/bins')} />
+                  <Item href="/inventory/stock-items" icon={<Package2 size={18} />} label="Stock Items" active={pathname?.startsWith('/inventory/stock-items')} />
+                </>
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PURCHASING']) && (
+                <>
+                  <Item href="/inventory/suppliers" icon={<ShoppingCart size={18} />} label="Suppliers" active={pathname?.startsWith('/inventory/suppliers')} />
+                  <Item href="/inventory/purchase-orders" icon={<Truck size={18} />} label="Purchase Orders" active={pathname?.startsWith('/inventory/purchase-orders')} />
+                  <Item href="/inventory/asn" icon={<PackageSearch size={18} />} label="ASN" active={pathname?.startsWith('/inventory/asn')} />
+                </>
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
+                <>
+                  <Item href="/inventory/grn" icon={<Receipt size={18} />} label="GRN" active={pathname?.startsWith('/inventory/grn')} />
+                  <Item href="/inventory/stock-transfers" icon={<ArrowRightLeft size={18} />} label="Stock Transfers" active={pathname?.startsWith('/inventory/stock-transfers')} />
+                  <Item href="/inventory/stock-adjustments" icon={<TrendingUp size={18} />} label="Stock Adjustments" active={pathname?.startsWith('/inventory/stock-adjustments')} />
+                  <Item href="/inventory/cycle-counts" icon={<ClipboardList size={18} />} label="Cycle Counts" active={pathname?.startsWith('/inventory/cycle-counts')} />
+                </>
+              )}
+            </>
+          )}
         </nav>
         <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
           <Link
@@ -201,6 +233,37 @@ export function Sidebar() {
                   )}
                   {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
                     <Item href="/catalog/compliance-documents" icon={<FileText size={18} />} label="Compliance Documents" active={pathname?.startsWith('/catalog/compliance-documents')} />
+                  )}
+                </>
+              )}
+              {isInventory && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Inventory</div>
+                  </div>
+                  <Item href="/inventory/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/inventory/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
+                    <>
+                      <Item href="/inventory/warehouses" icon={<Warehouse size={18} />} label="Warehouses" active={pathname?.startsWith('/inventory/warehouses')} />
+                      <Item href="/inventory/bins" icon={<Boxes size={18} />} label="Bins" active={pathname?.startsWith('/inventory/bins')} />
+                      <Item href="/inventory/stock-items" icon={<Package2 size={18} />} label="Stock Items" active={pathname?.startsWith('/inventory/stock-items')} />
+                    </>
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PURCHASING']) && (
+                    <>
+                      <Item href="/inventory/suppliers" icon={<ShoppingCart size={18} />} label="Suppliers" active={pathname?.startsWith('/inventory/suppliers')} />
+                      <Item href="/inventory/purchase-orders" icon={<Truck size={18} />} label="Purchase Orders" active={pathname?.startsWith('/inventory/purchase-orders')} />
+                      <Item href="/inventory/asn" icon={<PackageSearch size={18} />} label="ASN" active={pathname?.startsWith('/inventory/asn')} />
+                    </>
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
+                    <>
+                      <Item href="/inventory/grn" icon={<Receipt size={18} />} label="GRN" active={pathname?.startsWith('/inventory/grn')} />
+                      <Item href="/inventory/stock-transfers" icon={<ArrowRightLeft size={18} />} label="Stock Transfers" active={pathname?.startsWith('/inventory/stock-transfers')} />
+                      <Item href="/inventory/stock-adjustments" icon={<TrendingUp size={18} />} label="Stock Adjustments" active={pathname?.startsWith('/inventory/stock-adjustments')} />
+                      <Item href="/inventory/cycle-counts" icon={<ClipboardList size={18} />} label="Cycle Counts" active={pathname?.startsWith('/inventory/cycle-counts')} />
+                    </>
                   )}
                 </>
               )}

@@ -295,10 +295,11 @@ export default function VariantsPage() {
       header: 'Cost Price',
       cell: ({ row }) => {
         const price = row.original.costPrice;
-        return price ? (
-          <span>{row.original.costCurrency} {price.toFixed(2)}</span>
+        const numPrice = typeof price === 'number' ? price : (price != null ? parseFloat(String(price)) : NaN);
+        return price != null && !isNaN(numPrice) ? (
+          <span>{row.original.costCurrency} {numPrice.toFixed(2)}</span>
         ) : (
-          <span className="text-muted-foreground">-</span>
+          <span className="text-muted-foreground">—</span>
         );
       }
     },

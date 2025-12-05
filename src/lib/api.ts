@@ -1091,4 +1091,717 @@ export async function deleteComplianceDocument(id: string) {
   return status === 204;
 }
 
+// ============================================================================
+// INVENTORY API FUNCTIONS
+// ============================================================================
+
+// WAREHOUSES
+export async function listWarehouses(params?: {
+  locationId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.locationId) queryParams.append('locationId', params.locationId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/warehouses${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getWarehouse(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/warehouses/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createWarehouse(payload: {
+  locationId: string;
+  code: string;
+  name: string;
+  type: 'main_hub' | 'distribution_center' | 'store' | 'third_party' | 'other';
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
+  countryCode: string;
+  capacityCubicMeters?: number;
+  isDefault?: boolean;
+  status?: 'active' | 'inactive' | 'maintenance';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/warehouses`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateWarehouse(id: string, payload: {
+  code?: string;
+  name?: string;
+  type?: 'main_hub' | 'distribution_center' | 'store' | 'third_party' | 'other';
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
+  countryCode?: string;
+  capacityCubicMeters?: number;
+  isDefault?: boolean;
+  status?: 'active' | 'inactive' | 'maintenance';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/warehouses/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteWarehouse(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/warehouses/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// BINS
+export async function listBins(params?: {
+  warehouseId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/bins${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getBin(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/bins/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createBin(payload: {
+  warehouseId: string;
+  code: string;
+  name?: string;
+  zone?: string;
+  aisle?: string;
+  rack?: string;
+  shelf?: string;
+  binType?: 'standard' | 'bulk' | 'cold_storage' | 'hazmat' | 'quarantine' | 'staging' | 'returns';
+  capacityCubicMeters?: number;
+  maxWeightKg?: number;
+  barcode?: string;
+  status?: 'active' | 'inactive' | 'full' | 'maintenance';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/bins`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateBin(id: string, payload: {
+  code?: string;
+  name?: string;
+  zone?: string;
+  aisle?: string;
+  rack?: string;
+  shelf?: string;
+  binType?: 'standard' | 'bulk' | 'cold_storage' | 'hazmat' | 'quarantine' | 'staging' | 'returns';
+  capacityCubicMeters?: number;
+  maxWeightKg?: number;
+  barcode?: string;
+  status?: 'active' | 'inactive' | 'full' | 'maintenance';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/bins/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteBin(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/bins/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// SUPPLIERS
+export async function listSuppliers(params?: {
+  organizationId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/suppliers${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getSupplier(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/suppliers/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createSupplier(payload: {
+  organizationId: string;
+  code: string;
+  name: string;
+  legalName?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  taxId?: string;
+  paymentTerms?: string;
+  currency?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
+  countryCode?: string;
+  leadTimeDays?: number;
+  minimumOrderValue?: number;
+  rating?: number;
+  notes?: string;
+  status?: 'active' | 'inactive' | 'blocked';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/suppliers`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateSupplier(id: string, payload: {
+  code?: string;
+  name?: string;
+  legalName?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  taxId?: string;
+  paymentTerms?: string;
+  currency?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
+  countryCode?: string;
+  leadTimeDays?: number;
+  minimumOrderValue?: number;
+  rating?: number;
+  notes?: string;
+  status?: 'active' | 'inactive' | 'blocked';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/suppliers/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteSupplier(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/suppliers/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// PURCHASE ORDERS
+export async function listPurchaseOrders(params?: {
+  organizationId?: string;
+  supplierId?: string;
+  warehouseId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.supplierId) queryParams.append('supplierId', params.supplierId);
+  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/purchase-orders${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getPurchaseOrder(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/purchase-orders/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createPurchaseOrder(payload: {
+  organizationId: string;
+  supplierId: string;
+  warehouseId: string;
+  poNumber: string;
+  reference?: string;
+  orderDate: string;
+  expectedDeliveryDate?: string;
+  currency?: string;
+  subtotal?: number;
+  taxAmount?: number;
+  shippingCost?: number;
+  otherCosts?: number;
+  total?: number;
+  status?: 'draft' | 'submitted' | 'confirmed' | 'partial_received' | 'received' | 'cancelled';
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/purchase-orders`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePurchaseOrder(id: string, payload: {
+  poNumber?: string;
+  reference?: string;
+  orderDate?: string;
+  expectedDeliveryDate?: string;
+  currency?: string;
+  subtotal?: number;
+  taxAmount?: number;
+  shippingCost?: number;
+  otherCosts?: number;
+  total?: number;
+  status?: 'draft' | 'submitted' | 'confirmed' | 'partial_received' | 'received' | 'cancelled';
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/purchase-orders/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deletePurchaseOrder(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/purchase-orders/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// STOCK ITEMS
+export async function listStockItems(params?: {
+  variantId?: string;
+  warehouseId?: string;
+  binId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.variantId) queryParams.append('variantId', params.variantId);
+  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
+  if (params?.binId) queryParams.append('binId', params.binId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/stock-items${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getStockItem(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/stock-items/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createStockItem(payload: {
+  variantId: string;
+  warehouseId: string;
+  binId?: string;
+  lotNumber?: string;
+  serialNumber?: string;
+  expiryDate?: string;
+  manufactureDate?: string;
+  quantityOnHand?: number;
+  quantityReserved?: number;
+  safetyStockLevel?: number;
+  reorderPoint?: number;
+  reorderQuantity?: number;
+  status?: 'available' | 'reserved' | 'quarantine' | 'damaged' | 'expired';
+  costPrice?: number;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/stock-items`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateStockItem(id: string, payload: {
+  binId?: string;
+  lotNumber?: string;
+  serialNumber?: string;
+  expiryDate?: string;
+  manufactureDate?: string;
+  quantityOnHand?: number;
+  quantityReserved?: number;
+  safetyStockLevel?: number;
+  reorderPoint?: number;
+  reorderQuantity?: number;
+  status?: 'available' | 'reserved' | 'quarantine' | 'damaged' | 'expired';
+  costPrice?: number;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/stock-items/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteStockItem(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/stock-items/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// ASN (Advanced Shipping Notices)
+export async function listASN(params?: {
+  organizationId?: string;
+  purchaseOrderId?: string;
+  supplierId?: string;
+  warehouseId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.purchaseOrderId) queryParams.append('purchaseOrderId', params.purchaseOrderId);
+  if (params?.supplierId) queryParams.append('supplierId', params.supplierId);
+  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/asn${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getASN(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/asn/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createASN(payload: {
+  organizationId: string;
+  purchaseOrderId?: string;
+  supplierId: string;
+  warehouseId: string;
+  asnNumber: string;
+  reference?: string;
+  expectedDate: string;
+  carrier?: string;
+  trackingNumber?: string;
+  totalPallets?: number;
+  totalCartons?: number;
+  status?: 'pending' | 'in_transit' | 'arrived' | 'receiving' | 'completed' | 'cancelled';
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/asn`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateASN(id: string, payload: {
+  asnNumber?: string;
+  reference?: string;
+  expectedDate?: string;
+  carrier?: string;
+  trackingNumber?: string;
+  totalPallets?: number;
+  totalCartons?: number;
+  status?: 'pending' | 'in_transit' | 'arrived' | 'receiving' | 'completed' | 'cancelled';
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/asn/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteASN(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/asn/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// GRN (Goods Receipt Notes)
+export async function listGRN(params?: {
+  organizationId?: string;
+  asnId?: string;
+  purchaseOrderId?: string;
+  warehouseId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.asnId) queryParams.append('asnId', params.asnId);
+  if (params?.purchaseOrderId) queryParams.append('purchaseOrderId', params.purchaseOrderId);
+  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/grn${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getGRN(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/grn/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createGRN(payload: {
+  organizationId: string;
+  asnId?: string;
+  purchaseOrderId?: string;
+  warehouseId: string;
+  grnNumber: string;
+  receivedDate: string;
+  receivedById: string;
+  status?: 'draft' | 'qa_pending' | 'approved' | 'rejected' | 'put_away';
+  notes?: string;
+  lines: Array<{
+    purchaseOrderLineId?: string;
+    variantId: string;
+    quantityExpected: number;
+    quantityReceived: number;
+    quantityRejected?: number;
+    lotNumber?: string;
+    serialNumbers?: string;
+    expiryDate?: string;
+    qaStatus?: 'pending' | 'passed' | 'failed' | 'quarantine';
+    qaNotes?: string;
+  }>;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/grn`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateGRN(id: string, payload: {
+  grnNumber?: string;
+  receivedDate?: string;
+  status?: 'draft' | 'qa_pending' | 'approved' | 'rejected' | 'put_away';
+  notes?: string;
+  lines?: Array<{
+    purchaseOrderLineId?: string;
+    variantId: string;
+    quantityExpected: number;
+    quantityReceived: number;
+    quantityRejected?: number;
+    lotNumber?: string;
+    serialNumbers?: string;
+    expiryDate?: string;
+    qaStatus?: 'pending' | 'passed' | 'failed' | 'quarantine';
+    qaNotes?: string;
+  }>;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/grn/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteGRN(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/grn/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// Stock Transfers
+export async function listStockTransfers(params?: {
+  organizationId?: string;
+  fromWarehouseId?: string;
+  toWarehouseId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.fromWarehouseId) queryParams.append('fromWarehouseId', params.fromWarehouseId);
+  if (params?.toWarehouseId) queryParams.append('toWarehouseId', params.toWarehouseId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/stock-transfers${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getStockTransfer(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/stock-transfers/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createStockTransfer(payload: {
+  organizationId: string;
+  transferNumber: string;
+  fromWarehouseId: string;
+  toWarehouseId: string;
+  transferDate: string;
+  expectedArrivalDate?: string;
+  status?: 'draft' | 'submitted' | 'in_transit' | 'received' | 'cancelled';
+  notes?: string;
+  lines: Array<{
+    variantId: string;
+    lotNumber?: string;
+    quantitySent: number;
+    notes?: string;
+  }>;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/stock-transfers`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateStockTransfer(id: string, payload: {
+  transferNumber?: string;
+  transferDate?: string;
+  expectedArrivalDate?: string;
+  status?: 'draft' | 'submitted' | 'in_transit' | 'received' | 'cancelled';
+  notes?: string;
+  lines?: Array<{
+    variantId: string;
+    lotNumber?: string;
+    quantitySent: number;
+    notes?: string;
+  }>;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/stock-transfers/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteStockTransfer(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/stock-transfers/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// Stock Adjustments
+export async function listStockAdjustments(params?: {
+  organizationId?: string;
+  stockItemId?: string;
+  adjustmentType?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.stockItemId) queryParams.append('stockItemId', params.stockItemId);
+  if (params?.adjustmentType) queryParams.append('adjustmentType', params.adjustmentType);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/stock-adjustments${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getStockAdjustment(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/stock-adjustments/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createStockAdjustment(payload: {
+  organizationId: string;
+  stockItemId: string;
+  adjustmentNumber: string;
+  adjustmentDate: string;
+  adjustmentType: 'increase' | 'decrease' | 'correction' | 'write_off' | 'found' | 'damaged';
+  quantityChange: number;
+  reason: string;
+  costImpact?: number;
+  adjustedById: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/stock-adjustments`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateStockAdjustment(id: string, payload: {
+  adjustmentNumber?: string;
+  adjustmentDate?: string;
+  adjustmentType?: 'increase' | 'decrease' | 'correction' | 'write_off' | 'found' | 'damaged';
+  quantityChange?: number;
+  reason?: string;
+  costImpact?: number;
+  approvedById?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/stock-adjustments/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteStockAdjustment(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/stock-adjustments/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// Cycle Counts
+export async function listCycleCounts(params?: {
+  organizationId?: string;
+  warehouseId?: string;
+  status?: string;
+  countType?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.countType) queryParams.append('countType', params.countType);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/inventory/cycle-counts${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getCycleCount(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/cycle-counts/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createCycleCount(payload: {
+  organizationId: string;
+  warehouseId: string;
+  countNumber: string;
+  countDate: string;
+  countType: 'full' | 'partial' | 'abc_class_a' | 'abc_class_b' | 'abc_class_c' | 'spot_check';
+  status?: 'planned' | 'in_progress' | 'completed' | 'reconciled' | 'cancelled';
+  assignedToId?: string;
+  notes?: string;
+  lines?: Array<{
+    stockItemId: string;
+    expectedQuantity: number;
+    countedQuantity?: number;
+    notes?: string;
+  }>;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/cycle-counts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCycleCount(id: string, payload: {
+  countNumber?: string;
+  countDate?: string;
+  countType?: 'full' | 'partial' | 'abc_class_a' | 'abc_class_b' | 'abc_class_c' | 'spot_check';
+  status?: 'planned' | 'in_progress' | 'completed' | 'reconciled' | 'cancelled';
+  assignedToId?: string;
+  completedById?: string;
+  notes?: string;
+  lines?: Array<{
+    stockItemId: string;
+    expectedQuantity: number;
+    countedQuantity?: number;
+    notes?: string;
+  }>;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/cycle-counts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteCycleCount(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/cycle-counts/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
 
