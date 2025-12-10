@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -15,6 +15,7 @@ export function Sidebar() {
   const isCatalog = root === 'catalog';
   const isInventory = root === 'inventory';
   const isOrders = root === 'orders';
+  const isFinance = root === 'finance';
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUI();
   const { session, hydrated } = useSession();
@@ -162,6 +163,28 @@ export function Sidebar() {
               )}
             </>
           )}
+          {isFinance && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Finance & Accounting</div>
+              </div>
+              <Item href="/finance/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/finance/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
+                <>
+                  <Item href="/finance/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/finance/chart-of-accounts')} />
+                  <Item href="/finance/ledger-accounts" icon={<FileTextIcon size={18} />} label="Ledger Accounts" active={pathname?.startsWith('/finance/ledger-accounts')} />
+                  <Item href="/finance/cost-centers" icon={<Coins size={18} />} label="Cost Centers" active={pathname?.startsWith('/finance/cost-centers')} />
+                  <Item href="/finance/fiscal-periods" icon={<Calendar size={18} />} label="Fiscal Periods" active={pathname?.startsWith('/finance/fiscal-periods')} />
+                  <Item href="/finance/journal-entries" icon={<FileCheck size={18} />} label="Journal Entries" active={pathname?.startsWith('/finance/journal-entries')} />
+                  <Item href="/finance/bank-accounts" icon={<Wallet size={18} />} label="Bank Accounts" active={pathname?.startsWith('/finance/bank-accounts')} />
+                  <Item href="/finance/bank-transactions" icon={<CreditCard size={18} />} label="Bank Transactions" active={pathname?.startsWith('/finance/bank-transactions')} />
+                  <Item href="/finance/vat-returns" icon={<Receipt size={18} />} label="VAT Returns" active={pathname?.startsWith('/finance/vat-returns')} />
+                  <Item href="/finance/budget-lines" icon={<BarChart size={18} />} label="Budget Lines" active={pathname?.startsWith('/finance/budget-lines')} />
+                </>
+              )}
+            </>
+          )}
         </nav>
         <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
           <Link
@@ -296,6 +319,28 @@ export function Sidebar() {
                       <Item href="/orders/customers" icon={<Users size={18} />} label="Customers" active={pathname?.startsWith('/orders/customers')} />
                       <Item href="/orders/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/orders/orders')} />
                       <Item href="/orders/returns" icon={<RotateCcw size={18} />} label="Returns" active={pathname?.startsWith('/orders/returns')} />
+                    </>
+                  )}
+                </>
+              )}
+              {isFinance && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Finance & Accounting</div>
+                  </div>
+                  <Item href="/finance/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/finance/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
+                    <>
+                      <Item href="/finance/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/finance/chart-of-accounts')} />
+                      <Item href="/finance/ledger-accounts" icon={<FileTextIcon size={18} />} label="Ledger Accounts" active={pathname?.startsWith('/finance/ledger-accounts')} />
+                      <Item href="/finance/cost-centers" icon={<Coins size={18} />} label="Cost Centers" active={pathname?.startsWith('/finance/cost-centers')} />
+                      <Item href="/finance/fiscal-periods" icon={<Calendar size={18} />} label="Fiscal Periods" active={pathname?.startsWith('/finance/fiscal-periods')} />
+                      <Item href="/finance/journal-entries" icon={<FileCheck size={18} />} label="Journal Entries" active={pathname?.startsWith('/finance/journal-entries')} />
+                      <Item href="/finance/bank-accounts" icon={<Wallet size={18} />} label="Bank Accounts" active={pathname?.startsWith('/finance/bank-accounts')} />
+                      <Item href="/finance/bank-transactions" icon={<CreditCard size={18} />} label="Bank Transactions" active={pathname?.startsWith('/finance/bank-transactions')} />
+                      <Item href="/finance/vat-returns" icon={<Receipt size={18} />} label="VAT Returns" active={pathname?.startsWith('/finance/vat-returns')} />
+                      <Item href="/finance/budget-lines" icon={<BarChart size={18} />} label="Budget Lines" active={pathname?.startsWith('/finance/budget-lines')} />
                     </>
                   )}
                 </>

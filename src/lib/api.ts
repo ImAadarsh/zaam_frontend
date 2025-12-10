@@ -2277,4 +2277,576 @@ export async function deleteOrderNote(id: string) {
   return status === 204;
 }
 
+// ============================================================================
+// FINANCE API FUNCTIONS
+// ============================================================================
+
+// CHART OF ACCOUNTS
+export async function listChartOfAccounts(params?: {
+  organizationId?: string;
+  businessUnitId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/finance/chart-of-accounts${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getChartOfAccounts(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/chart-of-accounts/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createChartOfAccounts(payload: {
+  organizationId: string;
+  businessUnitId?: string;
+  name: string;
+  isDefault?: boolean;
+  status?: 'active' | 'inactive';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/chart-of-accounts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateChartOfAccounts(id: string, payload: {
+  businessUnitId?: string;
+  name?: string;
+  isDefault?: boolean;
+  status?: 'active' | 'inactive';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/chart-of-accounts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteChartOfAccounts(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/chart-of-accounts/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// LEDGER ACCOUNTS
+export async function listLedgerAccounts(params?: {
+  chartOfAccountsId?: string;
+  accountType?: string;
+  isActive?: boolean;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.chartOfAccountsId) queryParams.append('chartOfAccountsId', params.chartOfAccountsId);
+  if (params?.accountType) queryParams.append('accountType', params.accountType);
+  if (params?.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/finance/ledger-accounts${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getLedgerAccount(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/ledger-accounts/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createLedgerAccount(payload: {
+  chartOfAccountsId: string;
+  parentAccountId?: string;
+  accountCode: string;
+  accountName: string;
+  accountType: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense' | 'cost_of_goods_sold';
+  accountSubtype?: string;
+  normalBalance: 'debit' | 'credit';
+  description?: string;
+  isSystem?: boolean;
+  isActive?: boolean;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/ledger-accounts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateLedgerAccount(id: string, payload: {
+  parentAccountId?: string;
+  accountCode?: string;
+  accountName?: string;
+  accountType?: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense' | 'cost_of_goods_sold';
+  accountSubtype?: string;
+  normalBalance?: 'debit' | 'credit';
+  description?: string;
+  isActive?: boolean;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/ledger-accounts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteLedgerAccount(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/ledger-accounts/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// COST CENTERS
+export async function listCostCenters(params?: {
+  organizationId?: string;
+  businessUnitId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/finance/cost-centers${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getCostCenter(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/cost-centers/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createCostCenter(payload: {
+  organizationId: string;
+  businessUnitId?: string;
+  code: string;
+  name: string;
+  description?: string;
+  managerId?: string;
+  status?: 'active' | 'inactive' | 'closed';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/cost-centers`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCostCenter(id: string, payload: {
+  businessUnitId?: string;
+  code?: string;
+  name?: string;
+  description?: string;
+  managerId?: string;
+  status?: 'active' | 'inactive' | 'closed';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/cost-centers/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteCostCenter(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/cost-centers/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// FISCAL PERIODS
+export async function listFiscalPeriods(params?: {
+  organizationId?: string;
+  fiscalYear?: number;
+  isClosed?: boolean;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.fiscalYear) queryParams.append('fiscalYear', params.fiscalYear.toString());
+  if (params?.isClosed !== undefined) queryParams.append('isClosed', params.isClosed.toString());
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/finance/fiscal-periods${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getFiscalPeriod(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/fiscal-periods/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createFiscalPeriod(payload: {
+  organizationId: string;
+  periodName: string;
+  periodType: 'month' | 'quarter' | 'year';
+  startDate: string;
+  endDate: string;
+  fiscalYear: number;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/fiscal-periods`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateFiscalPeriod(id: string, payload: {
+  periodName?: string;
+  periodType?: 'month' | 'quarter' | 'year';
+  startDate?: string;
+  endDate?: string;
+  fiscalYear?: number;
+  isClosed?: boolean;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/fiscal-periods/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteFiscalPeriod(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/fiscal-periods/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// JOURNAL ENTRIES
+export async function listJournalEntries(params?: {
+  organizationId?: string;
+  fiscalPeriodId?: string;
+  status?: string;
+  entryType?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.fiscalPeriodId) queryParams.append('fiscalPeriodId', params.fiscalPeriodId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.entryType) queryParams.append('entryType', params.entryType);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/finance/journal-entries${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getJournalEntry(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/journal-entries/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createJournalEntry(payload: {
+  organizationId: string;
+  businessUnitId?: string;
+  fiscalPeriodId: string;
+  journalNumber: string;
+  entryDate: string;
+  entryType?: 'standard' | 'adjusting' | 'closing' | 'reversing' | 'recurring';
+  sourceType?: 'manual' | 'invoice' | 'payment' | 'order' | 'payroll' | 'inventory' | 'other';
+  sourceId?: string;
+  description?: string;
+  reference?: string;
+  status?: 'draft' | 'posted' | 'voided';
+  journalLines: Array<{
+    ledgerAccountId: string;
+    costCenterId?: string;
+    lineNumber: number;
+    description?: string;
+    debitAmount: number;
+    creditAmount: number;
+    currency?: string;
+    exchangeRate?: number;
+  }>;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/journal-entries`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateJournalEntry(id: string, payload: {
+  businessUnitId?: string;
+  fiscalPeriodId?: string;
+  journalNumber?: string;
+  entryDate?: string;
+  entryType?: 'standard' | 'adjusting' | 'closing' | 'reversing' | 'recurring';
+  sourceType?: 'manual' | 'invoice' | 'payment' | 'order' | 'payroll' | 'inventory' | 'other';
+  sourceId?: string;
+  description?: string;
+  reference?: string;
+  status?: 'draft' | 'posted' | 'voided';
+  journalLines?: Array<{
+    ledgerAccountId: string;
+    costCenterId?: string;
+    lineNumber: number;
+    description?: string;
+    debitAmount: number;
+    creditAmount: number;
+    currency?: string;
+    exchangeRate?: number;
+  }>;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/journal-entries/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteJournalEntry(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/journal-entries/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// BANK ACCOUNTS
+export async function listBankAccounts(params?: {
+  organizationId?: string;
+  businessUnitId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/finance/bank-accounts${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getBankAccount(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/bank-accounts/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createBankAccount(payload: {
+  organizationId: string;
+  businessUnitId?: string;
+  accountName: string;
+  bankName: string;
+  accountNumber?: string;
+  routingNumber?: string;
+  iban?: string;
+  swiftCode?: string;
+  currency?: string;
+  currentBalance?: number;
+  ledgerAccountId?: string;
+  isDefault?: boolean;
+  status?: 'active' | 'inactive' | 'closed';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/bank-accounts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateBankAccount(id: string, payload: {
+  businessUnitId?: string;
+  accountName?: string;
+  bankName?: string;
+  accountNumber?: string;
+  routingNumber?: string;
+  iban?: string;
+  swiftCode?: string;
+  currency?: string;
+  currentBalance?: number;
+  ledgerAccountId?: string;
+  isDefault?: boolean;
+  status?: 'active' | 'inactive' | 'closed';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/bank-accounts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteBankAccount(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/bank-accounts/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// BANK TRANSACTIONS
+export async function listBankTransactions(params?: {
+  bankAccountId?: string;
+  isReconciled?: boolean;
+  transactionType?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.bankAccountId) queryParams.append('bankAccountId', params.bankAccountId);
+  if (params?.isReconciled !== undefined) queryParams.append('isReconciled', params.isReconciled.toString());
+  if (params?.transactionType) queryParams.append('transactionType', params.transactionType);
+  if (params?.startDate) queryParams.append('startDate', params.startDate);
+  if (params?.endDate) queryParams.append('endDate', params.endDate);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/finance/bank-transactions${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getBankTransaction(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/bank-transactions/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createBankTransaction(payload: {
+  bankAccountId: string;
+  transactionDate: string;
+  postDate?: string;
+  transactionType: 'debit' | 'credit' | 'fee' | 'interest' | 'other';
+  amount: number;
+  currency?: string;
+  description?: string;
+  reference?: string;
+  payeePayer?: string;
+  balance?: number;
+  isReconciled?: boolean;
+  journalEntryId?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/bank-transactions`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateBankTransaction(id: string, payload: {
+  transactionDate?: string;
+  postDate?: string;
+  transactionType?: 'debit' | 'credit' | 'fee' | 'interest' | 'other';
+  amount?: number;
+  currency?: string;
+  description?: string;
+  reference?: string;
+  payeePayer?: string;
+  balance?: number;
+  isReconciled?: boolean;
+  journalEntryId?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/bank-transactions/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteBankTransaction(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/bank-transactions/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// VAT RETURNS
+export async function listVatReturns(params?: {
+  organizationId?: string;
+  businessUnitId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/finance/vat-returns${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getVatReturn(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/vat-returns/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createVatReturn(payload: {
+  organizationId: string;
+  businessUnitId?: string;
+  returnNumber: string;
+  periodStart: string;
+  periodEnd: string;
+  vatDueSales?: number;
+  vatDueAcquisitions?: number;
+  vatReclaimed?: number;
+  totalValueSales?: number;
+  totalValuePurchases?: number;
+  totalValueGoodsSupplied?: number;
+  totalAcquisitions?: number;
+  status?: 'draft' | 'submitted' | 'accepted' | 'rejected';
+  mtdReference?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/vat-returns`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateVatReturn(id: string, payload: {
+  businessUnitId?: string;
+  returnNumber?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  vatDueSales?: number;
+  vatDueAcquisitions?: number;
+  vatReclaimed?: number;
+  totalValueSales?: number;
+  totalValuePurchases?: number;
+  totalValueGoodsSupplied?: number;
+  totalAcquisitions?: number;
+  status?: 'draft' | 'submitted' | 'accepted' | 'rejected';
+  mtdReference?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/vat-returns/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteVatReturn(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/vat-returns/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// BUDGET LINES
+export async function listBudgetLines(params?: {
+  organizationId?: string;
+  businessUnitId?: string;
+  costCenterId?: string;
+  ledgerAccountId?: string;
+  fiscalPeriodId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
+  if (params?.costCenterId) queryParams.append('costCenterId', params.costCenterId);
+  if (params?.ledgerAccountId) queryParams.append('ledgerAccountId', params.ledgerAccountId);
+  if (params?.fiscalPeriodId) queryParams.append('fiscalPeriodId', params.fiscalPeriodId);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/finance/budget-lines${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getBudgetLine(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/budget-lines/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createBudgetLine(payload: {
+  organizationId: string;
+  businessUnitId?: string;
+  costCenterId?: string;
+  ledgerAccountId: string;
+  fiscalPeriodId: string;
+  budgetedAmount: number;
+  actualAmount?: number;
+  variancePercent?: number;
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/budget-lines`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateBudgetLine(id: string, payload: {
+  businessUnitId?: string;
+  costCenterId?: string;
+  ledgerAccountId?: string;
+  fiscalPeriodId?: string;
+  budgetedAmount?: number;
+  actualAmount?: number;
+  variancePercent?: number;
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/budget-lines/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteBudgetLine(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/budget-lines/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
 
