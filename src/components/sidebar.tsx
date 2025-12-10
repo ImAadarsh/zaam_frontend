@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -16,6 +16,7 @@ export function Sidebar() {
   const isInventory = root === 'inventory';
   const isOrders = root === 'orders';
   const isFinance = root === 'finance';
+  const isHR = root === 'hr';
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUI();
   const { session, hydrated } = useSession();
@@ -185,6 +186,36 @@ export function Sidebar() {
               )}
             </>
           )}
+          {isHR && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">HR, Payroll & KPI</div>
+              </div>
+              <Item href="/hr/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/hr/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER']) && (
+                <>
+                  <Item href="/hr/employees" icon={<Users size={18} />} label="Employees" active={pathname?.startsWith('/hr/employees')} />
+                  <Item href="/hr/employment-contracts" icon={<FileTextIcon size={18} />} label="Employment Contracts" active={pathname?.startsWith('/hr/employment-contracts')} />
+                  <Item href="/hr/time-entries" icon={<Clock size={18} />} label="Time Entries" active={pathname?.startsWith('/hr/time-entries')} />
+                  <Item href="/hr/leave-requests" icon={<Calendar size={18} />} label="Leave Requests" active={pathname?.startsWith('/hr/leave-requests')} />
+                  <Item href="/hr/shifts" icon={<Briefcase size={18} />} label="Shifts" active={pathname?.startsWith('/hr/shifts')} />
+                </>
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'HR_MANAGER']) && (
+                <>
+                  <Item href="/hr/payroll-runs" icon={<DollarSign size={18} />} label="Payroll Runs" active={pathname?.startsWith('/hr/payroll-runs')} />
+                </>
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER']) && (
+                <>
+                  <Item href="/hr/tasks" icon={<CheckSquare size={18} />} label="Tasks" active={pathname?.startsWith('/hr/tasks')} />
+                  <Item href="/hr/kpi-definitions" icon={<TrendingUp size={18} />} label="KPI Definitions" active={pathname?.startsWith('/hr/kpi-definitions')} />
+                  <Item href="/hr/kpi-records" icon={<BarChart size={18} />} label="KPI Records" active={pathname?.startsWith('/hr/kpi-records')} />
+                </>
+              )}
+            </>
+          )}
         </nav>
         <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
           <Link
@@ -341,6 +372,36 @@ export function Sidebar() {
                       <Item href="/finance/bank-transactions" icon={<CreditCard size={18} />} label="Bank Transactions" active={pathname?.startsWith('/finance/bank-transactions')} />
                       <Item href="/finance/vat-returns" icon={<Receipt size={18} />} label="VAT Returns" active={pathname?.startsWith('/finance/vat-returns')} />
                       <Item href="/finance/budget-lines" icon={<BarChart size={18} />} label="Budget Lines" active={pathname?.startsWith('/finance/budget-lines')} />
+                    </>
+                  )}
+                </>
+              )}
+              {isHR && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">HR, Payroll & KPI</div>
+                  </div>
+                  <Item href="/hr/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/hr/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER']) && (
+                    <>
+                      <Item href="/hr/employees" icon={<Users size={18} />} label="Employees" active={pathname?.startsWith('/hr/employees')} />
+                      <Item href="/hr/employment-contracts" icon={<FileTextIcon size={18} />} label="Employment Contracts" active={pathname?.startsWith('/hr/employment-contracts')} />
+                      <Item href="/hr/time-entries" icon={<Clock size={18} />} label="Time Entries" active={pathname?.startsWith('/hr/time-entries')} />
+                      <Item href="/hr/leave-requests" icon={<Calendar size={18} />} label="Leave Requests" active={pathname?.startsWith('/hr/leave-requests')} />
+                      <Item href="/hr/shifts" icon={<Briefcase size={18} />} label="Shifts" active={pathname?.startsWith('/hr/shifts')} />
+                    </>
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'HR_MANAGER']) && (
+                    <>
+                      <Item href="/hr/payroll-runs" icon={<DollarSign size={18} />} label="Payroll Runs" active={pathname?.startsWith('/hr/payroll-runs')} />
+                    </>
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER']) && (
+                    <>
+                      <Item href="/hr/tasks" icon={<CheckSquare size={18} />} label="Tasks" active={pathname?.startsWith('/hr/tasks')} />
+                      <Item href="/hr/kpi-definitions" icon={<TrendingUp size={18} />} label="KPI Definitions" active={pathname?.startsWith('/hr/kpi-definitions')} />
+                      <Item href="/hr/kpi-records" icon={<BarChart size={18} />} label="KPI Records" active={pathname?.startsWith('/hr/kpi-records')} />
                     </>
                   )}
                 </>

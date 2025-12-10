@@ -2849,4 +2849,719 @@ export async function deleteBudgetLine(id: string) {
   return status === 204;
 }
 
+// ============================================================================
+// HR MODULE
+// ============================================================================
+
+// EMPLOYEES
+export async function listEmployees(params?: {
+  organizationId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/employees${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getEmployee(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/employees/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createEmployee(payload: {
+  organizationId: string;
+  userId?: string;
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+  maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | 'other';
+  nationalId?: string;
+  taxId?: string;
+  passportNumber?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
+  countryCode?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  hireDate: string;
+  terminationDate?: string;
+  employmentType?: 'full_time' | 'part_time' | 'contract' | 'temporary' | 'intern';
+  status?: 'active' | 'on_leave' | 'suspended' | 'terminated';
+  photoUrl?: string;
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/employees`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateEmployee(id: string, payload: {
+  userId?: string;
+  employeeNumber?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+  maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | 'other';
+  nationalId?: string;
+  taxId?: string;
+  passportNumber?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
+  countryCode?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  hireDate?: string;
+  terminationDate?: string;
+  employmentType?: 'full_time' | 'part_time' | 'contract' | 'temporary' | 'intern';
+  status?: 'active' | 'on_leave' | 'suspended' | 'terminated';
+  photoUrl?: string;
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/employees/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteEmployee(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/employees/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// EMPLOYMENT CONTRACTS
+export async function listEmploymentContracts(params?: {
+  employeeId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/employment-contracts${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getEmploymentContract(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/employment-contracts/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createEmploymentContract(payload: {
+  employeeId: string;
+  businessUnitId: string;
+  locationId?: string;
+  costCenterId?: string;
+  jobTitle: string;
+  department?: string;
+  reportingTo?: string;
+  contractType: 'permanent' | 'fixed_term' | 'contract' | 'zero_hours';
+  startDate: string;
+  endDate?: string;
+  salaryAmount: number;
+  salaryCurrency?: string;
+  salaryPeriod?: 'hourly' | 'daily' | 'weekly' | 'monthly' | 'annual';
+  workingHoursPerWeek?: number;
+  probationPeriodDays?: number;
+  noticePeriodDays?: number;
+  contractDocumentUrl?: string;
+  isCurrent?: boolean;
+  status?: 'draft' | 'active' | 'expired' | 'terminated';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/employment-contracts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateEmploymentContract(id: string, payload: {
+  businessUnitId?: string;
+  locationId?: string;
+  costCenterId?: string;
+  jobTitle?: string;
+  department?: string;
+  reportingTo?: string;
+  contractType?: 'permanent' | 'fixed_term' | 'contract' | 'zero_hours';
+  startDate?: string;
+  endDate?: string;
+  salaryAmount?: number;
+  salaryCurrency?: string;
+  salaryPeriod?: 'hourly' | 'daily' | 'weekly' | 'monthly' | 'annual';
+  workingHoursPerWeek?: number;
+  probationPeriodDays?: number;
+  noticePeriodDays?: number;
+  contractDocumentUrl?: string;
+  isCurrent?: boolean;
+  status?: 'draft' | 'active' | 'expired' | 'terminated';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/employment-contracts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteEmploymentContract(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/employment-contracts/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// EMPLOYEE DOCUMENTS
+export async function listEmployeeDocuments(params?: {
+  employeeId?: string;
+  documentType?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
+  if (params?.documentType) queryParams.append('documentType', params.documentType);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/employee-documents${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getEmployeeDocument(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/employee-documents/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createEmployeeDocument(payload: {
+  employeeId: string;
+  documentType: 'contract' | 'offer_letter' | 'id' | 'passport' | 'certificate' | 'performance_review' | 'warning' | 'other';
+  documentName: string;
+  documentUrl: string;
+  documentNumber?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  uploadedBy?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/employee-documents`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateEmployeeDocument(id: string, payload: {
+  documentType?: 'contract' | 'offer_letter' | 'id' | 'passport' | 'certificate' | 'performance_review' | 'warning' | 'other';
+  documentName?: string;
+  documentUrl?: string;
+  documentNumber?: string;
+  issueDate?: string;
+  expiryDate?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/employee-documents/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteEmployeeDocument(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/employee-documents/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// TIME ENTRIES
+export async function listTimeEntries(params?: {
+  employeeId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/time-entries${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getTimeEntry(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/time-entries/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createTimeEntry(payload: {
+  employeeId: string;
+  businessUnitId: string;
+  locationId?: string;
+  entryDate: string;
+  clockInTime: string;
+  clockOutTime?: string;
+  totalHours?: number;
+  breakMinutes?: number;
+  overtimeHours?: number;
+  entryType?: 'regular' | 'overtime' | 'holiday' | 'sick' | 'unpaid';
+  notes?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/time-entries`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateTimeEntry(id: string, payload: {
+  locationId?: string;
+  entryDate?: string;
+  clockInTime?: string;
+  clockOutTime?: string;
+  totalHours?: number;
+  breakMinutes?: number;
+  overtimeHours?: number;
+  entryType?: 'regular' | 'overtime' | 'holiday' | 'sick' | 'unpaid';
+  notes?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/time-entries/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteTimeEntry(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/time-entries/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// LEAVE REQUESTS
+export async function listLeaveRequests(params?: {
+  employeeId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/leave-requests${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getLeaveRequest(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/leave-requests/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createLeaveRequest(payload: {
+  employeeId: string;
+  leaveType: 'vacation' | 'sick' | 'personal' | 'maternity' | 'paternity' | 'bereavement' | 'unpaid' | 'other';
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  reason?: string;
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/leave-requests`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateLeaveRequest(id: string, payload: {
+  leaveType?: 'vacation' | 'sick' | 'personal' | 'maternity' | 'paternity' | 'bereavement' | 'unpaid' | 'other';
+  startDate?: string;
+  endDate?: string;
+  totalDays?: number;
+  reason?: string;
+  status?: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  rejectionReason?: string;
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/leave-requests/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteLeaveRequest(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/leave-requests/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// SHIFTS
+export async function listShifts(params?: {
+  employeeId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/shifts${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getShift(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/shifts/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createShift(payload: {
+  employeeId: string;
+  businessUnitId: string;
+  locationId?: string;
+  shiftDate: string;
+  startTime: string;
+  endTime: string;
+  breakMinutes?: number;
+  shiftType?: 'regular' | 'opening' | 'closing' | 'split' | 'on_call';
+  notes?: string;
+  status?: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/shifts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateShift(id: string, payload: {
+  locationId?: string;
+  shiftDate?: string;
+  startTime?: string;
+  endTime?: string;
+  breakMinutes?: number;
+  shiftType?: 'regular' | 'opening' | 'closing' | 'split' | 'on_call';
+  notes?: string;
+  status?: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/shifts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteShift(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/shifts/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// PAYROLL RUNS
+export async function listPayrollRuns(params?: {
+  organizationId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/payroll-runs${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getPayrollRun(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/payroll-runs/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createPayrollRun(payload: {
+  organizationId: string;
+  businessUnitId?: string;
+  payrollNumber: string;
+  periodStart: string;
+  periodEnd: string;
+  paymentDate: string;
+  currency?: string;
+  status?: 'draft' | 'calculated' | 'approved' | 'paid' | 'posted';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/payroll-runs`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePayrollRun(id: string, payload: {
+  businessUnitId?: string;
+  payrollNumber?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  paymentDate?: string;
+  currency?: string;
+  status?: 'draft' | 'calculated' | 'approved' | 'paid' | 'posted';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/payroll-runs/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deletePayrollRun(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/payroll-runs/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// PAYROLL LINES
+export async function listPayrollLines(params?: {
+  payrollRunId?: string;
+  employeeId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.payrollRunId) queryParams.append('payrollRunId', params.payrollRunId);
+  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/payroll-lines${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getPayrollLine(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/payroll-lines/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createPayrollLine(payload: {
+  payrollRunId: string;
+  employeeId: string;
+  costCenterId?: string;
+  grossPay: number;
+  taxDeduction?: number;
+  nationalInsurance?: number;
+  pensionDeduction?: number;
+  otherDeductions?: number;
+  employerNi?: number;
+  employerPension?: number;
+  regularHours?: number;
+  overtimeHours?: number;
+  holidayHours?: number;
+  sickHours?: number;
+  paymentMethod?: 'bank_transfer' | 'check' | 'cash' | 'paypal';
+  payslipUrl?: string;
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/payroll-lines`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePayrollLine(id: string, payload: {
+  costCenterId?: string;
+  grossPay?: number;
+  taxDeduction?: number;
+  nationalInsurance?: number;
+  pensionDeduction?: number;
+  otherDeductions?: number;
+  employerNi?: number;
+  employerPension?: number;
+  regularHours?: number;
+  overtimeHours?: number;
+  holidayHours?: number;
+  sickHours?: number;
+  paymentMethod?: 'bank_transfer' | 'check' | 'cash' | 'paypal';
+  payslipUrl?: string;
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/payroll-lines/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deletePayrollLine(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/payroll-lines/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// TASKS
+export async function listTasks(params?: {
+  organizationId?: string;
+  status?: string;
+  assignedTo?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.assignedTo) queryParams.append('assignedTo', params.assignedTo);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/tasks${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getTask(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/tasks/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createTask(payload: {
+  organizationId: string;
+  title: string;
+  description?: string;
+  taskType?: 'order' | 'project' | 'maintenance' | 'support' | 'other';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  assignedTo?: string;
+  assignedBy?: string;
+  businessUnitId?: string;
+  locationId?: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  dueDate?: string;
+  estimatedHours?: number;
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/tasks`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateTask(id: string, payload: {
+  title?: string;
+  description?: string;
+  taskType?: 'order' | 'project' | 'maintenance' | 'support' | 'other';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  assignedTo?: string;
+  businessUnitId?: string;
+  locationId?: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  dueDate?: string;
+  estimatedHours?: number;
+  actualHours?: number;
+  status?: 'pending' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/tasks/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteTask(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/tasks/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// KPI DEFINITIONS
+export async function listKpiDefinitions(params?: {
+  organizationId?: string;
+  kpiCategory?: string;
+  isActive?: boolean;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.kpiCategory) queryParams.append('kpiCategory', params.kpiCategory);
+  if (params?.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/kpi-definitions${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getKpiDefinition(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/kpi-definitions/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createKpiDefinition(payload: {
+  organizationId: string;
+  kpiCode: string;
+  kpiName: string;
+  kpiCategory: 'sales' | 'operations' | 'finance' | 'customer_service' | 'hr' | 'marketing' | 'other';
+  description?: string;
+  unitOfMeasure?: string;
+  targetValue?: number;
+  calculationMethod?: string;
+  isHigherBetter?: boolean;
+  isActive?: boolean;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/kpi-definitions`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateKpiDefinition(id: string, payload: {
+  kpiCode?: string;
+  kpiName?: string;
+  kpiCategory?: 'sales' | 'operations' | 'finance' | 'customer_service' | 'hr' | 'marketing' | 'other';
+  description?: string;
+  unitOfMeasure?: string;
+  targetValue?: number;
+  calculationMethod?: string;
+  isHigherBetter?: boolean;
+  isActive?: boolean;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/kpi-definitions/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteKpiDefinition(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/kpi-definitions/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// KPI RECORDS
+export async function listKpiRecords(params?: {
+  kpiDefinitionId?: string;
+  employeeId?: string;
+  businessUnitId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.kpiDefinitionId) queryParams.append('kpiDefinitionId', params.kpiDefinitionId);
+  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
+  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/hr/kpi-records${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getKpiRecord(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/kpi-records/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createKpiRecord(payload: {
+  kpiDefinitionId: string;
+  businessUnitId?: string;
+  locationId?: string;
+  employeeId?: string;
+  periodType: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  periodStart: string;
+  periodEnd: string;
+  actualValue: number;
+  targetValue?: number;
+  variancePercent?: number;
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/kpi-records`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateKpiRecord(id: string, payload: {
+  businessUnitId?: string;
+  locationId?: string;
+  employeeId?: string;
+  periodType?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  periodStart?: string;
+  periodEnd?: string;
+  actualValue?: number;
+  targetValue?: number;
+  variancePercent?: number;
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/kpi-records/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteKpiRecord(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/kpi-records/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
 
