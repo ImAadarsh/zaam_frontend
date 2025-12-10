@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -14,6 +14,7 @@ export function Sidebar() {
   const isIAM = root === 'iam';
   const isCatalog = root === 'catalog';
   const isInventory = root === 'inventory';
+  const isOrders = root === 'orders';
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUI();
   const { session, hydrated } = useSession();
@@ -145,6 +146,22 @@ export function Sidebar() {
               )}
             </>
           )}
+          {isOrders && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Orders & Customers</div>
+              </div>
+              <Item href="/orders/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/orders/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']) && (
+                <>
+                  <Item href="/orders/customers" icon={<Users size={18} />} label="Customers" active={pathname?.startsWith('/orders/customers')} />
+                  <Item href="/orders/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/orders/orders')} />
+                  <Item href="/orders/returns" icon={<RotateCcw size={18} />} label="Returns" active={pathname?.startsWith('/orders/returns')} />
+                </>
+              )}
+            </>
+          )}
         </nav>
         <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
           <Link
@@ -263,6 +280,22 @@ export function Sidebar() {
                       <Item href="/inventory/stock-transfers" icon={<ArrowRightLeft size={18} />} label="Stock Transfers" active={pathname?.startsWith('/inventory/stock-transfers')} />
                       <Item href="/inventory/stock-adjustments" icon={<TrendingUp size={18} />} label="Stock Adjustments" active={pathname?.startsWith('/inventory/stock-adjustments')} />
                       <Item href="/inventory/cycle-counts" icon={<ClipboardList size={18} />} label="Cycle Counts" active={pathname?.startsWith('/inventory/cycle-counts')} />
+                    </>
+                  )}
+                </>
+              )}
+              {isOrders && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Orders & Customers</div>
+                  </div>
+                  <Item href="/orders/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/orders/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']) && (
+                    <>
+                      <Item href="/orders/customers" icon={<Users size={18} />} label="Customers" active={pathname?.startsWith('/orders/customers')} />
+                      <Item href="/orders/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/orders/orders')} />
+                      <Item href="/orders/returns" icon={<RotateCcw size={18} />} label="Returns" active={pathname?.startsWith('/orders/returns')} />
                     </>
                   )}
                 </>

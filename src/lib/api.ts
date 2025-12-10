@@ -1804,4 +1804,477 @@ export async function deleteCycleCount(id: string) {
   return status === 204;
 }
 
+// ============================================================================
+// ORDERS API FUNCTIONS
+// ============================================================================
+
+// CUSTOMERS
+export async function listCustomers(params?: {
+  organizationId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/orders/customers${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getCustomer(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/orders/customers/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createCustomer(payload: {
+  organizationId: string;
+  customerNumber?: string;
+  email?: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  companyName?: string;
+  customerType?: 'individual' | 'business' | 'wholesale' | 'vip';
+  tier?: 'standard' | 'silver' | 'gold' | 'platinum';
+  taxId?: string;
+  taxExempt?: boolean;
+  languageCode?: string;
+  marketingOptIn?: boolean;
+  notes?: string;
+  status?: 'active' | 'inactive' | 'blocked';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/orders/customers`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCustomer(id: string, payload: {
+  customerNumber?: string;
+  email?: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  companyName?: string;
+  customerType?: 'individual' | 'business' | 'wholesale' | 'vip';
+  tier?: 'standard' | 'silver' | 'gold' | 'platinum';
+  taxId?: string;
+  taxExempt?: boolean;
+  languageCode?: string;
+  marketingOptIn?: boolean;
+  notes?: string;
+  status?: 'active' | 'inactive' | 'blocked';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/orders/customers/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteCustomer(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/orders/customers/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// ORDERS
+export async function listOrders(params?: {
+  organizationId?: string;
+  customerId?: string;
+  status?: string;
+  paymentStatus?: string;
+  fulfillmentStatus?: string;
+  channel?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.customerId) queryParams.append('customerId', params.customerId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.paymentStatus) queryParams.append('paymentStatus', params.paymentStatus);
+  if (params?.fulfillmentStatus) queryParams.append('fulfillmentStatus', params.fulfillmentStatus);
+  if (params?.channel) queryParams.append('channel', params.channel);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/orders/orders${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getOrder(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/orders/orders/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createOrder(payload: {
+  organizationId: string;
+  businessUnitId?: string;
+  orderNumber: string;
+  channel: 'amazon' | 'ebay' | 'tiktok' | 'etsy' | 'shopify' | 'woocommerce' | 'wix' | 'b2b_portal' | 'pos' | 'phone' | 'email' | 'other';
+  channelOrderId?: string;
+  channelOrderNumber?: string;
+  customerId?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  orderDate: string;
+  currency?: string;
+  subtotal?: number;
+  discountAmount?: number;
+  shippingAmount?: number;
+  taxAmount?: number;
+  total: number;
+  paymentStatus?: 'pending' | 'authorized' | 'partially_paid' | 'paid' | 'refunded' | 'failed';
+  fulfillmentStatus?: 'pending' | 'processing' | 'partially_fulfilled' | 'fulfilled' | 'cancelled';
+  shippingMethod?: string;
+  requestedDeliveryDate?: string;
+  giftMessage?: string;
+  internalNotes?: string;
+  customerNotes?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  fraudScore?: number;
+  fraudStatus?: 'clear' | 'review' | 'flagged' | 'blocked';
+  tags?: string;
+  status?: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded' | 'on_hold';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/orders/orders`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateOrder(id: string, payload: {
+  orderNumber?: string;
+  channel?: 'amazon' | 'ebay' | 'tiktok' | 'etsy' | 'shopify' | 'woocommerce' | 'wix' | 'b2b_portal' | 'pos' | 'phone' | 'email' | 'other';
+  channelOrderId?: string;
+  channelOrderNumber?: string;
+  customerId?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  orderDate?: string;
+  currency?: string;
+  subtotal?: number;
+  discountAmount?: number;
+  shippingAmount?: number;
+  taxAmount?: number;
+  total?: number;
+  paymentStatus?: 'pending' | 'authorized' | 'partially_paid' | 'paid' | 'refunded' | 'failed';
+  fulfillmentStatus?: 'pending' | 'processing' | 'partially_fulfilled' | 'fulfilled' | 'cancelled';
+  shippingMethod?: string;
+  requestedDeliveryDate?: string;
+  giftMessage?: string;
+  internalNotes?: string;
+  customerNotes?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  fraudScore?: number;
+  fraudStatus?: 'clear' | 'review' | 'flagged' | 'blocked';
+  tags?: string;
+  status?: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded' | 'on_hold';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/orders/orders/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteOrder(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/orders/orders/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// RETURNS
+export async function listReturns(params?: {
+  organizationId?: string;
+  orderId?: string;
+  customerId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.orderId) queryParams.append('orderId', params.orderId);
+  if (params?.customerId) queryParams.append('customerId', params.customerId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.search) queryParams.append('search', params.search);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/orders/returns${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
+export async function getReturn(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/orders/returns/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createReturn(payload: {
+  organizationId: string;
+  returnNumber: string;
+  orderId: string;
+  customerId: string;
+  returnDate: string;
+  reasonCode: 'defective' | 'wrong_item' | 'not_as_described' | 'size_issue' | 'changed_mind' | 'damaged_in_transit' | 'other';
+  reasonNotes?: string;
+  refundMethod?: 'original_payment' | 'store_credit' | 'exchange' | 'no_refund';
+  refundAmount?: number;
+  restockingFee?: number;
+  returnShippingPaidBy?: 'customer' | 'merchant';
+  status?: 'requested' | 'approved' | 'rejected' | 'received' | 'refunded' | 'completed' | 'cancelled';
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/orders/returns`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateReturn(id: string, payload: {
+  returnNumber?: string;
+  returnDate?: string;
+  reasonCode?: 'defective' | 'wrong_item' | 'not_as_described' | 'size_issue' | 'changed_mind' | 'damaged_in_transit' | 'other';
+  reasonNotes?: string;
+  refundMethod?: 'original_payment' | 'store_credit' | 'exchange' | 'no_refund';
+  refundAmount?: number;
+  restockingFee?: number;
+  returnShippingPaidBy?: 'customer' | 'merchant';
+  status?: 'requested' | 'approved' | 'rejected' | 'received' | 'refunded' | 'completed' | 'cancelled';
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/orders/returns/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteReturn(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/orders/returns/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// CUSTOMER ADDRESSES
+export async function listCustomerAddresses(params?: {
+  customerId?: string;
+  addressType?: string;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.customerId) queryParams.append('customerId', params.customerId);
+  if (params?.addressType) queryParams.append('addressType', params.addressType);
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/orders/customer-addresses${query}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function getCustomerAddress(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/orders/customer-addresses/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createCustomerAddress(payload: {
+  customerId: string;
+  addressType: 'shipping' | 'billing' | 'both';
+  firstName?: string;
+  lastName?: string;
+  company?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  stateProvince?: string;
+  postalCode: string;
+  countryCode: string;
+  phone?: string;
+  isDefault?: boolean;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/orders/customer-addresses`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCustomerAddress(id: string, payload: {
+  addressType?: 'shipping' | 'billing' | 'both';
+  firstName?: string;
+  lastName?: string;
+  company?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
+  countryCode?: string;
+  phone?: string;
+  isDefault?: boolean;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/orders/customer-addresses/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteCustomerAddress(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/orders/customer-addresses/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// ORDER LINES
+export async function listOrderLines(params?: {
+  orderId?: string;
+  variantId?: string;
+  fulfillmentStatus?: string;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.orderId) queryParams.append('orderId', params.orderId);
+  if (params?.variantId) queryParams.append('variantId', params.variantId);
+  if (params?.fulfillmentStatus) queryParams.append('fulfillmentStatus', params.fulfillmentStatus);
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/orders/order-lines${query}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function getOrderLine(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/orders/order-lines/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createOrderLine(payload: {
+  orderId: string;
+  variantId: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  discountAmount?: number;
+  taxRate?: number;
+  taxAmount?: number;
+  lineTotal: number;
+  costPrice?: number;
+  warehouseId?: string;
+  fulfillmentStatus?: 'pending' | 'allocated' | 'picked' | 'packed' | 'shipped' | 'cancelled';
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/orders/order-lines`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateOrderLine(id: string, payload: {
+  sku?: string;
+  name?: string;
+  quantity?: number;
+  unitPrice?: number;
+  discountAmount?: number;
+  taxRate?: number;
+  taxAmount?: number;
+  lineTotal?: number;
+  costPrice?: number;
+  quantityFulfilled?: number;
+  warehouseId?: string;
+  fulfillmentStatus?: 'pending' | 'allocated' | 'picked' | 'packed' | 'shipped' | 'cancelled';
+  notes?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/orders/order-lines/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteOrderLine(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/orders/order-lines/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// ORDER ADDRESSES
+export async function listOrderAddresses(params?: {
+  orderId?: string;
+  addressType?: string;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.orderId) queryParams.append('orderId', params.orderId);
+  if (params?.addressType) queryParams.append('addressType', params.addressType);
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/orders/order-addresses${query}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function getOrderAddress(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/orders/order-addresses/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createOrderAddress(payload: {
+  orderId: string;
+  addressType: 'shipping' | 'billing';
+  firstName?: string;
+  lastName?: string;
+  company?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  stateProvince?: string;
+  postalCode: string;
+  countryCode: string;
+  phone?: string;
+  email?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/orders/order-addresses`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateOrderAddress(id: string, payload: {
+  addressType?: 'shipping' | 'billing';
+  firstName?: string;
+  lastName?: string;
+  company?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateProvince?: string;
+  postalCode?: string;
+  countryCode?: string;
+  phone?: string;
+  email?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/orders/order-addresses/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteOrderAddress(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/orders/order-addresses/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// ORDER NOTES
+export async function listOrderNotes(params?: {
+  orderId?: string;
+  noteType?: string;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.orderId) queryParams.append('orderId', params.orderId);
+  if (params?.noteType) queryParams.append('noteType', params.noteType);
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/orders/order-notes${query}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function getOrderNote(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/orders/order-notes/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createOrderNote(payload: {
+  orderId: string;
+  noteType?: 'internal' | 'customer' | 'system';
+  note: string;
+  isCustomerVisible?: boolean;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/orders/order-notes`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateOrderNote(id: string, payload: {
+  noteType?: 'internal' | 'customer' | 'system';
+  note?: string;
+  isCustomerVisible?: boolean;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/orders/order-notes/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteOrderNote(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/orders/order-notes/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
 

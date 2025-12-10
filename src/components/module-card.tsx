@@ -10,7 +10,7 @@ export function ModuleCard(props: { href: string; title: string; description: st
       className="group relative block"
     >
       <div className={`relative h-full p-6 rounded-2xl border transition-all duration-300 ${featured
-          ? 'bg-gradient-to-br from-primary/5 to-transparent border-primary/20 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5'
+          ? 'bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/30 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20 ring-1 ring-primary/10'
           : 'bg-card border-border/50 hover:border-border hover:shadow-lg'
         }`}>
 
