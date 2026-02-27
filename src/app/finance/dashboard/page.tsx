@@ -6,12 +6,12 @@ import { Header } from '@/components/header';
 import { StatCard } from '@/components/stat-card';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
-import { 
-  listChartOfAccounts, listLedgerAccounts, listJournalEntries, 
+import {
+  listChartOfAccounts, listLedgerAccounts, listJournalEntries,
   listBankAccounts, listVatReturns, listBudgetLines,
-  listFiscalPeriods
+  listFiscalPeriods, listInvoices, listPayments, listGateways
 } from '@/lib/api';
-import { BookOpen, FileText, FileCheck, Wallet, Receipt, BarChart, Calendar, TrendingUp } from 'lucide-react';
+import { BookOpen, FileText, FileCheck, Wallet, Receipt, BarChart, Calendar, TrendingUp, CreditCard } from 'lucide-react';
 import Link from 'next/link';
 
 export default function FinanceDashboard() {
@@ -27,7 +27,10 @@ export default function FinanceDashboard() {
     totalVatReturns: 0,
     totalBudgetLines: 0,
     activeFiscalPeriods: 0,
-    draftJournalEntries: 0
+    draftJournalEntries: 0,
+    totalInvoices: 0,
+    totalPayments: 0,
+    totalGateways: 0
   });
 
   useEffect(() => {
@@ -38,14 +41,17 @@ export default function FinanceDashboard() {
     }
     (async () => {
       try {
-        const [coaRes, laRes, jeRes, baRes, vatRes, budgetRes, fpRes] = await Promise.all([
+        const [coaRes, laRes, jeRes, baRes, vatRes, budgetRes, fpRes, invRes, payRes, gwRes] = await Promise.all([
           listChartOfAccounts({ organizationId: session?.user?.organizationId }),
           listLedgerAccounts({}),
           listJournalEntries({ organizationId: session?.user?.organizationId }),
           listBankAccounts({ organizationId: session?.user?.organizationId }),
           listVatReturns({ organizationId: session?.user?.organizationId }),
           listBudgetLines({ organizationId: session?.user?.organizationId }),
-          listFiscalPeriods({ organizationId: session?.user?.organizationId, isClosed: false })
+          listFiscalPeriods({ organizationId: session?.user?.organizationId, isClosed: false }),
+          listInvoices(session?.user?.organizationId!),
+          listPayments(session?.user?.organizationId!),
+          listGateways(session?.user?.organizationId!)
         ]);
 
         const journalEntries = jeRes.data || [];
@@ -59,7 +65,10 @@ export default function FinanceDashboard() {
           totalVatReturns: vatRes.data?.length || 0,
           totalBudgetLines: budgetRes.data?.length || 0,
           activeFiscalPeriods: fpRes.data?.length || 0,
-          draftJournalEntries: draftEntries
+          draftJournalEntries: draftEntries,
+          totalInvoices: invRes.data?.length || 0,
+          totalPayments: payRes.data?.length || 0,
+          totalGateways: gwRes.data?.length || 0
         });
       } catch (e: any) {
         console.error('Failed to load finance stats:', e);
@@ -112,11 +121,35 @@ export default function FinanceDashboard() {
         <main className="flex-1 overflow-auto p-4 md:p-6">
           <div className="space-y-6">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Finance & Accounting Overview</h1>
-              <p className="text-muted-foreground">Manage chart of accounts, journal entries, bank accounts, and financial reporting</p>
+              <h1 className="text-3xl font-bold mb-2">Finance & Payments Overview</h1>
+              <p className="text-muted-foreground">Manage invoices, payments, and financial reporting</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Link href="/finance/invoices">
+                <StatCard
+                  title="Invoices"
+                  value={stats.totalInvoices.toString()}
+                  icon={<Receipt className="h-5 w-5" />}
+                  hint="Total invoices created"
+                />
+              </Link>
+              <Link href="/finance/payments">
+                <StatCard
+                  title="Payments"
+                  value={stats.totalPayments.toString()}
+                  icon={<CreditCard className="h-5 w-5" />}
+                  hint="Total payments recorded"
+                />
+              </Link>
+              <Link href="/finance/gateways">
+                <StatCard
+                  title="Gateways"
+                  value={stats.totalGateways.toString()}
+                  icon={<Wallet className="h-5 w-5" />}
+                  hint="Configured payment gateways"
+                />
+              </Link>
               <Link href="/finance/chart-of-accounts">
                 <StatCard
                   title="Chart of Accounts"
@@ -184,6 +217,18 @@ export default function FinanceDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+              <Link href="/finance/invoices" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
+                <h3 className="font-semibold mb-2">Invoices</h3>
+                <p className="text-sm text-muted-foreground">Manage customer invoices and billing</p>
+              </Link>
+              <Link href="/finance/payments" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
+                <h3 className="font-semibold mb-2">Payments</h3>
+                <p className="text-sm text-muted-foreground">Manage incoming payments and refunds</p>
+              </Link>
+              <Link href="/finance/gateways" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
+                <h3 className="font-semibold mb-2">Payment Gateways</h3>
+                <p className="text-sm text-muted-foreground">Configure Stripe, PayPal, and more</p>
+              </Link>
               <Link
                 href="/finance/chart-of-accounts"
                 className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"

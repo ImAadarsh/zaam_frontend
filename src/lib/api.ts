@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
 import { clearSession, getSession } from '@/lib/auth';
 
@@ -3562,6 +3563,296 @@ export async function updateKpiRecord(id: string, payload: {
 export async function deleteKpiRecord(id: string) {
   const { status } = await axios.delete(`${API_BASE}/api/hr/kpi-records/${id}`, { headers: authHeaders() });
   return status === 204;
+}
+
+// ============================================================================
+// CRM API FUNCTIONS
+// ============================================================================
+
+// TICKETS
+export async function listTickets(params?: {
+  organizationId?: string;
+  customerId?: string;
+  orderId?: string;
+  status?: string;
+  priority?: string;
+  category?: string;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.customerId) queryParams.append('customerId', params.customerId);
+  if (params?.orderId) queryParams.append('orderId', params.orderId);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.priority) queryParams.append('priority', params.priority);
+  if (params?.category) queryParams.append('category', params.category);
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/crm/tickets${query}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function getTicket(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/crm/tickets/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createTicket(payload: {
+  organizationId: string;
+  customerId?: string;
+  orderId?: string;
+  channel: 'email' | 'sms' | 'whatsapp' | 'phone' | 'chat' | 'social_dm' | 'web_form';
+  subject: string;
+  description?: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  category?: 'order_inquiry' | 'return' | 'complaint' | 'technical' | 'billing' | 'general' | 'other';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/tickets`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateTicket(id: string, payload: {
+  subject?: string;
+  description?: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  category?: 'order_inquiry' | 'return' | 'complaint' | 'technical' | 'billing' | 'general' | 'other';
+  status?: 'new' | 'open' | 'pending_customer' | 'pending_internal' | 'resolved' | 'closed' | 'cancelled';
+  tags?: string;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/crm/tickets/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function addTicketMessage(id: string, payload: {
+  senderType: 'customer' | 'agent' | 'system';
+  senderId?: string;
+  senderName?: string;
+  senderEmail?: string;
+  message: string;
+  isInternal?: boolean;
+  attachments?: any;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/tickets/${id}/messages`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function assignTicket(id: string, payload: {
+  assignedTo: string;
+  notes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/tickets/${id}/assign`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+// CANNED RESPONSES
+export async function listCannedResponses() {
+  const { data } = await axios.get(`${API_BASE}/api/crm/canned-responses`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function getCannedResponse(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/crm/canned-responses/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createCannedResponse(payload: {
+  organizationId: string;
+  title: string;
+  shortcut?: string | null;
+  content: string;
+  category?: string | null;
+  isActive?: boolean;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/canned-responses`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCannedResponse(id: string, payload: {
+  title?: string;
+  shortcut?: string | null;
+  content?: string;
+  category?: string | null;
+  isActive?: boolean;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/crm/canned-responses/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteCannedResponse(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/crm/canned-responses/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+export async function incrementCannedResponseUsage(id: string) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/canned-responses/${id}/usage`, {}, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+// CUSTOMER TIERS
+export async function listCustomerTiers() {
+  const { data } = await axios.get(`${API_BASE}/api/crm/customer-tiers`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function getCustomerTier(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/crm/customer-tiers/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createCustomerTier(payload: {
+  organizationId: string;
+  tierName: string;
+  tierCode: string;
+  minLifetimeValue?: number | null;
+  minOrders?: number | null;
+  benefits?: any | null;
+  discountPercent?: number | null;
+  prioritySupport?: boolean;
+  position?: number;
+  isActive?: boolean;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/customer-tiers`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCustomerTier(id: string, payload: {
+  tierName?: string;
+  tierCode?: string;
+  minLifetimeValue?: number | null;
+  minOrders?: number | null;
+  benefits?: any | null;
+  discountPercent?: number | null;
+  prioritySupport?: boolean;
+  position?: number;
+  isActive?: boolean;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/crm/customer-tiers/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteCustomerTier(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/crm/customer-tiers/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// ============================================================================
+// FINANCE/PAYMENTS API FUNCTIONS
+// ============================================================================
+
+// GATEWAYS
+export async function listGateways(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/gateways?organizationId=${organizationId}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getGateway(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/gateways/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createGateway(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/gateways`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateGateway(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/gateways/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteGateway(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/gateways/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// PAYMENTS
+export async function listPayments(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/payments?organizationId=${organizationId}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getPayment(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/payments/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createPayment(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/payments`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updatePayment(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/payments/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deletePayment(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/payments/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// INVOICES
+export async function listInvoices(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/invoices?organizationId=${organizationId}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getInvoice(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/invoices/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createInvoice(payload: Record<string, unknown>) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/invoices`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateInvoice(id: string, payload: Record<string, unknown>) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/invoices/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteInvoice(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/finance/invoices/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// ==== Finance: Payouts & Settlements ====
+
+export async function listPayouts(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/payouts?organizationId=${organizationId}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function getPayout(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/payouts/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createPayout(payload: Record<string, unknown>) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/payouts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePayout(id: string, payload: Record<string, unknown>) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/payouts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deletePayout(id: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/finance/payouts/${id}`, { headers: authHeaders() });
+  return data;
+}
+
+export async function listSettlements(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/settlements?organizationId=${organizationId}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function getSettlement(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/settlements/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createSettlement(payload: Record<string, unknown>) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/settlements`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateSettlement(id: string, payload: Record<string, unknown>) {
+  const { data } = await axios.patch(`${API_BASE}/api/finance/settlements/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteSettlement(id: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/finance/settlements/${id}`, { headers: authHeaders() });
+  return data;
 }
 
 

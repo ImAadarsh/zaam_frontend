@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -17,11 +17,13 @@ export function Sidebar() {
   const isOrders = root === 'orders';
   const isFinance = root === 'finance';
   const isHR = root === 'hr';
+  const isCRM = root === 'crm';
+  const isAccounting = root === 'accounting';
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUI();
   const { session, hydrated } = useSession();
   const userRoles = session?.user?.roles || [];
-  
+
   // Helper to check if user has required roles
   const hasRole = (requiredRoles: string[]) => {
     if (!hydrated) return false; // Don't check roles until hydrated to avoid hydration mismatch
@@ -168,11 +170,14 @@ export function Sidebar() {
             <>
               <div className="mt-6 mb-2 flex items-center gap-2 px-3">
                 <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
-                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Finance & Accounting</div>
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Payments & Invoicing</div>
               </div>
               <Item href="/finance/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/finance/dashboard'} />
               {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
                 <>
+                  <Item href="/finance/invoices" icon={<Receipt size={18} />} label="Invoices" active={pathname?.startsWith('/finance/invoices')} />
+                  <Item href="/finance/payments" icon={<CreditCard size={18} />} label="Payments" active={pathname?.startsWith('/finance/payments')} />
+                  <Item href="/finance/gateways" icon={<Wallet size={18} />} label="Payment Gateways" active={pathname?.startsWith('/finance/gateways')} />
                   <Item href="/finance/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/finance/chart-of-accounts')} />
                   <Item href="/finance/ledger-accounts" icon={<FileTextIcon size={18} />} label="Ledger Accounts" active={pathname?.startsWith('/finance/ledger-accounts')} />
                   <Item href="/finance/cost-centers" icon={<Coins size={18} />} label="Cost Centers" active={pathname?.startsWith('/finance/cost-centers')} />
@@ -182,6 +187,23 @@ export function Sidebar() {
                   <Item href="/finance/bank-transactions" icon={<CreditCard size={18} />} label="Bank Transactions" active={pathname?.startsWith('/finance/bank-transactions')} />
                   <Item href="/finance/vat-returns" icon={<Receipt size={18} />} label="VAT Returns" active={pathname?.startsWith('/finance/vat-returns')} />
                   <Item href="/finance/budget-lines" icon={<BarChart size={18} />} label="Budget Lines" active={pathname?.startsWith('/finance/budget-lines')} />
+                </>
+              )}
+            </>
+          )}
+          {isAccounting && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Finance & Accounting</div>
+              </div>
+              <Item href="/accounting/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/accounting/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
+                <>
+                  <Item href="/accounting/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/accounting/chart-of-accounts')} />
+                  <Item href="/accounting/journal-entries" icon={<FileCheck size={18} />} label="Journal Entries" active={pathname?.startsWith('/accounting/journal-entries')} />
+                  <Item href="/accounting/bank-accounts" icon={<Landmark size={18} />} label="Bank Accounts" active={pathname?.startsWith('/accounting/bank-accounts')} />
+                  <Item href="/accounting/vat-returns" icon={<Receipt size={18} />} label="VAT Returns" active={pathname?.startsWith('/accounting/vat-returns')} />
                 </>
               )}
             </>
@@ -213,6 +235,24 @@ export function Sidebar() {
                   <Item href="/hr/kpi-definitions" icon={<TrendingUp size={18} />} label="KPI Definitions" active={pathname?.startsWith('/hr/kpi-definitions')} />
                   <Item href="/hr/kpi-records" icon={<BarChart size={18} />} label="KPI Records" active={pathname?.startsWith('/hr/kpi-records')} />
                 </>
+              )}
+            </>
+          )}
+          {isCRM && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">CRM & Customer Service</div>
+              </div>
+              <Item href="/crm/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/crm/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT']) && (
+                <>
+                  <Item href="/crm/tickets" icon={<MessageSquare size={18} />} label="Tickets" active={pathname?.startsWith('/crm/tickets')} />
+                  <Item href="/crm/canned-responses" icon={<FileText size={18} />} label="Canned Responses" active={pathname?.startsWith('/crm/canned-responses')} />
+                </>
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
+                <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
               )}
             </>
           )}
@@ -358,11 +398,14 @@ export function Sidebar() {
                 <>
                   <div className="mt-6 mb-2 flex items-center gap-2 px-3">
                     <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
-                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Finance & Accounting</div>
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Payments & Invoicing</div>
                   </div>
                   <Item href="/finance/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/finance/dashboard'} />
                   {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
                     <>
+                      <Item href="/finance/invoices" icon={<Receipt size={18} />} label="Invoices" active={pathname?.startsWith('/finance/invoices')} />
+                      <Item href="/finance/payments" icon={<CreditCard size={18} />} label="Payments" active={pathname?.startsWith('/finance/payments')} />
+                      <Item href="/finance/gateways" icon={<Wallet size={18} />} label="Payment Gateways" active={pathname?.startsWith('/finance/gateways')} />
                       <Item href="/finance/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/finance/chart-of-accounts')} />
                       <Item href="/finance/ledger-accounts" icon={<FileTextIcon size={18} />} label="Ledger Accounts" active={pathname?.startsWith('/finance/ledger-accounts')} />
                       <Item href="/finance/cost-centers" icon={<Coins size={18} />} label="Cost Centers" active={pathname?.startsWith('/finance/cost-centers')} />
@@ -403,6 +446,24 @@ export function Sidebar() {
                       <Item href="/hr/kpi-definitions" icon={<TrendingUp size={18} />} label="KPI Definitions" active={pathname?.startsWith('/hr/kpi-definitions')} />
                       <Item href="/hr/kpi-records" icon={<BarChart size={18} />} label="KPI Records" active={pathname?.startsWith('/hr/kpi-records')} />
                     </>
+                  )}
+                </>
+              )}
+              {isCRM && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">CRM & Customer Service</div>
+                  </div>
+                  <Item href="/crm/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/crm/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT']) && (
+                    <>
+                      <Item href="/crm/tickets" icon={<MessageSquare size={18} />} label="Tickets" active={pathname?.startsWith('/crm/tickets')} />
+                      <Item href="/crm/canned-responses" icon={<FileText size={18} />} label="Canned Responses" active={pathname?.startsWith('/crm/canned-responses')} />
+                    </>
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
+                    <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
                   )}
                 </>
               )}
