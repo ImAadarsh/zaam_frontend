@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { Sidebar } from '@/components/sidebar';
@@ -8,12 +8,19 @@ import { listTickets } from '@/lib/api';
 import { RichDataTable } from '@/components/rich-data-table';
 import { MessageSquare, Plus, Filter, Eye, X, Send } from 'lucide-react';
 import { ColumnDef } from '@tanstack/react-table';
-import { useMemo } from 'react';
 import { listCustomers, createTicket } from '@/lib/api';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
 export default function TicketsPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen app-surface" />}>
+            <TicketsPageInner />
+        </Suspense>
+    );
+}
+
+function TicketsPageInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [tickets, setTickets] = useState<any[]>([]);
