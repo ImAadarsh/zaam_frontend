@@ -1,14 +1,22 @@
+'use client';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export function ModuleCard(props: { href: string; title: string; description: string; Icon: any; featured?: boolean }) {
   const { href, title, description, Icon, featured } = props;
 
   return (
-    <Link
-      href={href}
-      className="group relative block"
+    <motion.div
+      whileHover={{ y: -5, scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+      className="h-full"
     >
+      <Link
+        href={href}
+        className="group relative block h-full"
+      >
       <div className={`relative h-full p-6 rounded-2xl border transition-all duration-300 ${featured
           ? 'bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/30 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/20 ring-1 ring-primary/10'
           : 'bg-card border-border/50 hover:border-border hover:shadow-lg'
@@ -40,13 +48,17 @@ export function ModuleCard(props: { href: string; title: string; description: st
           </p>
         </div>
 
-        {/* Featured indicator */}
+        {/* Status indicator */}
         {featured && (
-          <div className="absolute top-4 right-4">
-            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+          <div className="absolute top-4 right-4 z-10 pointer-events-none">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_4px_rgba(16,185,129,0.8)]" />
+              Complete
+            </div>
           </div>
         )}
       </div>
-    </Link>
+      </Link>
+    </motion.div>
   );
 }

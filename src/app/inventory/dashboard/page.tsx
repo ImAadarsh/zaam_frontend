@@ -9,6 +9,18 @@ import { useRoleCheck } from '@/hooks/use-role-check';
 import { listWarehouses, listStockItems, listSuppliers, listPurchaseOrders } from '@/lib/api';
 import { Warehouse, Package, ShoppingCart, TrendingUp, AlertTriangle, Boxes } from 'lucide-react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const mockChartData = [
+  { name: 'Mon', inbound: 400, outbound: 240 },
+  { name: 'Tue', inbound: 300, outbound: 139 },
+  { name: 'Wed', inbound: 200, outbound: 980 },
+  { name: 'Thu', inbound: 278, outbound: 390 },
+  { name: 'Fri', inbound: 189, outbound: 480 },
+  { name: 'Sat', inbound: 239, outbound: 380 },
+  { name: 'Sun', inbound: 349, outbound: 430 }
+];
 
 export default function InventoryDashboard() {
   const router = useRouter();
@@ -109,7 +121,15 @@ export default function InventoryDashboard() {
               <p className="text-muted-foreground">Manage warehouses, stock, suppliers, and purchase orders</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              initial="hidden"
+              animate="show"
+              variants={{
+                hidden: { opacity: 0 },
+                show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+              }}
+            >
               <Link href="/inventory/warehouses">
                 <StatCard
                   title="Warehouses"
@@ -154,43 +174,86 @@ export default function InventoryDashboard() {
                 icon={<Boxes className="h-5 w-5" />}
                 hint="Inventory value at cost"
               />
-            </div>
+            </motion.div>
+
+            {/* Recharts Area */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mt-8 p-6 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-xl"
+            >
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold tracking-tight">Stock Movements</h2>
+                <p className="text-sm text-muted-foreground">Rolling 7-day inbound vs outbound</p>
+              </div>
+              <div className="h-[350px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={mockChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorInbound" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorOutbound" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                      itemStyle={{ color: 'hsl(var(--foreground))' }}
+                    />
+                    <Area type="monotone" dataKey="inbound" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorInbound)" />
+                    <Area type="monotone" dataKey="outbound" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorOutbound)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
               <Link
                 href="/inventory/warehouses"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
+                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden"
               >
-                <h3 className="font-semibold mb-2">Warehouses</h3>
-                <p className="text-sm text-muted-foreground">Manage warehouse locations and settings</p>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Warehouses</h3>
+                <p className="text-sm text-muted-foreground relative">Manage warehouse locations and settings</p>
               </Link>
               <Link
                 href="/inventory/stock-items"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
+                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden"
               >
-                <h3 className="font-semibold mb-2">Stock Items</h3>
-                <p className="text-sm text-muted-foreground">View and manage inventory levels</p>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Stock Items</h3>
+                <p className="text-sm text-muted-foreground relative">View and manage inventory levels</p>
               </Link>
               <Link
                 href="/inventory/suppliers"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
+                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden"
               >
-                <h3 className="font-semibold mb-2">Suppliers</h3>
-                <p className="text-sm text-muted-foreground">Manage supplier information</p>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Suppliers</h3>
+                <p className="text-sm text-muted-foreground relative">Manage supplier information</p>
               </Link>
               <Link
                 href="/inventory/purchase-orders"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
+                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden"
               >
-                <h3 className="font-semibold mb-2">Purchase Orders</h3>
-                <p className="text-sm text-muted-foreground">Create and track purchase orders</p>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Purchase Orders</h3>
+                <p className="text-sm text-muted-foreground relative">Create and track purchase orders</p>
               </Link>
               <Link
                 href="/inventory/bins"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
+                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden"
               >
-                <h3 className="font-semibold mb-2">Bins</h3>
-                <p className="text-sm text-muted-foreground">Manage storage bins and locations</p>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Bins</h3>
+                <p className="text-sm text-muted-foreground relative">Manage storage bins and locations</p>
               </Link>
             </div>
           </div>

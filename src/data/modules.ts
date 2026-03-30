@@ -49,7 +49,7 @@ export const modules = [
     description: 'Posts, Inbox, Creators'
   },
   {
-    slug: 'reports', name: 'Reporting & Analytics', icon: BarChart3, color: '#0A0A0A',
+    slug: 'analytics', name: 'Reporting & Analytics', icon: BarChart3, color: '#0A0A0A',
     description: 'Reports, Dashboards, Exports'
   },
   {

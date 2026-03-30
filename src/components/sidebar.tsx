@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -19,6 +19,11 @@ export function Sidebar() {
   const isHR = root === 'hr';
   const isCRM = root === 'crm';
   const isAccounting = root === 'accounting';
+  const isMarketing = pathname?.startsWith('/marketing');
+  const isSocial = pathname?.startsWith('/social');
+  const isAnalytics = pathname?.startsWith('/analytics');
+  const isFulfillment = pathname?.startsWith('/fulfillment');
+  const isSystem = pathname?.startsWith('/system');
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUI();
   const { session, hydrated } = useSession();
@@ -27,7 +32,8 @@ export function Sidebar() {
   // Helper to check if user has required roles
   const hasRole = (requiredRoles: string[]) => {
     if (!hydrated) return false; // Don't check roles until hydrated to avoid hydration mismatch
-    return requiredRoles.some(role => userRoles.includes(role));
+    const roleCodes = userRoles.map((r: any) => typeof r === 'string' ? r : (r?.code || r?.name || '')).map((r: string) => r.toUpperCase());
+    return roleCodes.includes('SUPER_ADMIN') || requiredRoles.some(role => roleCodes.includes(role.toUpperCase()));
   };
 
   function doLogout() {
@@ -238,6 +244,54 @@ export function Sidebar() {
               )}
             </>
           )}
+          {isAnalytics && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Analytics & Reporting</div>
+              </div>
+              <Item href="/analytics/dashboard" icon={<BarChart3 size={18} />} label="Overview" active={pathname === '/analytics/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
+                <>
+                  <Item href="/analytics/reports" icon={<FileText size={18} />} label="Reports" active={pathname?.startsWith('/analytics/reports')} />
+                  <Item href="/analytics/scheduled-reports" icon={<CalendarClock size={18} />} label="Scheduled" active={pathname?.startsWith('/analytics/scheduled-reports')} />
+                  <Item href="/analytics/exports" icon={<Download size={18} />} label="Data Exports" active={pathname?.startsWith('/analytics/exports')} />
+                </>
+              )}
+            </>
+          )}
+          {isFulfillment && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Fulfillment & 3PL</div>
+              </div>
+              <Item href="/fulfillment/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/fulfillment/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
+                <>
+                  <Item href="/fulfillment/pick-pack" icon={<Package size={18} />} label="Pick/Pack" active={pathname?.startsWith('/fulfillment/pick-pack')} />
+                  <Item href="/fulfillment/shipments" icon={<Truck size={18} />} label="Shipments" active={pathname?.startsWith('/fulfillment/shipments')} />
+                  <Item href="/fulfillment/tracking" icon={<MapPin size={18} />} label="Tracking" active={pathname?.startsWith('/fulfillment/tracking')} />
+                </>
+              )}
+            </>
+          )}
+          {isSystem && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">System & Config</div>
+              </div>
+              <Item href="/system/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/system/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
+                <>
+                  <Item href="/system/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/system/settings')} />
+                  <Item href="/system/templates" icon={<FileText size={18} />} label="Templates" active={pathname?.startsWith('/system/templates')} />
+                  <Item href="/system/webhooks" icon={<Share2 size={18} />} label="Webhooks" active={pathname?.startsWith('/system/webhooks')} />
+                </>
+              )}
+            </>
+          )}
           {isCRM && (
             <>
               <div className="mt-6 mb-2 flex items-center gap-2 px-3">
@@ -253,6 +307,23 @@ export function Sidebar() {
               )}
               {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
                 <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
+              )}
+            </>
+          )}
+          {isMarketing && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Marketing & Affiliates</div>
+              </div>
+              <Item href="/marketing/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/marketing/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'MARKETING']) && (
+                <>
+                  <Item href="/marketing/segments" icon={<Users size={18} />} label="Segments" active={pathname?.startsWith('/marketing/segments')} />
+                  <Item href="/marketing/campaigns" icon={<Megaphone size={18} />} label="Campaigns" active={pathname?.startsWith('/marketing/campaigns')} />
+                  <Item href="/marketing/coupons" icon={<Tag size={18} />} label="Coupons" active={pathname?.startsWith('/marketing/coupons')} />
+                  <Item href="/marketing/affiliates" icon={<Share2 size={18} />} label="Affiliates" active={pathname?.startsWith('/marketing/affiliates')} />
+                </>
               )}
             </>
           )}
@@ -449,6 +520,54 @@ export function Sidebar() {
                   )}
                 </>
               )}
+              {isAnalytics && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Analytics & Reporting</div>
+                  </div>
+                  <Item href="/analytics/dashboard" icon={<BarChart3 size={18} />} label="Overview" active={pathname === '/analytics/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
+                    <>
+                      <Item href="/analytics/reports" icon={<FileText size={18} />} label="Reports" active={pathname?.startsWith('/analytics/reports')} />
+                      <Item href="/analytics/scheduled-reports" icon={<CalendarClock size={18} />} label="Scheduled" active={pathname?.startsWith('/analytics/scheduled-reports')} />
+                      <Item href="/analytics/exports" icon={<Download size={18} />} label="Data Exports" active={pathname?.startsWith('/analytics/exports')} />
+                    </>
+                  )}
+                </>
+              )}
+              {isFulfillment && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Fulfillment & 3PL</div>
+                  </div>
+                  <Item href="/fulfillment/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/fulfillment/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
+                    <>
+                      <Item href="/fulfillment/pick-pack" icon={<Package size={18} />} label="Pick/Pack" active={pathname?.startsWith('/fulfillment/pick-pack')} />
+                      <Item href="/fulfillment/shipments" icon={<Truck size={18} />} label="Shipments" active={pathname?.startsWith('/fulfillment/shipments')} />
+                      <Item href="/fulfillment/tracking" icon={<MapPin size={18} />} label="Tracking" active={pathname?.startsWith('/fulfillment/tracking')} />
+                    </>
+                  )}
+                </>
+              )}
+              {isSystem && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">System & Config</div>
+                  </div>
+                  <Item href="/system/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/system/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
+                    <>
+                      <Item href="/system/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/system/settings')} />
+                      <Item href="/system/templates" icon={<FileText size={18} />} label="Templates" active={pathname?.startsWith('/system/templates')} />
+                      <Item href="/system/webhooks" icon={<Share2 size={18} />} label="Webhooks" active={pathname?.startsWith('/system/webhooks')} />
+                    </>
+                  )}
+                </>
+              )}
               {isCRM && (
                 <>
                   <div className="mt-6 mb-2 flex items-center gap-2 px-3">
@@ -464,6 +583,23 @@ export function Sidebar() {
                   )}
                   {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
                     <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
+                  )}
+                </>
+              )}
+              {isMarketing && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Marketing & Affiliates</div>
+                  </div>
+                  <Item href="/marketing/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/marketing/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'MARKETING']) && (
+                    <>
+                      <Item href="/marketing/segments" icon={<Users size={18} />} label="Segments" active={pathname?.startsWith('/marketing/segments')} />
+                      <Item href="/marketing/campaigns" icon={<Megaphone size={18} />} label="Campaigns" active={pathname?.startsWith('/marketing/campaigns')} />
+                      <Item href="/marketing/coupons" icon={<Tag size={18} />} label="Coupons" active={pathname?.startsWith('/marketing/coupons')} />
+                      <Item href="/marketing/affiliates" icon={<Share2 size={18} />} label="Affiliates" active={pathname?.startsWith('/marketing/affiliates')} />
+                    </>
                   )}
                 </>
               )}

@@ -7,8 +7,20 @@ import { StatCard } from '@/components/stat-card';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { listCustomers, listOrders, listReturns } from '@/lib/api';
-import { Users, ShoppingCart, RotateCcw, DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
+import { Users, ShoppingCart, RotateCcw, DollarSign, TrendingUp, AlertCircle, TrendingDown } from 'lucide-react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const mockChartData = [
+  { name: 'Mon', sales: 4000, returns: 240 },
+  { name: 'Tue', sales: 3000, returns: 139 },
+  { name: 'Wed', sales: 2000, returns: 980 },
+  { name: 'Thu', sales: 2780, returns: 390 },
+  { name: 'Fri', sales: 1890, returns: 480 },
+  { name: 'Sat', sales: 2390, returns: 380 },
+  { name: 'Sun', sales: 3490, returns: 430 }
+];
 
 export default function OrdersDashboard() {
   const router = useRouter();
@@ -113,7 +125,15 @@ export default function OrdersDashboard() {
               <p className="text-muted-foreground">Manage customers, orders, and returns</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              initial="hidden"
+              animate="show"
+              variants={{
+                hidden: { opacity: 0 },
+                show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+              }}
+            >
               <Link href="/orders/customers">
                 <StatCard
                   title="Customers"
@@ -160,29 +180,70 @@ export default function OrdersDashboard() {
                 icon={<DollarSign className="h-5 w-5" />}
                 hint="Revenue from completed orders"
               />
-            </div>
+            </motion.div>
+
+            {/* Recharts Area */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mt-8 p-6 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-xl"
+            >
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold tracking-tight">Sales & Returns Volume</h2>
+                <p className="text-sm text-muted-foreground">Rolling 7-day volume metrics</p>
+              </div>
+              <div className="h-[350px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={mockChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorReturns" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                      itemStyle={{ color: 'hsl(var(--foreground))' }}
+                    />
+                    <Area type="monotone" dataKey="sales" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
+                    <Area type="monotone" dataKey="returns" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorReturns)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
               <Link
                 href="/orders/customers"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
+                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden"
               >
-                <h3 className="font-semibold mb-2">Customers</h3>
-                <p className="text-sm text-muted-foreground">Manage customer information and addresses</p>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Customers</h3>
+                <p className="text-sm text-muted-foreground relative">Manage customer information and addresses</p>
               </Link>
               <Link
                 href="/orders/orders"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
+                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:primary/50 transition-all duration-300 overflow-hidden"
               >
-                <h3 className="font-semibold mb-2">Orders</h3>
-                <p className="text-sm text-muted-foreground">View and manage sales orders from all channels</p>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Orders</h3>
+                <p className="text-sm text-muted-foreground relative">View and manage sales orders from all channels</p>
               </Link>
               <Link
                 href="/orders/returns"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
+                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden"
               >
-                <h3 className="font-semibold mb-2">Returns</h3>
-                <p className="text-sm text-muted-foreground">Process returns and refunds</p>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Returns</h3>
+                <p className="text-sm text-muted-foreground relative">Process returns and refunds</p>
               </Link>
             </div>
           </div>

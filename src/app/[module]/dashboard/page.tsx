@@ -7,7 +7,7 @@ import { Header } from '@/components/header';
 import { getSession } from '@/lib/auth';
 import { StatCard } from '@/components/stat-card';
 import { listUsers, listRoles, listAuditLogs, listOrganizations, listBusinessUnits, listLocations, listApiKeys, listCatalogItems, listVariants, listPriceLists, listTaxCodes } from '@/lib/api';
-import { Users, Shield, Key, FileText, UserCog, TrendingUp, Activity, Building2, Briefcase, MapPin, Package2, Tag, DollarSign, Receipt } from 'lucide-react';
+import { Users, Shield, Key, FileText, UserCog, TrendingUp, Activity, Building2, Briefcase, MapPin, Package2, Tag, DollarSign, Receipt, Truck, Package, Settings, Share2 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const COLORS = ['#D4A017', '#E5B84A', '#F0D07C', '#8B7012', '#A68A1A'];
@@ -794,6 +794,68 @@ export default function ModuleDashboardPage() {
                       <Bar dataKey="value" fill="#D4A017" radius={[0, 8, 8, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
+                </div>
+              </section>
+            </>
+          ) : params.module === 'fulfillment' ? (
+            <>
+              <section className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+                <StatCard title="Active Shipments" value="24" hint="In transit" icon={<Truck size={20} />} />
+                <StatCard title="Pick/Pack Queue" value="12" hint="Pending orders" icon={<Package size={20} />} />
+                <StatCard title="Avg Delivery Time" value="2.4 days" hint="Last 30 days" icon={<MapPin size={20} />} />
+              </section>
+
+              <section className="grid gap-4 grid-cols-1 mt-6">
+                <div className="rounded-2xl border border-border bg-card p-6">
+                  <div className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">Quick Actions</div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <a href="/fulfillment/pick-pack" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <Package size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Pick & Pack</div>
+                      <div className="text-xs text-muted-foreground mt-1">Manage processing</div>
+                    </a>
+                    <a href="/fulfillment/shipments" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <Truck size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Shipments</div>
+                      <div className="text-xs text-muted-foreground mt-1">Manage dispatches</div>
+                    </a>
+                    <a href="/fulfillment/tracking" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <MapPin size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Tracking</div>
+                      <div className="text-xs text-muted-foreground mt-1">Live parcel tracker</div>
+                    </a>
+                  </div>
+                </div>
+              </section>
+            </>
+          ) : params.module === 'system' ? (
+            <>
+              <section className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+                <StatCard title="System Version" value="v1.4.2" hint="Latest stable" icon={<Settings size={20} />} />
+                <StatCard title="Active Webhooks" value="8" hint="Connected integrations" icon={<Share2 size={20} />} />
+                <StatCard title="Storage Used" value="42 GB" hint="Database & Assets" icon={<FileText size={20} />} />
+              </section>
+
+              <section className="grid gap-4 grid-cols-1 mt-6">
+                <div className="rounded-2xl border border-border bg-card p-6">
+                  <div className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">Quick Actions</div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <a href="/system/settings" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <Settings size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Settings</div>
+                      <div className="text-xs text-muted-foreground mt-1">Global platform config</div>
+                    </a>
+                    <a href="/system/templates" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <FileText size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Templates</div>
+                      <div className="text-xs text-muted-foreground mt-1">Email, SMS, & PDF</div>
+                    </a>
+                    <a href="/system/webhooks" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                      <Share2 size={20} className="text-primary mb-2" />
+                      <div className="font-medium text-sm">Webhooks</div>
+                      <div className="text-xs text-muted-foreground mt-1">Third-party callbacks</div>
+                    </a>
+                  </div>
                 </div>
               </section>
             </>

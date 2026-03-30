@@ -13,6 +13,18 @@ import {
 } from '@/lib/api';
 import { BookOpen, FileText, FileCheck, Wallet, Receipt, BarChart, Calendar, TrendingUp, CreditCard } from 'lucide-react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const mockChartData = [
+  { name: 'Jan', revenue: 4000, expenses: 2400 },
+  { name: 'Feb', revenue: 3000, expenses: 1398 },
+  { name: 'Mar', revenue: 2000, expenses: 9800 },
+  { name: 'Apr', revenue: 2780, expenses: 3908 },
+  { name: 'May', revenue: 1890, expenses: 4800 },
+  { name: 'Jun', revenue: 2390, expenses: 3800 },
+  { name: 'Jul', revenue: 3490, expenses: 4300 }
+];
 
 export default function FinanceDashboard() {
   const router = useRouter();
@@ -125,7 +137,15 @@ export default function FinanceDashboard() {
               <p className="text-muted-foreground">Manage invoices, payments, and financial reporting</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+              initial="hidden"
+              animate="show"
+              variants={{
+                hidden: { opacity: 0 },
+                show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+              }}
+            >
               <Link href="/finance/invoices">
                 <StatCard
                   title="Invoices"
@@ -214,62 +234,91 @@ export default function FinanceDashboard() {
                   hint="Pending journal entries"
                 />
               </Link>
-            </div>
+            </motion.div>
+
+            {/* Recharts Area */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mt-8 p-6 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-xl"
+            >
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold tracking-tight">Revenue vs Expenses</h2>
+                <p className="text-sm text-muted-foreground">Monthly financial performance</p>
+              </div>
+              <div className="h-[350px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={mockChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRevenueFin" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                      itemStyle={{ color: 'hsl(var(--foreground))' }}
+                    />
+                    <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenueFin)" />
+                    <Area type="monotone" dataKey="expenses" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorExpenses)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-              <Link href="/finance/invoices" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <h3 className="font-semibold mb-2">Invoices</h3>
-                <p className="text-sm text-muted-foreground">Manage customer invoices and billing</p>
+              <Link href="/finance/invoices" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Invoices</h3>
+                <p className="text-sm text-muted-foreground relative">Manage customer invoices and billing</p>
               </Link>
-              <Link href="/finance/payments" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <h3 className="font-semibold mb-2">Payments</h3>
-                <p className="text-sm text-muted-foreground">Manage incoming payments and refunds</p>
+              <Link href="/finance/payments" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Payments</h3>
+                <p className="text-sm text-muted-foreground relative">Manage incoming payments and refunds</p>
               </Link>
-              <Link href="/finance/gateways" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <h3 className="font-semibold mb-2">Payment Gateways</h3>
-                <p className="text-sm text-muted-foreground">Configure Stripe, PayPal, and more</p>
+              <Link href="/finance/gateways" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Payment Gateways</h3>
+                <p className="text-sm text-muted-foreground relative">Configure Stripe, PayPal, and more</p>
               </Link>
-              <Link
-                href="/finance/chart-of-accounts"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
-              >
-                <h3 className="font-semibold mb-2">Chart of Accounts</h3>
-                <p className="text-sm text-muted-foreground">Manage account structure and organization</p>
+              <Link href="/finance/chart-of-accounts" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Chart of Accounts</h3>
+                <p className="text-sm text-muted-foreground relative">Manage account structure and organization</p>
               </Link>
-              <Link
-                href="/finance/ledger-accounts"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
-              >
-                <h3 className="font-semibold mb-2">Ledger Accounts</h3>
-                <p className="text-sm text-muted-foreground">Manage individual GL accounts</p>
+              <Link href="/finance/ledger-accounts" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Ledger Accounts</h3>
+                <p className="text-sm text-muted-foreground relative">Manage individual GL accounts</p>
               </Link>
-              <Link
-                href="/finance/journal-entries"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
-              >
-                <h3 className="font-semibold mb-2">Journal Entries</h3>
-                <p className="text-sm text-muted-foreground">Create and manage journal entries</p>
+              <Link href="/finance/journal-entries" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Journal Entries</h3>
+                <p className="text-sm text-muted-foreground relative">Create and manage journal entries</p>
               </Link>
-              <Link
-                href="/finance/bank-accounts"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
-              >
-                <h3 className="font-semibold mb-2">Bank Accounts</h3>
-                <p className="text-sm text-muted-foreground">Manage bank account information</p>
+              <Link href="/finance/bank-accounts" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Bank Accounts</h3>
+                <p className="text-sm text-muted-foreground relative">Manage bank account information</p>
               </Link>
-              <Link
-                href="/finance/fiscal-periods"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
-              >
-                <h3 className="font-semibold mb-2">Fiscal Periods</h3>
-                <p className="text-sm text-muted-foreground">Manage accounting periods</p>
+              <Link href="/finance/fiscal-periods" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">Fiscal Periods</h3>
+                <p className="text-sm text-muted-foreground relative">Manage accounting periods</p>
               </Link>
-              <Link
-                href="/finance/vat-returns"
-                className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors"
-              >
-                <h3 className="font-semibold mb-2">VAT Returns</h3>
-                <p className="text-sm text-muted-foreground">Manage VAT return filings</p>
+              <Link href="/finance/vat-returns" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-semibold mb-2 relative">VAT Returns</h3>
+                <p className="text-sm text-muted-foreground relative">Manage VAT return filings</p>
               </Link>
             </div>
           </div>

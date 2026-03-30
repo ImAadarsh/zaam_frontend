@@ -21,7 +21,8 @@ export function useRoleCheck(requiredRoles: string[], redirectTo = '/modules') {
     }
 
     const userRoles = session.user?.roles || [];
-    const hasRequiredRole = requiredRoles.some(role => userRoles.includes(role));
+    const roleCodes = userRoles.map((r: any) => typeof r === 'string' ? r : (r?.code || r?.name || '')).map((r: string) => r.toUpperCase());
+    const hasRequiredRole = roleCodes.includes('SUPER_ADMIN') || requiredRoles.some(role => roleCodes.includes(role.toUpperCase()));
 
     if (!hasRequiredRole) {
       toast.error('You do not have permission to access this page. Please contact an administrator.');

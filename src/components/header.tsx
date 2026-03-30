@@ -1,3 +1,5 @@
+'use client';
+
 import { Sun, MoonStar, Menu, ChevronDown, Sparkles, User, LogOut } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import Image from 'next/image';

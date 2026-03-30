@@ -5,7 +5,8 @@ import { getSession, clearSession } from '@/lib/auth';
 import { ModuleCard } from '@/components/module-card';
 import { Header } from '@/components/header';
 import { modules } from '@/data/modules';
-import { Search, ArrowLeft, LogOut } from 'lucide-react';
+import { Search, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function ModulesPage() {
   const router = useRouter();
@@ -43,11 +44,16 @@ export default function ModulesPage() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
               {/* Welcome Text */}
               <div className="flex-1">
-                <h1 className="text-2xl font-semibold mb-1 text-foreground tracking-tight">
-                  Welcome to Zaam
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  Your complete business management platform. Select a module below to get started.
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }} 
+                  animate={{ opacity: 1, y: 0 }}
+                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4"
+                >
+                  <Sparkles size={16} /> Welcome to your ERP
+                </motion.div>
+                <h1 className="text-3xl font-bold tracking-tight">Modules</h1>
+                <p className="text-muted-foreground mt-2 text-lg">
+                  Select a module to manage your business operations
                 </p>
               </div>
 
@@ -57,14 +63,14 @@ export default function ModulesPage() {
                   onClick={handleBack}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground transition-colors font-medium text-sm"
                 >
-                  <ArrowLeft size={16} />
+                  <Search size={16} />
                   <span>Back</span>
                 </button>
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-colors font-medium text-sm"
                 >
-                  <LogOut size={16} />
+                  <Search size={16} />
                   <span>Logout</span>
                 </button>
               </div>
@@ -87,18 +93,36 @@ export default function ModulesPage() {
 
           {/* Module Grid */}
           {filteredModules.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+              initial="hidden"
+              animate="show"
+              variants={{
+                hidden: { opacity: 0 },
+                show: {
+                  opacity: 1,
+                  transition: { staggerChildren: 0.1 }
+                }
+              }}
+            >
               {filteredModules.map((m) => (
-                <ModuleCard
+                <motion.div 
                   key={m.slug}
-                  href={`/${m.slug}/dashboard`}
-                  title={m.name}
-                  description={m.description}
-                  Icon={m.icon}
-                  featured={['iam', 'catalog', 'inventory', 'orders', 'finance', 'accounting', 'crm', 'hr'].includes(m.slug)}
-                />
+                  variants={{
+                    hidden: { opacity: 0, y: 20 },
+                    show: { opacity: 1, y: 0 }
+                  }}
+                >
+                  <ModuleCard
+                    href={`/${m.slug}/dashboard`}
+                    title={m.name}
+                    description={m.description}
+                    Icon={m.icon}
+                    featured={true}
+                  />
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           ) : (
             <div className="text-center py-16">
               <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-muted mb-4">

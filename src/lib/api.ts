@@ -3855,4 +3855,274 @@ export async function deleteSettlement(id: string) {
   return data;
 }
 
+// ============================================================================
+// MARKETING API FUNCTIONS
+// ============================================================================
 
+// SEGMENTS
+export async function listSegments() {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/segments`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getSegment(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/segments/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createSegment(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/segments`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateSegment(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/marketing/segments/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteSegment(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/marketing/segments/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// CAMPAIGNS
+export async function listCampaigns() {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/campaigns`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getCampaign(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/campaigns/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createCampaign(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/campaigns`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateCampaign(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/marketing/campaigns/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteCampaign(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/marketing/campaigns/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// COUPONS
+export async function listCoupons() {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/coupons`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getCoupon(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/coupons/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createCoupon(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/coupons`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateCoupon(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/marketing/coupons/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteCoupon(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/marketing/coupons/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// AFFILIATES
+export async function listAffiliates() {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/affiliates`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getAffiliate(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/affiliates/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createAffiliate(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/affiliates`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateAffiliate(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/marketing/affiliates/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteAffiliate(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/marketing/affiliates/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// ============================================================================
+// SOCIAL API FUNCTIONS
+// ============================================================================
+
+// SOCIAL ACCOUNTS
+export async function listSocialAccounts() {
+  const { data } = await axios.get(`${API_BASE}/api/social/accounts`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getSocialAccount(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/social/accounts/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createSocialAccount(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/social/accounts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateSocialAccount(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/social/accounts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteSocialAccount(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/social/accounts/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// SOCIAL POSTS
+export async function listSocialPosts() {
+  const { data } = await axios.get(`${API_BASE}/api/social/posts`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getSocialPost(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/social/posts/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createSocialPost(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/social/posts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateSocialPost(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/social/posts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteSocialPost(id: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/social/posts/${id}`, { headers: authHeaders() });
+  return data; // Soft delete returns the data
+}
+
+// CREATORS
+export async function listCreators() {
+  const { data } = await axios.get(`${API_BASE}/api/social/creators`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getCreator(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/social/creators/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createCreator(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/social/creators`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateCreator(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/social/creators/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteCreator(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/social/creators/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// SOCIAL MESSAGES
+export async function listSocialMessages() {
+  const { data } = await axios.get(`${API_BASE}/api/social/messages`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getSocialMessage(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/social/messages/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createSocialMessage(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/social/messages`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateSocialMessage(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/social/messages/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteSocialMessage(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/social/messages/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// ==========================================
+// ANALYTICS & REPORTING ENDPOINTS
+// ==========================================
+
+export async function listReportDefinitions(params?: any) {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/reports`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getReportDefinition(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/reports/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createReportDefinition(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/analytics/reports`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateReportDefinition(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/analytics/reports/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteReportDefinition(id: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/analytics/reports/${id}`, { headers: authHeaders() });
+  return data;
+}
+
+export async function listScheduledReports(params?: any) {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/scheduled-reports`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getScheduledReport(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/scheduled-reports/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createScheduledReport(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/analytics/scheduled-reports`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateScheduledReport(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/analytics/scheduled-reports/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteScheduledReport(id: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/analytics/scheduled-reports/${id}`, { headers: authHeaders() });
+  return data;
+}
+
+export async function listDashboards(params?: any) {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/dashboards`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getDashboard(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/dashboards/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createDashboard(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/analytics/dashboards`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateDashboard(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/analytics/dashboards/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteDashboard(id: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/analytics/dashboards/${id}`, { headers: authHeaders() });
+  return data;
+}
+
+export async function listDataExports(params?: any) {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/exports`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function getDataExport(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/exports/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function createDataExport(payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/analytics/exports`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateDataExport(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/analytics/exports/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteDataExport(id: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/analytics/exports/${id}`, { headers: authHeaders() });
+  return data;
+}
