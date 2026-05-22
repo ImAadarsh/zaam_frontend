@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -109,6 +109,7 @@ export function Sidebar() {
                   <Item href="/catalog/product-media" icon={<ImageIcon size={18} />} label="Product Media" active={pathname?.startsWith('/catalog/product-media')} />
                   <Item href="/catalog/bundles" icon={<Package size={18} />} label="Bundles" active={pathname?.startsWith('/catalog/bundles')} />
                   <Item href="/catalog/channel-mappings" icon={<Share2 size={18} />} label="Channel Mappings" active={pathname?.startsWith('/catalog/channel-mappings')} />
+                  <Item href="/catalog/import-channels" icon={<Upload size={18} />} label="Import Channels" active={pathname?.startsWith('/catalog/import-channels')} />
                 </>
               )}
               {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'FINANCE']) && (
@@ -402,6 +403,7 @@ export function Sidebar() {
                       <Item href="/catalog/product-media" icon={<ImageIcon size={18} />} label="Product Media" active={pathname?.startsWith('/catalog/product-media')} />
                       <Item href="/catalog/bundles" icon={<Package size={18} />} label="Bundles" active={pathname?.startsWith('/catalog/bundles')} />
                       <Item href="/catalog/channel-mappings" icon={<Share2 size={18} />} label="Channel Mappings" active={pathname?.startsWith('/catalog/channel-mappings')} />
+                      <Item href="/catalog/import-channels" icon={<Upload size={18} />} label="Import Channels" active={pathname?.startsWith('/catalog/import-channels')} />
                     </>
                   )}
                   {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'FINANCE']) && (

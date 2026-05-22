@@ -1012,6 +1012,110 @@ export async function deleteChannelMapping(id: string) {
   return status === 204;
 }
 
+// IMPORT CHANNELS
+export async function listImportSources() {
+  const { data } = await axios.get(`${API_BASE}/api/catalog/import-channels/sources`, { headers: authHeaders() });
+  return data as {
+    data: Array<{
+      id: string;
+      channel: string;
+      label: string;
+      format: 'csv' | 'api';
+      available: boolean;
+      hint?: string;
+    }>;
+  };
+}
+
+export type ProductImportOptions = {
+  organizationId: string;
+  businessUnitId?: string;
+  warehouseId?: string;
+  priceListId?: string;
+  duplicateMode: 'skip' | 'update';
+  importProducts: boolean;
+  importVariants: boolean;
+  importInventory: boolean;
+  importPrices: boolean;
+  importMedia: boolean;
+  importChannelMappings: boolean;
+};
+
+export type ImportPreviewResult = {
+  sourceType: string;
+  channel: string;
+  fileName?: string;
+  detectedSourceType?: string | null;
+  productCount: number;
+  variantCount: number;
+  mediaCount: number;
+  sampleProducts: any[];
+};
+
+export async function previewProductImport(file: File, sourceType: string) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('sourceType', sourceType);
+  const { data } = await axios.post(`${API_BASE}/api/catalog/import-channels/preview`, formData, {
+    headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' }
+  });
+  return data as { data: ImportPreviewResult };
+}
+
+export type ShopifyApiCredentials = { shopDomain: string; accessToken: string };
+export type WooCommerceApiCredentials = {
+  storeUrl: string;
+  consumerKey: string;
+  consumerSecret: string;
+};
+
+export async function previewProductImportApi(
+  sourceType: 'shopify_api' | 'woocommerce_api',
+  credentials: ShopifyApiCredentials | WooCommerceApiCredentials
+) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/import-channels/api/preview`,
+    { sourceType, credentials },
+    { headers: authHeaders() }
+  );
+  return data as { data: ImportPreviewResult };
+}
+
+export async function executeProductImportApi(
+  sourceType: 'shopify_api' | 'woocommerce_api',
+  credentials: ShopifyApiCredentials | WooCommerceApiCredentials,
+  options: ProductImportOptions
+) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/import-channels/api/execute`,
+    { sourceType, credentials, options },
+    { headers: authHeaders(), timeout: 600000 }
+  );
+  return data as { data: { jobId: string; status: string; summary: Record<string, unknown> } };
+}
+
+export async function executeProductImport(file: File, sourceType: string, options: ProductImportOptions) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('sourceType', sourceType);
+  formData.append('options', JSON.stringify(options));
+  const { data } = await axios.post(`${API_BASE}/api/catalog/import-channels/execute`, formData, {
+    headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
+    timeout: 600000
+  });
+  return data as { data: { jobId: string; status: string; summary: Record<string, unknown> } };
+}
+
+export async function listProductImportJobs(params?: { organizationId?: string; page?: number; limit?: number }) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/catalog/import-channels/jobs${query}`, { headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+
 // COMPLIANCE DOCUMENTS
 export async function listComplianceDocuments(params?: {
   catalogItemId?: string;
