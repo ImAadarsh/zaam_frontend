@@ -16,6 +16,10 @@ import {
   listBusinessUnits,
   listWarehouses,
   listPriceLists,
+  listChannelConnections,
+  createWooCommerceConnection,
+  testChannelConnection,
+  deleteChannelConnection,
   type ProductImportOptions,
   type ShopifyApiCredentials,
   type WooCommerceApiCredentials
@@ -34,7 +38,11 @@ import {
   RefreshCw,
   AlertTriangle,
   X,
-  Plug
+  Plug,
+  Store,
+  Plus,
+  Trash2,
+  Zap
 } from 'lucide-react';
 
 type ImportSource = {
@@ -50,7 +58,8 @@ const DEFAULT_SOURCES: ImportSource[] = [
   { id: 'woocommerce_csv', label: 'WooCommerce (CSV)', available: true, format: 'csv' },
   { id: 'wordpress_csv', label: 'WordPress (CSV)', available: true, format: 'csv' },
   { id: 'shopify_api', label: 'Shopify (API)', available: true, format: 'api' },
-  { id: 'woocommerce_api', label: 'WooCommerce (API)', available: true, format: 'api' }
+  { id: 'woocommerce_api', label: 'WooCommerce (API)', available: true, format: 'api' },
+  { id: 'wordpress_api', label: 'WordPress (API)', available: true, format: 'api', hint: 'WordPress Application Password or WooCommerce consumer key/secret — use WordPress Channels page for full management' }
 ];
 
 type PreviewData = {
@@ -120,8 +129,19 @@ export default function ImportChannelsPage() {
     consumerKey: '',
     consumerSecret: ''
   });
+  const [connections, setConnections] = useState<any[]>([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState('');
+  const [showAddStore, setShowAddStore] = useState(false);
+  const [newStore, setNewStore] = useState({
+    name: '',
+    storeUrl: '',
+    consumerKey: '',
+    consumerSecret: ''
+  });
+  const [testingConnId, setTestingConnId] = useState<string | null>(null);
 
   const selectedSource = sources.find((s) => s.id === sourceType) ?? DEFAULT_SOURCES[0];
+  const wooConnections = connections.filter((c) => c.channel === 'woocommerce' && c.status === 'active');
   const isApiMode = selectedSource.format === 'api';
 
   const [options, setOptions] = useState<ProductImportOptions>({
@@ -192,6 +212,12 @@ export default function ImportChannelsPage() {
 
     const jobsRes = await listProductImportJobs({ organizationId: orgId, limit: 10 }).catch(() => null);
     if (jobsRes?.data) setJobs(jobsRes.data);
+
+    const connRes = await listChannelConnections({
+      organizationId: orgId,
+      channel: 'woocommerce'
+    }).catch(() => null);
+    if (connRes?.data) setConnections(connRes.data);
 
     setLoading(false);
     if (errors.length && !sourcesRes) {
@@ -273,15 +299,20 @@ export default function ImportChannelsPage() {
       return;
     }
     if (isApiMode) {
-      if (sourceType === 'shopify_api' && (!shopifyCreds.shopDomain || !shopifyCreds.accessToken)) {
-        toast.error('Enter Shopify shop domain and access token');
+      if (!options.organizationId) {
+        toast.error('Select an organization first');
         return;
       }
-      if (
+      if (sourceType === 'woocommerce_api' && selectedConnectionId) {
+        /* saved connection */
+      } else if (sourceType === 'shopify_api' && (!shopifyCreds.shopDomain || !shopifyCreds.accessToken)) {
+        toast.error('Select a saved store or enter Shopify credentials');
+        return;
+      } else if (
         sourceType === 'woocommerce_api' &&
         (!wooCreds.storeUrl || !wooCreds.consumerKey || !wooCreds.consumerSecret)
       ) {
-        toast.error('Enter WooCommerce store URL and API keys');
+        toast.error('Select a saved WooCommerce store or enter API keys');
         return;
       }
     } else if (!file) {
@@ -295,10 +326,17 @@ export default function ImportChannelsPage() {
     try {
       let count = 0;
       if (isApiMode) {
-        const res = await previewProductImportApi(
-          sourceType as 'shopify_api' | 'woocommerce_api',
-          sourceType === 'shopify_api' ? shopifyCreds : wooCreds
-        );
+        const res = await previewProductImportApi({
+          sourceType: sourceType as 'shopify_api' | 'woocommerce_api' | 'wordpress_api',
+          organizationId: options.organizationId,
+          connectionId: sourceType === 'woocommerce_api' && selectedConnectionId ? selectedConnectionId : undefined,
+          credentials:
+            sourceType === 'woocommerce_api' && selectedConnectionId
+              ? undefined
+              : sourceType === 'shopify_api'
+                ? shopifyCreds
+                : wooCreds
+        });
         applyPreview(res.data);
         count = res.data.productCount;
       } else {
@@ -350,11 +388,19 @@ export default function ImportChannelsPage() {
     try {
       const payload = buildPayload();
       const res = isApiMode
-        ? await executeProductImportApi(
-            sourceType as 'shopify_api' | 'woocommerce_api',
-            sourceType === 'shopify_api' ? shopifyCreds : wooCreds,
-            payload
-          )
+        ? await executeProductImportApi({
+            sourceType: sourceType as 'shopify_api' | 'woocommerce_api' | 'wordpress_api',
+            organizationId: options.organizationId,
+            connectionId:
+              sourceType === 'woocommerce_api' && selectedConnectionId ? selectedConnectionId : undefined,
+            credentials:
+              sourceType === 'woocommerce_api' && selectedConnectionId
+                ? undefined
+                : sourceType === 'shopify_api'
+                  ? shopifyCreds
+                  : wooCreds,
+            options: payload
+          })
         : await executeProductImport(file!, sourceType, payload);
       setLastResult(res.data.summary as ImportSummary);
       toast.success('Import completed successfully');
@@ -377,7 +423,60 @@ export default function ImportChannelsPage() {
     !!options.organizationId &&
     (!options.importInventory || !!options.warehouseId) &&
     (!options.importPrices || !!options.priceListId) &&
-    (isApiMode || !!file);
+    (isApiMode || !!file) &&
+    (!isApiMode ||
+      sourceType !== 'woocommerce_api' ||
+      selectedConnectionId ||
+      (wooCreds.storeUrl && wooCreds.consumerKey && wooCreds.consumerSecret));
+
+  async function handleAddStore(e: React.FormEvent) {
+    e.preventDefault();
+    if (!options.organizationId) {
+      toast.error('Select an organization first');
+      return;
+    }
+    try {
+      const res = await createWooCommerceConnection({
+        organizationId: options.organizationId,
+        name: newStore.name,
+        storeUrl: newStore.storeUrl,
+        consumerKey: newStore.consumerKey,
+        consumerSecret: newStore.consumerSecret
+      });
+      setConnections((prev) => [...prev, res.data]);
+      setSelectedConnectionId(res.data.id);
+      setSourceType('woocommerce_api');
+      setShowAddStore(false);
+      setNewStore({ name: '', storeUrl: '', consumerKey: '', consumerSecret: '' });
+      toast.success(`Store "${res.data.name}" saved`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || 'Failed to save store');
+    }
+  }
+
+  async function handleTestConnection(id: string) {
+    setTestingConnId(id);
+    try {
+      const res = await testChannelConnection(id);
+      toast.success(res.data.message);
+      setConnections((prev) =>
+        prev.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                lastTestOk: true,
+                lastTestMessage: res.data.message,
+                lastTestedAt: new Date().toISOString()
+              }
+            : c
+        )
+      );
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || 'Connection test failed');
+    } finally {
+      setTestingConnId(null);
+    }
+  }
 
   if (!hydrated || !hasAccess) return null;
 
@@ -427,6 +526,136 @@ export default function ImportChannelsPage() {
             </div>
           )}
 
+          {/* Saved WooCommerce stores */}
+          <section className="mb-6 rounded-2xl border border-border bg-card/50 p-5 md:p-6 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Store className="h-5 w-5 text-[#D4A017]" />
+                <h2 className="text-lg font-semibold">WooCommerce stores</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddStore(!showAddStore)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted"
+              >
+                <Plus size={14} /> Add store
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Save REST API keys once, then import from any store without re-entering secrets.
+            </p>
+
+            {showAddStore && (
+              <form onSubmit={handleAddStore} className="grid gap-3 sm:grid-cols-2 rounded-lg border border-border p-4 bg-background/40">
+                <label className="block text-sm font-medium sm:col-span-2">
+                  Store name
+                  <input
+                    required
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    placeholder="e.g. DeltaPuff"
+                    value={newStore.name}
+                    onChange={(e) => setNewStore({ ...newStore, name: e.target.value })}
+                  />
+                </label>
+                <label className="block text-sm font-medium sm:col-span-2">
+                  Store URL
+                  <input
+                    required
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    placeholder="https://yourstore.com"
+                    value={newStore.storeUrl}
+                    onChange={(e) => setNewStore({ ...newStore, storeUrl: e.target.value })}
+                  />
+                </label>
+                <label className="block text-sm font-medium">
+                  Consumer key
+                  <input
+                    required
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono text-xs"
+                    value={newStore.consumerKey}
+                    onChange={(e) => setNewStore({ ...newStore, consumerKey: e.target.value })}
+                  />
+                </label>
+                <label className="block text-sm font-medium">
+                  Consumer secret
+                  <input
+                    required
+                    type="password"
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono text-xs"
+                    value={newStore.consumerSecret}
+                    onChange={(e) => setNewStore({ ...newStore, consumerSecret: e.target.value })}
+                  />
+                </label>
+                <div className="sm:col-span-2 flex gap-2">
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-[#D4A017] px-4 py-2 text-sm font-medium text-black"
+                  >
+                    Save connection
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddStore(false)}
+                    className="rounded-lg border border-border px-4 py-2 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {connections.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No stores saved yet. Add your WooCommerce REST API keys above.</p>
+            ) : (
+              <ul className="divide-y divide-border rounded-lg border border-border overflow-hidden">
+                {connections.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm bg-background/30">
+                    <div>
+                      <span className="font-medium">{c.name}</span>
+                      <span className="text-muted-foreground"> · {c.storeUrl}</span>
+                      {c.keyHint && (
+                        <span className="block text-xs text-muted-foreground font-mono">{c.keyHint}</span>
+                      )}
+                      {c.lastTestMessage && (
+                        <span className={`block text-xs ${c.lastTestOk ? 'text-green-600' : 'text-red-500'}`}>
+                          {c.lastTestMessage}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleTestConnection(c.id)}
+                        disabled={testingConnId === c.id}
+                        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                      >
+                        {testingConnId === c.id ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Zap size={12} />
+                        )}
+                        Test
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!confirm(`Delete connection "${c.name}"?`)) return;
+                          await deleteChannelConnection(c.id);
+                          setConnections((prev) => prev.filter((x) => x.id !== c.id));
+                          if (selectedConnectionId === c.id) setSelectedConnectionId('');
+                          toast.success('Store removed');
+                        }}
+                        className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           {/* Step 1 */}
           <section className="mb-6 rounded-2xl border border-border bg-card/50 p-5 md:p-6 space-y-4 shadow-sm">
             <div className="flex items-center gap-2">
@@ -462,6 +691,26 @@ export default function ImportChannelsPage() {
                     <Plug size={16} />
                     Store API credentials
                   </div>
+                  {sourceType === 'woocommerce_api' && wooConnections.length > 0 && (
+                    <label className="block">
+                      Saved WooCommerce store
+                      <select
+                        className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                        value={selectedConnectionId}
+                        onChange={(e) => {
+                          setSelectedConnectionId(e.target.value);
+                          setPreview(null);
+                        }}
+                      >
+                        <option value="">Enter keys manually…</option>
+                        {wooConnections.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} — {c.storeUrl}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   {sourceType === 'shopify_api' ? (
                     <>
                       <label className="block">
@@ -488,7 +737,7 @@ export default function ImportChannelsPage() {
                         />
                       </label>
                     </>
-                  ) : (
+                  ) : !selectedConnectionId ? (
                     <>
                       <label className="block">
                         Store URL
@@ -502,7 +751,7 @@ export default function ImportChannelsPage() {
                       <label className="block">
                         Consumer key
                         <input
-                          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono text-xs"
                           value={wooCreds.consumerKey}
                           onChange={(e) =>
                             setWooCreds({ ...wooCreds, consumerKey: e.target.value })
@@ -513,7 +762,7 @@ export default function ImportChannelsPage() {
                         Consumer secret
                         <input
                           type="password"
-                          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                          className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono text-xs"
                           value={wooCreds.consumerSecret}
                           onChange={(e) =>
                             setWooCreds({ ...wooCreds, consumerSecret: e.target.value })
@@ -521,6 +770,11 @@ export default function ImportChannelsPage() {
                         />
                       </label>
                     </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground rounded-lg bg-muted/40 px-3 py-2">
+                      Using saved store:{' '}
+                      <strong>{wooConnections.find((c) => c.id === selectedConnectionId)?.name}</strong>
+                    </p>
                   )}
                 </div>
               ) : (

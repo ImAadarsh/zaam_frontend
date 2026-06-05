@@ -1069,29 +1069,199 @@ export type WooCommerceApiCredentials = {
   consumerSecret: string;
 };
 
-export async function previewProductImportApi(
-  sourceType: 'shopify_api' | 'woocommerce_api',
-  credentials: ShopifyApiCredentials | WooCommerceApiCredentials
-) {
+export async function previewProductImportApi(payload: {
+  sourceType: 'shopify_api' | 'woocommerce_api' | 'wordpress_api';
+  organizationId: string;
+  connectionId?: string;
+  credentials?: ShopifyApiCredentials | WooCommerceApiCredentials | Record<string, unknown>;
+}) {
   const { data } = await axios.post(
     `${API_BASE}/api/catalog/import-channels/api/preview`,
-    { sourceType, credentials },
+    payload,
     { headers: authHeaders() }
   );
   return data as { data: ImportPreviewResult };
 }
 
-export async function executeProductImportApi(
-  sourceType: 'shopify_api' | 'woocommerce_api',
-  credentials: ShopifyApiCredentials | WooCommerceApiCredentials,
-  options: ProductImportOptions
-) {
+export async function executeProductImportApi(payload: {
+  sourceType: 'shopify_api' | 'woocommerce_api' | 'wordpress_api';
+  organizationId: string;
+  connectionId?: string;
+  credentials?: ShopifyApiCredentials | WooCommerceApiCredentials | Record<string, unknown>;
+  options: ProductImportOptions;
+}) {
   const { data } = await axios.post(
     `${API_BASE}/api/catalog/import-channels/api/execute`,
-    { sourceType, credentials, options },
+    payload,
     { headers: authHeaders(), timeout: 600000 }
   );
   return data as { data: { jobId: string; status: string; summary: Record<string, unknown> } };
+}
+
+// CHANNEL CONNECTIONS (saved WooCommerce / Shopify stores)
+export async function listChannelConnections(params?: {
+  organizationId?: string;
+  channel?: 'shopify' | 'woocommerce' | 'wordpress';
+  status?: string;
+}) {
+  const q = new URLSearchParams();
+  if (params?.organizationId) q.append('organizationId', params.organizationId);
+  if (params?.channel) q.append('channel', params.channel);
+  if (params?.status) q.append('status', params.status);
+  const query = q.toString() ? `?${q.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/catalog/channel-connections${query}`, {
+    headers: authHeaders()
+  });
+  return data as { data: any[] };
+}
+
+export async function createWooCommerceConnection(payload: {
+  organizationId: string;
+  name: string;
+  storeUrl: string;
+  consumerKey: string;
+  consumerSecret: string;
+  status?: 'active' | 'inactive';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/catalog/channel-connections/woocommerce`, payload, {
+    headers: authHeaders()
+  });
+  return data as { data: any };
+}
+
+export async function testChannelConnection(id: string) {
+  const { data } = await axios.post(`${API_BASE}/api/catalog/channel-connections/${id}/test`, {}, {
+    headers: authHeaders()
+  });
+  return data as { data: { ok: boolean; productCount: number; message: string } };
+}
+
+export async function deleteChannelConnection(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/catalog/channel-connections/${id}`, {
+    headers: authHeaders()
+  });
+  return status === 204;
+}
+
+// ─── WordPress Channel API ────────────────────────────────────────────────────
+
+export type WordPressAuthMode = 'appPassword' | 'consumerKey';
+
+export async function createWordPressConnection(payload: {
+  organizationId: string;
+  name: string;
+  storeUrl: string;
+  authMode: WordPressAuthMode;
+  username?: string;
+  appPassword?: string;
+  consumerKey?: string;
+  consumerSecret?: string;
+  status?: 'active' | 'inactive';
+}) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/channel-connections/wordpress`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function browseWordPressProducts(params: {
+  connectionId: string;
+  organizationId: string;
+  page?: number;
+  perPage?: number;
+  search?: string;
+  status?: string;
+}) {
+  const q = new URLSearchParams({ organizationId: params.organizationId });
+  if (params.page) q.append('page', String(params.page));
+  if (params.perPage) q.append('perPage', String(params.perPage));
+  if (params.search) q.append('search', params.search);
+  if (params.status) q.append('status', params.status);
+
+  const { data } = await axios.get(
+    `${API_BASE}/api/catalog/wordpress-channels/${params.connectionId}/products?${q}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: Array<{
+      id: number;
+      name: string;
+      sku: string;
+      type: string;
+      status: string;
+      regular_price: string;
+      stock_quantity: number | null;
+      categories: Array<{ name: string }>;
+      images: Array<{ src: string }>;
+    }>;
+    pagination: { page: number; perPage: number; total: number; totalPages: number };
+  };
+}
+
+export async function importWordPressProducts(payload: {
+  connectionId: string;
+  organizationId: string;
+  productIds?: number[];
+  importAll?: boolean;
+  options?: {
+    businessUnitId?: string;
+    warehouseId?: string;
+    priceListId?: string;
+    duplicateMode?: 'skip' | 'update';
+    importProducts?: boolean;
+    importVariants?: boolean;
+    importInventory?: boolean;
+    importPrices?: boolean;
+    importMedia?: boolean;
+    importChannelMappings?: boolean;
+  };
+}) {
+  const { connectionId, ...body } = payload;
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/wordpress-channels/${connectionId}/import`,
+    body,
+    { headers: authHeaders(), timeout: 600000 }
+  );
+  return data as { data: { jobId: string; status: string; summary: Record<string, unknown> } };
+}
+
+export async function exportToWordPress(payload: {
+  connectionId: string;
+  organizationId: string;
+  catalogItemIds?: string[];
+  exportAll?: boolean;
+  duplicateMode?: 'skip' | 'update';
+}) {
+  const { connectionId, ...body } = payload;
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/wordpress-channels/${connectionId}/export`,
+    body,
+    { headers: authHeaders(), timeout: 600000 }
+  );
+  return data as {
+    data: {
+      created: number;
+      updated: number;
+      skipped: number;
+      errors: Array<{ sku: string; message: string }>;
+    };
+  };
+}
+
+export async function previewWordPressExport(params: {
+  connectionId: string;
+  organizationId: string;
+  catalogItemIds?: string;
+}) {
+  const q = new URLSearchParams({ organizationId: params.organizationId });
+  if (params.catalogItemIds) q.append('catalogItemIds', params.catalogItemIds);
+  const { data } = await axios.get(
+    `${API_BASE}/api/catalog/wordpress-channels/${params.connectionId}/preview-export?${q}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: { totalItems: number; items: Array<{ id: string; sku: string; name: string; status: string; category: string }> } };
 }
 
 export async function executeProductImport(file: File, sourceType: string, options: ProductImportOptions) {
