@@ -1173,12 +1173,24 @@ export async function browseWordPressProducts(params: {
   perPage?: number;
   search?: string;
   status?: string;
+  type?: string;
+  stockStatus?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  orderby?: string;
+  order?: string;
 }) {
   const q = new URLSearchParams({ organizationId: params.organizationId });
   if (params.page) q.append('page', String(params.page));
   if (params.perPage) q.append('perPage', String(params.perPage));
   if (params.search) q.append('search', params.search);
   if (params.status) q.append('status', params.status);
+  if (params.type) q.append('type', params.type);
+  if (params.stockStatus) q.append('stockStatus', params.stockStatus);
+  if (params.minPrice) q.append('minPrice', params.minPrice);
+  if (params.maxPrice) q.append('maxPrice', params.maxPrice);
+  if (params.orderby) q.append('orderby', params.orderby);
+  if (params.order) q.append('order', params.order);
 
   const { data } = await axios.get(
     `${API_BASE}/api/catalog/wordpress-channels/${params.connectionId}/products?${q}`,
@@ -1262,6 +1274,49 @@ export async function previewWordPressExport(params: {
     { headers: authHeaders() }
   );
   return data as { data: { totalItems: number; items: Array<{ id: string; sku: string; name: string; status: string; category: string }> } };
+}
+
+export async function wpSyncStatus(params: {
+  connectionId: string;
+  organizationId: string;
+  wcProductIds: number[];
+}) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/wordpress-channels/${params.connectionId}/sync-status`,
+    { organizationId: params.organizationId, wcProductIds: params.wcProductIds },
+    { headers: authHeaders() }
+  );
+  return data as { data: Record<number, { inErp: boolean; catalogItemId?: string; sku?: string; name?: string; lastSynced?: string }> };
+}
+
+export async function wpSyncHealth(params: { connectionId: string; organizationId: string }) {
+  const q = new URLSearchParams({ organizationId: params.organizationId });
+  const { data } = await axios.get(
+    `${API_BASE}/api/catalog/wordpress-channels/${params.connectionId}/sync-health?${q}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: {
+      wpTotal: number;
+      erpMapped: number;
+      lastSync: string | null;
+      recentJobs: Array<{ id: number; status: string; summary: Record<string, number> | null; createdAt: string }>;
+    }
+  };
+}
+
+export async function wpPushPrices(params: {
+  connectionId: string;
+  organizationId: string;
+  catalogItemIds?: string[];
+  pushAll?: boolean;
+}) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/wordpress-channels/${params.connectionId}/push-prices`,
+    { organizationId: params.organizationId, catalogItemIds: params.catalogItemIds, pushAll: params.pushAll },
+    { headers: authHeaders(), timeout: 120000 }
+  );
+  return data as { data: { pushed: number; errors: number; errorDetails: string[] } };
 }
 
 export async function executeProductImport(file: File, sourceType: string, options: ProductImportOptions) {

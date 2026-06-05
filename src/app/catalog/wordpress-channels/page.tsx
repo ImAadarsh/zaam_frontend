@@ -19,6 +19,9 @@ import {
   listPriceLists,
   listBusinessUnits,
   listProductImportJobs,
+  wpSyncStatus,
+  wpSyncHealth,
+  wpPushPrices,
   type WordPressAuthMode
 } from '@/lib/api';
 import { toast } from 'sonner';
@@ -43,7 +46,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   ArrowUpFromLine,
-  ArrowDownToLine
+  ArrowDownToLine,
+  Activity,
+  Zap as ZapIcon,
+  ExternalLink,
+  Tag,
+  TrendingUp,
+  ShoppingCart
 } from 'lucide-react';
 
 type WpConnection = {
@@ -114,6 +123,28 @@ export default function WordPressChannelsPage() {
   const [browseTotal, setBrowseTotal] = useState(0);
   const [browseTotalPages, setBrowseTotalPages] = useState(1);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<number>>(new Set());
+  // filters
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('any');
+  const [filterStock, setFilterStock] = useState('');
+  const [filterMinPrice, setFilterMinPrice] = useState('');
+  const [filterMaxPrice, setFilterMaxPrice] = useState('');
+  const [filterOrderby, setFilterOrderby] = useState('date');
+  const [filterOrder, setFilterOrder] = useState('desc');
+  const [showFilters, setShowFilters] = useState(false);
+  // sync status map: wcProductId → { inErp, lastSynced }
+  const [syncStatusMap, setSyncStatusMap] = useState<Record<number, { inErp: boolean; lastSynced?: string }>>({});
+  const [loadingSyncStatus, setLoadingSyncStatus] = useState(false);
+  // health dashboard
+  const [health, setHealth] = useState<{ wpTotal: number; erpMapped: number; lastSync: string | null; recentJobs: any[] } | null>(null);
+  const [loadingHealth, setLoadingHealth] = useState(false);
+  // slide-over product detail
+  const [slideoverProduct, setSlideoverProduct] = useState<any | null>(null);
+  // quick-import single product
+  const [quickImporting, setQuickImporting] = useState<number | null>(null);
+  // push prices
+  const [pushingPrices, setPushingPrices] = useState(false);
+  const [pushResult, setPushResult] = useState<{ pushed: number; errors: number } | null>(null);
 
   // ── Import ────────────────────────────────────────────────────────────────
   const [organizations, setOrganizations] = useState<any[]>([]);
@@ -278,15 +309,101 @@ export default function WordPressChannelsPage() {
         organizationId: orgId,
         page,
         perPage: 30,
-        search: browseSearch || undefined
+        search: browseSearch || undefined,
+        type: filterType || undefined,
+        status: filterStatus || undefined,
+        stockStatus: filterStock || undefined,
+        minPrice: filterMinPrice || undefined,
+        maxPrice: filterMaxPrice || undefined,
+        orderby: filterOrderby || undefined,
+        order: filterOrder || undefined
       });
       setWpProducts(res.data);
       setBrowseTotal(res.pagination.total);
       setBrowseTotalPages(res.pagination.totalPages);
+      setSyncStatusMap({});
+      // load sync badges + health in parallel after render
+      loadSyncStatus(res.data);
+      loadHealth();
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message || 'Failed to fetch products');
     } finally {
       setBrowsing(false);
+    }
+  }
+
+  function resetFilters() {
+    setFilterType(''); setFilterStatus('any'); setFilterStock('');
+    setFilterMinPrice(''); setFilterMaxPrice('');
+    setFilterOrderby('date'); setFilterOrder('desc');
+  }
+
+  async function loadSyncStatus(products: any[]) {
+    if (!selectedConnId || !products.length) return;
+    const effectiveOrgId = orgId || organizations[0]?.id;
+    if (!effectiveOrgId) return;
+    setLoadingSyncStatus(true);
+    try {
+      const res = await wpSyncStatus({
+        connectionId: selectedConnId,
+        organizationId: effectiveOrgId,
+        wcProductIds: products.map((p) => p.id)
+      });
+      setSyncStatusMap(res.data);
+    } catch { /* non-fatal */ } finally {
+      setLoadingSyncStatus(false);
+    }
+  }
+
+  async function loadHealth() {
+    if (!selectedConnId) return;
+    const effectiveOrgId = orgId || organizations[0]?.id;
+    if (!effectiveOrgId) return;
+    setLoadingHealth(true);
+    try {
+      const res = await wpSyncHealth({ connectionId: selectedConnId, organizationId: effectiveOrgId });
+      setHealth(res.data);
+    } catch { /* non-fatal */ } finally {
+      setLoadingHealth(false);
+    }
+  }
+
+  async function handleQuickImport(product: any) {
+    if (!selectedConnId) { toast.error('Select a connection'); return; }
+    const effectiveOrgId = orgId || organizations[0]?.id;
+    if (!effectiveOrgId) { toast.error('Select an organization'); return; }
+    setQuickImporting(product.id);
+    try {
+      await importWordPressProducts({
+        connectionId: selectedConnId,
+        organizationId: effectiveOrgId,
+        productIds: [product.id],
+        importAll: false,
+        options: { duplicateMode: 'update', importProducts: true, importVariants: true, importMedia: true, importChannelMappings: true }
+      });
+      toast.success(`"${product.name}" imported`);
+      setSyncStatusMap((prev) => ({ ...prev, [product.id]: { inErp: true, lastSynced: new Date().toISOString() } }));
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || 'Quick import failed');
+    } finally {
+      setQuickImporting(null);
+    }
+  }
+
+  async function handlePushPrices(all = true) {
+    if (!selectedConnId) { toast.error('Select a connection'); return; }
+    const effectiveOrgId = orgId || organizations[0]?.id;
+    if (!effectiveOrgId) { toast.error('Select an organization'); return; }
+    setPushingPrices(true);
+    setPushResult(null);
+    try {
+      const res = await wpPushPrices({ connectionId: selectedConnId, organizationId: effectiveOrgId, pushAll: all });
+      setPushResult(res.data);
+      toast.success(`Pushed ${res.data.pushed} price(s) to WordPress`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || 'Push failed');
+    } finally {
+      setPushingPrices(false);
     }
   }
 
@@ -636,6 +753,7 @@ export default function WordPressChannelsPage() {
               {/* ── BROWSE TAB ─────────────────────────────────────────── */}
               {activeTab === 'browse' && (
                 <section className="space-y-4">
+                  {/* ── Top bar: connection + search + filter toggle ── */}
                   <div className="flex flex-wrap items-center gap-3">
                     <select
                       className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
@@ -657,6 +775,17 @@ export default function WordPressChannelsPage() {
                         onKeyDown={(e) => e.key === 'Enter' && handleBrowse(1)}
                       />
                     </div>
+                    <button type="button" onClick={() => setShowFilters((v) => !v)}
+                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors
+                        ${showFilters ? 'border-[#D4A017] bg-[#D4A017]/10 text-[#D4A017]' : 'border-border bg-background text-muted-foreground hover:text-foreground'}`}>
+                      <RefreshCw size={14} className={showFilters ? 'text-[#D4A017]' : ''} />
+                      Filters
+                      {(filterType || filterStock || filterMinPrice || filterMaxPrice || filterStatus !== 'any') && (
+                        <span className="rounded-full bg-[#D4A017] text-black text-[10px] font-bold px-1.5 py-0.5">
+                          {[filterType, filterStock, filterMinPrice || filterMaxPrice, filterStatus !== 'any' ? filterStatus : ''].filter(Boolean).length}
+                        </span>
+                      )}
+                    </button>
                     <button type="button" onClick={() => handleBrowse(1)} disabled={browsing || !selectedConnId}
                       className="inline-flex items-center gap-2 rounded-lg bg-[#D4A017] px-4 py-2 text-sm font-medium text-black disabled:opacity-50">
                       {browsing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
@@ -664,10 +793,153 @@ export default function WordPressChannelsPage() {
                     </button>
                   </div>
 
+                  {/* ── Expandable filter panel ── */}
+                  {showFilters && (
+                    <div className="rounded-2xl border border-border bg-card/50 p-4 space-y-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {/* Type */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Product type</label>
+                          <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                            <option value="">All types</option>
+                            <option value="simple">Simple</option>
+                            <option value="variable">Variable</option>
+                            <option value="grouped">Grouped</option>
+                            <option value="external">External</option>
+                          </select>
+                        </div>
+                        {/* Status */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Status</label>
+                          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                            <option value="any">Any</option>
+                            <option value="publish">Published</option>
+                            <option value="draft">Draft</option>
+                            <option value="pending">Pending</option>
+                            <option value="private">Private</option>
+                          </select>
+                        </div>
+                        {/* Stock */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Stock status</label>
+                          <select value={filterStock} onChange={(e) => setFilterStock(e.target.value)}
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                            <option value="">Any</option>
+                            <option value="instock">In stock</option>
+                            <option value="outofstock">Out of stock</option>
+                            <option value="onbackorder">On backorder</option>
+                          </select>
+                        </div>
+                        {/* Sort */}
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Sort by</label>
+                          <div className="flex gap-1">
+                            <select value={filterOrderby} onChange={(e) => setFilterOrderby(e.target.value)}
+                              className="flex-1 rounded-lg border border-border bg-background px-2 py-2 text-sm">
+                              <option value="date">Date</option>
+                              <option value="title">Name</option>
+                              <option value="price">Price</option>
+                              <option value="popularity">Popularity</option>
+                              <option value="rating">Rating</option>
+                            </select>
+                            <select value={filterOrder} onChange={(e) => setFilterOrder(e.target.value)}
+                              className="rounded-lg border border-border bg-background px-2 py-2 text-sm">
+                              <option value="desc">↓</option>
+                              <option value="asc">↑</option>
+                            </select>
+                          </div>
+                        </div>
+                        {/* Price range */}
+                        <div className="space-y-1 col-span-2">
+                          <label className="text-xs font-medium text-muted-foreground">Price range</label>
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
+                              <input type="number" min="0" placeholder="Min"
+                                value={filterMinPrice}
+                                onChange={(e) => setFilterMinPrice(e.target.value)}
+                                className="w-full rounded-lg border border-border bg-background pl-6 pr-3 py-2 text-sm" />
+                            </div>
+                            <span className="text-muted-foreground text-sm">–</span>
+                            <div className="relative flex-1">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
+                              <input type="number" min="0" placeholder="Max"
+                                value={filterMaxPrice}
+                                onChange={(e) => setFilterMaxPrice(e.target.value)}
+                                className="w-full rounded-lg border border-border bg-background pl-6 pr-3 py-2 text-sm" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 pt-1 border-t border-border">
+                        <button type="button" onClick={() => { resetFilters(); handleBrowse(1); }}
+                          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                          <X size={12} /> Reset filters
+                        </button>
+                        <button type="button" onClick={() => handleBrowse(1)} disabled={browsing || !selectedConnId}
+                          className="ml-auto inline-flex items-center gap-2 rounded-lg bg-[#D4A017] px-4 py-2 text-sm font-medium text-black disabled:opacity-50">
+                          {browsing ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                          Apply filters
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Sync health card ─────────────────────────────── */}
+                  {health && (
+                    <div className="rounded-2xl border border-border bg-card/50 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Activity size={16} className="text-[#D4A017]" /> Sync health
+                          {loadingHealth && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <div className="text-center">
+                            <div className="text-xl font-bold tabular-nums text-foreground">{health.wpTotal.toLocaleString()}</div>
+                            <div className="text-xs text-muted-foreground">On WordPress</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold tabular-nums text-green-500">{health.erpMapped.toLocaleString()}</div>
+                            <div className="text-xs text-muted-foreground">In ERP</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold tabular-nums text-amber-500">{Math.max(0, health.wpTotal - health.erpMapped).toLocaleString()}</div>
+                            <div className="text-xs text-muted-foreground">Not imported</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm font-medium text-foreground">
+                              {health.lastSync ? new Date(health.lastSync).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                            </div>
+                            <div className="text-xs text-muted-foreground">Last synced</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold tabular-nums text-blue-500">
+                              {health.wpTotal > 0 ? Math.round((health.erpMapped / health.wpTotal) * 100) : 0}%
+                            </div>
+                            <div className="text-xs text-muted-foreground">Coverage</div>
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => handlePushPrices(true)} disabled={pushingPrices}
+                          className="inline-flex items-center gap-2 rounded-lg border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-2 text-xs font-medium text-[#D4A017] hover:bg-[#D4A017]/20 disabled:opacity-50">
+                          {pushingPrices ? <Loader2 size={13} className="animate-spin" /> : <TrendingUp size={13} />}
+                          Push prices to WP
+                        </button>
+                      </div>
+                      {pushResult && (
+                        <div className="mt-3 pt-3 border-t border-border flex gap-4 text-xs text-muted-foreground">
+                          <span className="text-green-600 font-medium">✓ {pushResult.pushed} prices pushed</span>
+                          {pushResult.errors > 0 && <span className="text-red-500">{pushResult.errors} errors</span>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {wpProducts.length > 0 && (
                     <>
                       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                        <span className="text-muted-foreground">{browseTotal} products total</span>
+                        <span className="text-muted-foreground">{browseTotal} products total · page {browsePage} of {browseTotalPages}</span>
                         <div className="flex items-center gap-3">
                           <button type="button" onClick={toggleSelectAll}
                             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
@@ -700,6 +972,8 @@ export default function WordPressChannelsPage() {
                               <th className="px-3 py-3 text-left font-medium">Stock</th>
                               <th className="px-3 py-3 text-left font-medium">Category</th>
                               <th className="px-3 py-3 text-left font-medium">Status</th>
+                              <th className="px-3 py-3 text-left font-medium">ERP</th>
+                              <th className="px-3 py-3"></th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border/60">
@@ -727,6 +1001,39 @@ export default function WordPressChannelsPage() {
                                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
                                     p.status === 'publish' ? 'bg-green-500/15 text-green-600' : 'bg-amber-500/15 text-amber-600'
                                   }`}>{p.status === 'publish' ? 'Published' : p.status}</span>
+                                </td>
+                                {/* ERP sync badge */}
+                                <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                                  {loadingSyncStatus
+                                    ? <Loader2 size={12} className="animate-spin text-muted-foreground" />
+                                    : syncStatusMap[p.id]?.inErp
+                                      ? <span title={syncStatusMap[p.id]?.lastSynced ? `Last synced ${new Date(syncStatusMap[p.id].lastSynced!).toLocaleDateString()}` : 'In ERP'}
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/15 text-green-600">
+                                          <CheckCircle2 size={10} /> In ERP
+                                        </span>
+                                      : syncStatusMap[p.id]
+                                        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+                                            ✕ Not imported
+                                          </span>
+                                        : null}
+                                </td>
+                                {/* Quick import button */}
+                                <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center gap-1">
+                                    <button type="button"
+                                      onClick={() => handleQuickImport(p)}
+                                      disabled={quickImporting === p.id}
+                                      title="Quick import this product"
+                                      className="rounded-lg border border-[#D4A017]/40 bg-[#D4A017]/10 px-2 py-1 text-xs font-medium text-[#D4A017] hover:bg-[#D4A017]/20 disabled:opacity-50 whitespace-nowrap">
+                                      {quickImporting === p.id ? <Loader2 size={11} className="animate-spin" /> : <ArrowDownToLine size={11} />}
+                                    </button>
+                                    <button type="button"
+                                      onClick={() => setSlideoverProduct(p)}
+                                      title="View product details"
+                                      className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30">
+                                      <ExternalLink size={11} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -1076,6 +1383,108 @@ export default function WordPressChannelsPage() {
           )}
         </main>
       </div>
+
+      {/* ── Product detail slide-over ────────────────────────────────────── */}
+      {slideoverProduct && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSlideoverProduct(null)} />
+          <div className="relative w-full max-w-lg bg-background border-l border-border shadow-2xl overflow-y-auto flex flex-col">
+            {/* Header */}
+            <div className="sticky top-0 bg-background border-b border-border px-6 py-4 flex items-start justify-between gap-4 z-10">
+              <div className="flex-1 min-w-0">
+                <h2 className="font-semibold text-base leading-tight truncate">{slideoverProduct.name}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">WC ID: {slideoverProduct.id} · {slideoverProduct.type}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {syncStatusMap[slideoverProduct.id]?.inErp
+                  ? <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/15 text-green-600"><CheckCircle2 size={11} /> In ERP</span>
+                  : <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">Not imported</span>}
+                <button type="button" onClick={() => setSlideoverProduct(null)}
+                  className="rounded-lg border border-border p-1.5 hover:bg-muted">
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Images */}
+            {slideoverProduct.images?.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto p-4 border-b border-border">
+                {slideoverProduct.images.map((img: any, i: number) => (
+                  <img key={i} src={img.src} alt="" className="h-28 w-28 shrink-0 rounded-xl object-cover border border-border" />
+                ))}
+              </div>
+            )}
+
+            {/* Details */}
+            <div className="p-6 space-y-5 flex-1">
+              {/* Price & stock */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  ['Regular price', slideoverProduct.regular_price ? `£${slideoverProduct.regular_price}` : '—'],
+                  ['Sale price', slideoverProduct.sale_price ? `£${slideoverProduct.sale_price}` : '—'],
+                  ['Stock qty', slideoverProduct.stock_quantity ?? '—']
+                ].map(([label, val]) => (
+                  <div key={label as string} className="rounded-xl border border-border bg-muted/30 p-3 text-center">
+                    <div className="text-base font-bold">{val as string}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{label as string}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Meta */}
+              <div className="space-y-2 text-sm">
+                {slideoverProduct.sku && <div className="flex gap-2"><span className="text-muted-foreground w-24 shrink-0">SKU</span><span className="font-mono">{slideoverProduct.sku}</span></div>}
+                {slideoverProduct.categories?.length > 0 && <div className="flex gap-2"><span className="text-muted-foreground w-24 shrink-0">Categories</span><span>{slideoverProduct.categories.map((c: any) => c.name).join(', ')}</span></div>}
+                {slideoverProduct.tags?.length > 0 && <div className="flex gap-2"><span className="text-muted-foreground w-24 shrink-0">Tags</span><span>{slideoverProduct.tags.map((t: any) => t.name).join(', ')}</span></div>}
+                <div className="flex gap-2"><span className="text-muted-foreground w-24 shrink-0">Status</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${slideoverProduct.status === 'publish' ? 'bg-green-500/15 text-green-600' : 'bg-amber-500/15 text-amber-600'}`}>
+                    {slideoverProduct.status === 'publish' ? 'Published' : slideoverProduct.status}
+                  </span>
+                </div>
+                <div className="flex gap-2"><span className="text-muted-foreground w-24 shrink-0">Stock mgmt</span><span>{slideoverProduct.manage_stock ? 'Yes' : 'No'}</span></div>
+              </div>
+
+              {/* Description */}
+              {(slideoverProduct.short_description || slideoverProduct.description) && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Description</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: (slideoverProduct.short_description || slideoverProduct.description).slice(0, 400) }} />
+                </div>
+              )}
+
+              {/* Variants */}
+              {slideoverProduct.attributes?.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Attributes</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {slideoverProduct.attributes.map((a: any) => (
+                      <div key={a.name} className="rounded-lg border border-border bg-muted/30 px-2.5 py-1 text-xs">
+                        <span className="text-muted-foreground">{a.name}:</span> {a.options?.join(', ')}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div className="sticky bottom-0 bg-background border-t border-border px-6 py-4 flex gap-3">
+              <button type="button"
+                onClick={() => { handleQuickImport(slideoverProduct); setSlideoverProduct(null); }}
+                disabled={quickImporting === slideoverProduct.id}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#D4A017] px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50">
+                {quickImporting === slideoverProduct.id ? <Loader2 size={15} className="animate-spin" /> : <ArrowDownToLine size={15} />}
+                {syncStatusMap[slideoverProduct.id]?.inErp ? 'Re-import (update)' : 'Import to ERP'}
+              </button>
+              <a href={slideoverProduct.permalink} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium hover:bg-muted">
+                <ExternalLink size={14} /> View on site
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
