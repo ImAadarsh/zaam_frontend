@@ -111,6 +111,7 @@ export function Sidebar() {
                   <Item href="/catalog/channel-mappings" icon={<Share2 size={18} />} label="Channel Mappings" active={pathname?.startsWith('/catalog/channel-mappings')} />
                   <Item href="/catalog/import-channels" icon={<Upload size={18} />} label="Import Channels" active={pathname?.startsWith('/catalog/import-channels')} />
                   <Item href="/catalog/wordpress-channels" icon={<Globe size={18} />} label="WordPress Channels" active={pathname?.startsWith('/catalog/wordpress-channels')} />
+                  <Item href="/catalog/epos-channels" icon={<ShoppingCart size={18} />} label="EPOS Channels" active={pathname?.startsWith('/catalog/epos-channels')} />
                 </>
               )}
               {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'FINANCE']) && (
@@ -406,6 +407,7 @@ export function Sidebar() {
                       <Item href="/catalog/channel-mappings" icon={<Share2 size={18} />} label="Channel Mappings" active={pathname?.startsWith('/catalog/channel-mappings')} />
                       <Item href="/catalog/import-channels" icon={<Upload size={18} />} label="Import Channels" active={pathname?.startsWith('/catalog/import-channels')} />
                       <Item href="/catalog/wordpress-channels" icon={<Globe size={18} />} label="WordPress Channels" active={pathname?.startsWith('/catalog/wordpress-channels')} />
+                  <Item href="/catalog/epos-channels" icon={<ShoppingCart size={18} />} label="EPOS Channels" active={pathname?.startsWith('/catalog/epos-channels')} />
                     </>
                   )}
                   {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'FINANCE']) && (

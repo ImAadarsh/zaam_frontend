@@ -45,6 +45,67 @@ function authHeaders() {
   return { Authorization: `Bearer ${s?.accessToken ?? ''}` };
 }
 
+type PaginatedListResult<T = any> = {
+  data: T[];
+  pagination?: { page?: number; limit?: number; total?: number; totalPages?: number };
+};
+type PaginatedQueryValue = string | number | boolean | undefined | null;
+type PaginatedQueryParams = Record<string, PaginatedQueryValue> & { page?: number; limit?: number };
+
+function appendPaginatedQueryParams(q: URLSearchParams, params?: PaginatedQueryParams) {
+  if (!params) return;
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'page' || key === 'limit') continue;
+    if (value === undefined || value === null || value === '') continue;
+    q.append(key, String(value));
+  }
+}
+
+async function fetchAllPaginatedPages<T>(
+  fetchPage: (page: number, limit: number) => Promise<PaginatedListResult<T>>,
+  pageSize = 100
+): Promise<PaginatedListResult<T>> {
+  const all: T[] = [];
+  let page = 1;
+  let totalPages = 1;
+  let total = 0;
+
+  do {
+    const res = await fetchPage(page, pageSize);
+    all.push(...(res.data || []));
+    totalPages = res.pagination?.totalPages ?? 1;
+    total = res.pagination?.total ?? all.length;
+    page++;
+  } while (page <= totalPages);
+
+  return {
+    data: all,
+    pagination: { page: 1, limit: all.length, total, totalPages: 1 },
+  };
+}
+
+/** Fetches all pages when page/limit are omitted; otherwise returns a single page. */
+async function getPaginatedList<T = any>(
+  path: string,
+  params?: PaginatedQueryParams,
+  pageSize = 100
+): Promise<PaginatedListResult<T>> {
+  const fetchPage = async (page: number, limit: number): Promise<PaginatedListResult<T>> => {
+    const q = new URLSearchParams();
+    appendPaginatedQueryParams(q, params);
+    q.append('page', String(page));
+    q.append('limit', String(limit));
+    const query = q.toString() ? `?${q.toString()}` : '';
+    const { data } = await axios.get(`${API_BASE}${path}${query}`, { headers: authHeaders() });
+    return data;
+  };
+
+  if (params?.page != null || params?.limit != null) {
+    return fetchPage(params.page ?? 1, params.limit ?? 50);
+  }
+  return fetchAllPaginatedPages(fetchPage, pageSize);
+}
+
 // USERS
 export async function listUsers() {
   const { data } = await axios.get(`${API_BASE}/api/iam/users`, { headers: authHeaders() });
@@ -364,17 +425,9 @@ export async function listCatalogItems(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/catalog/items${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/catalog/items', params);
 }
+
 
 export async function getCatalogItem(id: string) {
   const { data } = await axios.get(`${API_BASE}/api/catalog/items/${id}`, { headers: authHeaders() });
@@ -1101,7 +1154,7 @@ export async function executeProductImportApi(payload: {
 // CHANNEL CONNECTIONS (saved WooCommerce / Shopify stores)
 export async function listChannelConnections(params?: {
   organizationId?: string;
-  channel?: 'shopify' | 'woocommerce' | 'wordpress';
+  channel?: 'shopify' | 'woocommerce' | 'wordpress' | 'goodtill';
   status?: string;
 }) {
   const q = new URLSearchParams();
@@ -1319,6 +1372,228 @@ export async function wpPushPrices(params: {
   return data as { data: { pushed: number; errors: number; errorDetails: string[] } };
 }
 
+// ─── Good Till / EPOS Channel API ─────────────────────────────────────────────
+
+export async function createGoodTillConnection(payload: {
+  organizationId: string;
+  name: string;
+  subdomain: string;
+  username: string;
+  password: string;
+  outletId?: string;
+  defaultVatCodeId?: string;
+  status?: 'active' | 'inactive';
+}) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/channel-connections/goodtill`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function listEposConnections(params?: { organizationId?: string }) {
+  const q = new URLSearchParams();
+  if (params?.organizationId) q.append('organizationId', params.organizationId);
+  const query = q.toString() ? `?${q.toString()}` : '';
+  try {
+    const { data } = await axios.get(`${API_BASE}/api/catalog/epos-channels/connections${query}`, {
+      headers: authHeaders()
+    });
+    return data as { data: any[] };
+  } catch (err: any) {
+    if (err?.response?.status !== 404) throw err;
+    const { data } = await axios.get(
+      `${API_BASE}/api/catalog/channel-connections?${new URLSearchParams({
+        ...(params?.organizationId ? { organizationId: params.organizationId } : {}),
+        channel: 'goodtill'
+      })}`,
+      { headers: authHeaders() }
+    );
+    const rows = (data.data ?? []).map((c: any) => ({
+      ...c,
+      subdomain: c.shopDomain ?? c.subdomain,
+      outletId: null,
+      defaultVatCodeId: null
+    }));
+    return { data: rows };
+  }
+}
+
+export async function listGoodTillVatRates(params: { connectionId: string; organizationId: string }) {
+  const q = new URLSearchParams({ organizationId: params.organizationId });
+  const { data } = await axios.get(
+    `${API_BASE}/api/catalog/epos-channels/${params.connectionId}/vat-rates?${q}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: Array<{ id: string; vat_name: string; vat_rate: string }> };
+}
+
+export async function browseGoodTillProducts(params: {
+  connectionId: string;
+  organizationId: string;
+  page?: number;
+  perPage?: number;
+  search?: string;
+}) {
+  const q = new URLSearchParams({ organizationId: params.organizationId });
+  if (params.page) q.append('page', String(params.page));
+  if (params.perPage) q.append('perPage', String(params.perPage));
+  if (params.search) q.append('search', params.search);
+
+  const { data } = await axios.get(
+    `${API_BASE}/api/catalog/epos-channels/${params.connectionId}/products?${q}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: Array<{
+      product_id: string;
+      product_name: string;
+      product_sku: string;
+      barcode: string | null;
+      selling_price: string;
+      inventory: string;
+      category: string | null;
+      has_variant: number;
+      variants: any[];
+    }>;
+    pagination: { page: number; perPage: number; total: number; totalPages: number };
+  };
+}
+
+export async function importGoodTillProducts(payload: {
+  connectionId: string;
+  organizationId: string;
+  productIds?: string[];
+  importAll?: boolean;
+  options?: {
+    businessUnitId?: string;
+    warehouseId?: string;
+    priceListId?: string;
+    duplicateMode?: 'skip' | 'update';
+    importProducts?: boolean;
+    importVariants?: boolean;
+    importInventory?: boolean;
+    importPrices?: boolean;
+    importMedia?: boolean;
+    importChannelMappings?: boolean;
+  };
+}) {
+  const { connectionId, ...body } = payload;
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/epos-channels/${connectionId}/import`,
+    body,
+    { headers: authHeaders(), timeout: 600000 }
+  );
+  return data as { data: { jobId: string; status: string; summary: Record<string, unknown> } };
+}
+
+export async function exportToGoodTill(payload: {
+  connectionId: string;
+  organizationId: string;
+  catalogItemIds?: string[];
+  exportAll?: boolean;
+  duplicateMode?: 'skip' | 'update';
+  vatCodeId?: string;
+  priceListId?: string;
+  warehouseId?: string;
+  generateBarcodes?: boolean;
+}) {
+  const { connectionId, ...body } = payload;
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/epos-channels/${connectionId}/export`,
+    body,
+    { headers: authHeaders(), timeout: 600000 }
+  );
+  return data as {
+    data: {
+      created: number;
+      updated: number;
+      skipped: number;
+      barcodesGenerated: number;
+      errors: Array<{ sku: string; message: string }>;
+    };
+  };
+}
+
+export async function previewGoodTillExport(params: {
+  connectionId: string;
+  organizationId: string;
+  catalogItemIds?: string;
+}) {
+  const q = new URLSearchParams({ organizationId: params.organizationId });
+  if (params.catalogItemIds) q.append('catalogItemIds', params.catalogItemIds);
+  const { data } = await axios.get(
+    `${API_BASE}/api/catalog/epos-channels/${params.connectionId}/preview-export?${q}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: { totalItems: number; items: Array<{ id: string; sku: string; name: string; status: string; category: string }> } };
+}
+
+export async function generateEposProductBarcodes(payload: {
+  connectionId: string;
+  organizationId: string;
+  productIds?: string[];
+  generateAll?: boolean;
+  forceRegenerate?: boolean;
+}) {
+  const { connectionId, ...body } = payload;
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/epos-channels/${connectionId}/epos-products/barcodes`,
+    body,
+    { headers: authHeaders(), timeout: 300000 }
+  );
+  return data as {
+    data: {
+      generated: number;
+      updated: number;
+      skipped: number;
+      errors: Array<{ productId: string; sku: string; message: string }>;
+      products: Array<{
+        productId: string;
+        productSku: string;
+        productName: string;
+        barcode: string;
+        sellingPrice: string;
+      }>;
+    };
+  };
+}
+
+export async function getEposBarcodeImage(params: { connectionId: string; barcode: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/catalog/epos-channels/${params.connectionId}/barcode-image/${encodeURIComponent(params.barcode)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: { barcode: string; imageDataUrl: string } };
+}
+
+export async function generateEposBarcodes(payload: {
+  connectionId: string;
+  organizationId: string;
+  catalogItemIds?: string[];
+  exportAll?: boolean;
+}) {
+  const { connectionId, ...body } = payload;
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/epos-channels/${connectionId}/generate-barcodes`,
+    body,
+    { headers: authHeaders(), timeout: 120000 }
+  );
+  return data as { data: { generated: number; skipped?: number; barcodes: Array<{ variantSku: string; barcode: string }> } };
+}
+
+export async function getEposQrCode(params: {
+  connectionId: string;
+  barcode: string;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/catalog/epos-channels/${params.connectionId}/qr/${encodeURIComponent(params.barcode)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: { barcode: string; qrDataUrl: string } };
+}
+
 export async function executeProductImport(file: File, sourceType: string, options: ProductImportOptions) {
   const formData = new FormData();
   formData.append('file', file);
@@ -1332,13 +1607,7 @@ export async function executeProductImport(file: File, sourceType: string, optio
 }
 
 export async function listProductImportJobs(params?: { organizationId?: string; page?: number; limit?: number }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/catalog/import-channels/jobs${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/catalog/import-channels/jobs', params);
 }
 
 // COMPLIANCE DOCUMENTS
@@ -1433,15 +1702,7 @@ export async function listWarehouses(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.locationId) queryParams.append('locationId', params.locationId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/warehouses${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/warehouses', params);
 }
 
 export async function getWarehouse(id: string) {
@@ -1499,15 +1760,7 @@ export async function listBins(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/bins${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/bins', params);
 }
 
 export async function getBin(id: string) {
@@ -1563,15 +1816,7 @@ export async function listSuppliers(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/suppliers${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/suppliers', params);
 }
 
 export async function getSupplier(id: string) {
@@ -1647,17 +1892,7 @@ export async function listPurchaseOrders(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.supplierId) queryParams.append('supplierId', params.supplierId);
-  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/purchase-orders${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/purchase-orders', params);
 }
 
 export async function getPurchaseOrder(id: string) {
@@ -1719,17 +1954,7 @@ export async function listStockItems(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.variantId) queryParams.append('variantId', params.variantId);
-  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
-  if (params?.binId) queryParams.append('binId', params.binId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/stock-items${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/stock-items', params);
 }
 
 export async function getStockItem(id: string) {
@@ -1791,18 +2016,7 @@ export async function listASN(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.purchaseOrderId) queryParams.append('purchaseOrderId', params.purchaseOrderId);
-  if (params?.supplierId) queryParams.append('supplierId', params.supplierId);
-  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/asn${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/asn', params);
 }
 
 export async function getASN(id: string) {
@@ -1860,18 +2074,7 @@ export async function listGRN(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.asnId) queryParams.append('asnId', params.asnId);
-  if (params?.purchaseOrderId) queryParams.append('purchaseOrderId', params.purchaseOrderId);
-  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/grn${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/grn', params);
 }
 
 export async function getGRN(id: string) {
@@ -1943,17 +2146,7 @@ export async function listStockTransfers(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.fromWarehouseId) queryParams.append('fromWarehouseId', params.fromWarehouseId);
-  if (params?.toWarehouseId) queryParams.append('toWarehouseId', params.toWarehouseId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/stock-transfers${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/stock-transfers', params);
 }
 
 export async function getStockTransfer(id: string) {
@@ -2012,16 +2205,7 @@ export async function listStockAdjustments(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.stockItemId) queryParams.append('stockItemId', params.stockItemId);
-  if (params?.adjustmentType) queryParams.append('adjustmentType', params.adjustmentType);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/stock-adjustments${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/stock-adjustments', params);
 }
 
 export async function getStockAdjustment(id: string) {
@@ -2072,17 +2256,7 @@ export async function listCycleCounts(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.warehouseId) queryParams.append('warehouseId', params.warehouseId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.countType) queryParams.append('countType', params.countType);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/inventory/cycle-counts${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/inventory/cycle-counts', params);
 }
 
 export async function getCycleCount(id: string) {
@@ -2146,15 +2320,7 @@ export async function listCustomers(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/orders/customers${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/orders/customers', params);
 }
 
 export async function getCustomer(id: string) {
@@ -2220,19 +2386,7 @@ export async function listOrders(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.customerId) queryParams.append('customerId', params.customerId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.paymentStatus) queryParams.append('paymentStatus', params.paymentStatus);
-  if (params?.fulfillmentStatus) queryParams.append('fulfillmentStatus', params.fulfillmentStatus);
-  if (params?.channel) queryParams.append('channel', params.channel);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/orders/orders${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/orders/orders', params);
 }
 
 export async function getOrder(id: string) {
@@ -2323,17 +2477,7 @@ export async function listReturns(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.orderId) queryParams.append('orderId', params.orderId);
-  if (params?.customerId) queryParams.append('customerId', params.customerId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/orders/returns${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/orders/returns', params);
 }
 
 export async function getReturn(id: string) {
@@ -2619,15 +2763,7 @@ export async function listChartOfAccounts(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/finance/chart-of-accounts${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/finance/chart-of-accounts', params);
 }
 
 export async function getChartOfAccounts(id: string) {
@@ -2670,16 +2806,7 @@ export async function listLedgerAccounts(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.chartOfAccountsId) queryParams.append('chartOfAccountsId', params.chartOfAccountsId);
-  if (params?.accountType) queryParams.append('accountType', params.accountType);
-  if (params?.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/finance/ledger-accounts${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/finance/ledger-accounts', params);
 }
 
 export async function getLedgerAccount(id: string) {
@@ -2731,16 +2858,7 @@ export async function listCostCenters(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.search) queryParams.append('search', params.search);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/finance/cost-centers${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/finance/cost-centers', params);
 }
 
 export async function getCostCenter(id: string) {
@@ -2786,15 +2904,7 @@ export async function listFiscalPeriods(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.fiscalYear) queryParams.append('fiscalYear', params.fiscalYear.toString());
-  if (params?.isClosed !== undefined) queryParams.append('isClosed', params.isClosed.toString());
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/finance/fiscal-periods${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/finance/fiscal-periods', params);
 }
 
 export async function getFiscalPeriod(id: string) {
@@ -2840,16 +2950,7 @@ export async function listJournalEntries(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.fiscalPeriodId) queryParams.append('fiscalPeriodId', params.fiscalPeriodId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.entryType) queryParams.append('entryType', params.entryType);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/finance/journal-entries${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/finance/journal-entries', params);
 }
 
 export async function getJournalEntry(id: string) {
@@ -2923,15 +3024,7 @@ export async function listBankAccounts(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/finance/bank-accounts${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/finance/bank-accounts', params);
 }
 
 export async function getBankAccount(id: string) {
@@ -2991,17 +3084,7 @@ export async function listBankTransactions(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.bankAccountId) queryParams.append('bankAccountId', params.bankAccountId);
-  if (params?.isReconciled !== undefined) queryParams.append('isReconciled', params.isReconciled.toString());
-  if (params?.transactionType) queryParams.append('transactionType', params.transactionType);
-  if (params?.startDate) queryParams.append('startDate', params.startDate);
-  if (params?.endDate) queryParams.append('endDate', params.endDate);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/finance/bank-transactions${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/finance/bank-transactions', params);
 }
 
 export async function getBankTransaction(id: string) {
@@ -3057,15 +3140,7 @@ export async function listVatReturns(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/finance/vat-returns${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/finance/vat-returns', params);
 }
 
 export async function getVatReturn(id: string) {
@@ -3127,17 +3202,7 @@ export async function listBudgetLines(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
-  if (params?.costCenterId) queryParams.append('costCenterId', params.costCenterId);
-  if (params?.ledgerAccountId) queryParams.append('ledgerAccountId', params.ledgerAccountId);
-  if (params?.fiscalPeriodId) queryParams.append('fiscalPeriodId', params.fiscalPeriodId);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/finance/budget-lines${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/finance/budget-lines', params);
 }
 
 export async function getBudgetLine(id: string) {
@@ -3190,14 +3255,7 @@ export async function listEmployees(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/employees${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/employees', params);
 }
 
 export async function getEmployee(id: string) {
@@ -3284,14 +3342,7 @@ export async function listEmploymentContracts(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/employment-contracts${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/employment-contracts', params);
 }
 
 export async function getEmploymentContract(id: string) {
@@ -3360,14 +3411,7 @@ export async function listEmployeeDocuments(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
-  if (params?.documentType) queryParams.append('documentType', params.documentType);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/employee-documents${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/employee-documents', params);
 }
 
 export async function getEmployeeDocument(id: string) {
@@ -3413,14 +3457,7 @@ export async function listTimeEntries(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/time-entries${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/time-entries', params);
 }
 
 export async function getTimeEntry(id: string) {
@@ -3474,14 +3511,7 @@ export async function listLeaveRequests(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/leave-requests${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/leave-requests', params);
 }
 
 export async function getLeaveRequest(id: string) {
@@ -3528,14 +3558,7 @@ export async function listShifts(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/shifts${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/shifts', params);
 }
 
 export async function getShift(id: string) {
@@ -3585,14 +3608,7 @@ export async function listPayrollRuns(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/payroll-runs${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/payroll-runs', params);
 }
 
 export async function getPayrollRun(id: string) {
@@ -3639,14 +3655,7 @@ export async function listPayrollLines(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.payrollRunId) queryParams.append('payrollRunId', params.payrollRunId);
-  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/payroll-lines${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/payroll-lines', params);
 }
 
 export async function getPayrollLine(id: string) {
@@ -3711,15 +3720,7 @@ export async function listTasks(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.status) queryParams.append('status', params.status);
-  if (params?.assignedTo) queryParams.append('assignedTo', params.assignedTo);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/tasks${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/tasks', params);
 }
 
 export async function getTask(id: string) {
@@ -3780,15 +3781,7 @@ export async function listKpiDefinitions(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
-  if (params?.kpiCategory) queryParams.append('kpiCategory', params.kpiCategory);
-  if (params?.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/kpi-definitions${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/kpi-definitions', params);
 }
 
 export async function getKpiDefinition(id: string) {
@@ -3840,15 +3833,7 @@ export async function listKpiRecords(params?: {
   page?: number;
   limit?: number;
 }) {
-  const queryParams = new URLSearchParams();
-  if (params?.kpiDefinitionId) queryParams.append('kpiDefinitionId', params.kpiDefinitionId);
-  if (params?.employeeId) queryParams.append('employeeId', params.employeeId);
-  if (params?.businessUnitId) queryParams.append('businessUnitId', params.businessUnitId);
-  if (params?.page) queryParams.append('page', params.page.toString());
-  if (params?.limit) queryParams.append('limit', params.limit.toString());
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/hr/kpi-records${query}`, { headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return getPaginatedList('/api/hr/kpi-records', params);
 }
 
 export async function getKpiRecord(id: string) {
