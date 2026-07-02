@@ -8,6 +8,7 @@ import { jsPDF } from 'jspdf';
 import { Download, Loader2, Printer, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarcodePreview } from '@/components/barcode-preview';
+import { resolveBarcodeSymbology, toJsBarcodeFormat } from '@/lib/barcodeSymbology';
 
 export type LabelProduct = {
   product_id: string;
@@ -90,8 +91,9 @@ function BarcodeSvg({
   useEffect(() => {
     if (!svgRef.current || !value) return;
     try {
-      JsBarcode(svgRef.current, value, {
-        format: 'CODE128',
+      const { symbology, encodeValue } = resolveBarcodeSymbology(value);
+      JsBarcode(svgRef.current, encodeValue, {
+        format: toJsBarcodeFormat(symbology),
         width: 2,
         height: Math.max(24, toPx(heightIn, unit) * 0.55),
         displayValue: false,

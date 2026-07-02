@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
+import { resolveBarcodeSymbology, toJsBarcodeFormat } from '@/lib/barcodeSymbology';
 
 type Props = {
   value: string;
@@ -11,15 +12,16 @@ type Props = {
   className?: string;
 };
 
-/** Renders a CODE128 barcode SVG for on-screen preview. */
+/** Renders a POS-compatible barcode (EAN-13 / UPC / EAN-8) for on-screen preview. */
 export function BarcodePreview({ value, width = 2, height = 40, showText = true, className }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
     if (!svgRef.current || !value?.trim()) return;
     try {
-      JsBarcode(svgRef.current, value.trim(), {
-        format: 'CODE128',
+      const { symbology, encodeValue } = resolveBarcodeSymbology(value);
+      JsBarcode(svgRef.current, encodeValue, {
+        format: toJsBarcodeFormat(symbology),
         width,
         height,
         displayValue: showText,
