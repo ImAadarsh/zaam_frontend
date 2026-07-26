@@ -18,9 +18,15 @@ function LoginContent() {
     // Check for error messages from OAuth callback
     const error = searchParams.get('error');
     const message = searchParams.get('message');
+    const reason = searchParams.get('reason');
     if (error && message) {
       toast.error(message);
       // Clean up URL
+      router.replace('/login');
+      return;
+    }
+    if (reason === 'expired') {
+      toast.message('Your session ended. Please sign in again.');
       router.replace('/login');
     }
   }, [searchParams, router]);

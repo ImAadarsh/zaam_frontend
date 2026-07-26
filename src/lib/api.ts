@@ -1,26 +1,106 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import axios from 'axios';
-import { clearSession, getSession } from '@/lib/auth';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { clearSession, getSession, updateAccessToken } from '@/lib/auth';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
 
 let interceptorsRegistered = false;
+let isRefreshing = false;
+let refreshWaiters: Array<(token: string | null) => void> = [];
+
+type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean };
+
+function isAuthEndpoint(url?: string) {
+  if (!url) return false;
+  return (
+    url.includes('/api/iam/auth/login') ||
+    url.includes('/api/iam/auth/refresh') ||
+    url.includes('/api/iam/auth/google')
+  );
+}
+
+function forceLogout() {
+  clearSession();
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname.startsWith('/login')) return;
+  const next = `/login?reason=expired`;
+  if (window.location.pathname + window.location.search !== next) {
+    window.location.href = next;
+  }
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const session = getSession();
+  if (!session?.refreshToken) return null;
+  try {
+    const { data } = await axios.post(
+      `${API_BASE}/api/iam/auth/refresh`,
+      { refreshToken: session.refreshToken },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+    const accessToken = data?.accessToken as string | undefined;
+    if (!accessToken) return null;
+    updateAccessToken(accessToken);
+    return accessToken;
+  } catch {
+    return null;
+  }
+}
 
 function ensureInterceptors() {
   if (interceptorsRegistered) return;
+
   axios.interceptors.response.use(
     (response) => response,
-    (error) => {
-      const status = error?.response?.status;
-      if (status === 401) {
-        clearSession();
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = '/login?reason=expired';
-        }
+    async (error: AxiosError) => {
+      const status = error.response?.status;
+      const original = error.config as RetryConfig | undefined;
+
+      // Only handle expired / invalid access tokens — never nuke the session
+      // on login failures or refresh failures (handled below).
+      if (status !== 401 || !original || original._retry || isAuthEndpoint(original.url)) {
+        return Promise.reject(error);
       }
-      return Promise.reject(error);
+
+      // No stored session → nothing to recover; just fail the request.
+      if (!getSession()?.refreshToken) {
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          refreshWaiters.push((token) => {
+            if (!token) {
+              reject(error);
+              return;
+            }
+            original.headers = original.headers ?? {};
+            original.headers.Authorization = `Bearer ${token}`;
+            resolve(axios(original));
+          });
+        });
+      }
+
+      original._retry = true;
+      isRefreshing = true;
+      const token = await refreshAccessToken();
+      isRefreshing = false;
+
+      const waiters = refreshWaiters;
+      refreshWaiters = [];
+      waiters.forEach((cb) => cb(token));
+
+      if (!token) {
+        forceLogout();
+        return Promise.reject(error);
+      }
+
+      original.headers = original.headers ?? {};
+      original.headers.Authorization = `Bearer ${token}`;
+      return axios(original);
     }
   );
+
   interceptorsRegistered = true;
 }
 
@@ -42,7 +122,9 @@ export async function getGoogleAuthUrl() {
 
 function authHeaders() {
   const s = getSession();
-  return { Authorization: `Bearer ${s?.accessToken ?? ''}` };
+  // Never send "Bearer " with an empty token — that alone triggers a 401 logout loop.
+  if (!s?.accessToken) return {};
+  return { Authorization: `Bearer ${s.accessToken}` };
 }
 
 type PaginatedListResult<T = any> = {
@@ -442,8 +524,17 @@ export async function createCatalogItem(payload: {
   description?: string;
   longDescription?: string;
   category?: string;
+  subCategory?: string;
   brand?: string;
   manufacturer?: string;
+  uom?: string;
+  packSize?: string;
+  costPrice?: number;
+  sellingPrice?: number;
+  currency?: string;
+  supplierSku?: string;
+  leadTimeDays?: number;
+  remarks?: string;
   hsCode?: string;
   countryOfOrigin?: string;
   taxCodeId?: string;
@@ -455,6 +546,15 @@ export async function createCatalogItem(payload: {
   dimensionUnit?: 'cm' | 'm' | 'in' | 'ft';
   attributes?: Record<string, any>;
   status?: 'active' | 'inactive' | 'discontinued';
+  barcode?: string;
+  openingQuantity?: number;
+  reorderLevel?: number;
+  reorderQuantity?: number;
+  warehouseName?: string;
+  binCode?: string;
+  supplierName?: string;
+  lotNumber?: string;
+  expiryDate?: string;
 }) {
   const { data } = await axios.post(`${API_BASE}/api/catalog/items`, payload, { headers: authHeaders() });
   return data as { data: any };
@@ -467,8 +567,17 @@ export async function updateCatalogItem(id: string, payload: {
   description?: string;
   longDescription?: string;
   category?: string;
+  subCategory?: string;
   brand?: string;
   manufacturer?: string;
+  uom?: string;
+  packSize?: string;
+  costPrice?: number;
+  sellingPrice?: number;
+  currency?: string;
+  supplierSku?: string;
+  leadTimeDays?: number;
+  remarks?: string;
   hsCode?: string;
   countryOfOrigin?: string;
   taxCodeId?: string;
@@ -480,6 +589,15 @@ export async function updateCatalogItem(id: string, payload: {
   dimensionUnit?: 'cm' | 'm' | 'in' | 'ft';
   attributes?: Record<string, any>;
   status?: 'active' | 'inactive' | 'discontinued';
+  barcode?: string;
+  openingQuantity?: number;
+  reorderLevel?: number;
+  reorderQuantity?: number;
+  warehouseName?: string;
+  binCode?: string;
+  supplierName?: string;
+  lotNumber?: string;
+  expiryDate?: string;
 }) {
   const { data } = await axios.patch(`${API_BASE}/api/catalog/items/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
@@ -1608,6 +1726,66 @@ export async function executeProductImport(file: File, sourceType: string, optio
 
 export async function listProductImportJobs(params?: { organizationId?: string; page?: number; limit?: number }) {
   return getPaginatedList('/api/catalog/import-channels/jobs', params);
+}
+
+// INVENTORY EXCEL SEED IMPORT
+export async function previewInventoryExcelImport(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await axios.post(`${API_BASE}/api/catalog/inventory-import/preview`, formData, {
+    headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
+    timeout: 120000
+  });
+  return data as {
+    data: {
+      rowCount: number;
+      sample: Array<Record<string, unknown>>;
+      categories: string[];
+      warehouses: string[];
+      suppliers: string[];
+      warnings: string[];
+    };
+  };
+}
+
+export async function executeInventoryExcelImport(
+  file: File,
+  options: {
+    organizationId: string;
+    businessUnitId?: string;
+    duplicateMode?: 'skip' | 'update';
+    importInventory?: boolean;
+  }
+) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('organizationId', options.organizationId);
+  if (options.businessUnitId) formData.append('businessUnitId', options.businessUnitId);
+  formData.append('duplicateMode', options.duplicateMode ?? 'update');
+  formData.append('importInventory', String(options.importInventory ?? true));
+  const { data } = await axios.post(`${API_BASE}/api/catalog/inventory-import/execute`, formData, {
+    headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
+    timeout: 600000
+  });
+  return data as {
+    data: {
+      preview: Record<string, unknown>;
+      result: {
+        productsCreated: number;
+        productsUpdated: number;
+        productsSkipped: number;
+        variantsCreated: number;
+        barcodesCreated: number;
+        warehousesCreated: number;
+        binsCreated: number;
+        suppliersCreated: number;
+        stockItemsCreated: number;
+        stockItemsUpdated: number;
+        taxCodesCreated: number;
+        errors: Array<{ sku: string; rowNumber: number; message: string }>;
+      };
+    };
+  };
 }
 
 // COMPLIANCE DOCUMENTS
