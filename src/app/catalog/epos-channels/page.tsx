@@ -16,6 +16,8 @@ import {
   listGoodTillVatRates,
   generateEposBarcodes,
   generateEposProductBarcodes,
+  deleteGoodTillProduct,
+  deleteGoodTillProducts,
   listOrganizations,
   listWarehouses,
   listPriceLists,
@@ -25,6 +27,7 @@ import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import {
+  RefreshCw,
   ShoppingCart,
   Plus,
   Trash2,
@@ -139,16 +142,24 @@ export default function EposChannelsPage() {
   const [exporting, setExporting] = useState(false);
   const [generatingBarcodes, setGeneratingBarcodes] = useState(false);
   const [generatingEposBarcodes, setGeneratingEposBarcodes] = useState(false);
+  const [deletingEpos, setDeletingEpos] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<null | {
+    mode: 'one' | 'selected' | 'all';
+    product?: GtProduct;
+  }>(null);
   const [forceRegenerateBarcodes, setForceRegenerateBarcodes] = useState(false);
   const [labelProducts, setLabelProducts] = useState<LabelProduct[] | null>(null);
+  const [loadingAllLabels, setLoadingAllLabels] = useState(false);
   const [detailProduct, setDetailProduct] = useState<GtProduct | null>(null);
   const [exportResult, setExportResult] = useState<{
     created: number;
     updated: number;
     skipped: number;
+    unchanged?: number;
     barcodesGenerated: number;
     errors: Array<{ sku: string; message: string }>;
   } | null>(null);
+  const [exportingMode, setExportingMode] = useState<'push' | 'sync' | null>(null);
 
   const loadConnections = useCallback(async () => {
     const org = organizationId || session?.user?.organizationId;
@@ -318,10 +329,11 @@ export default function EposChannelsPage() {
     }
   }
 
-  async function handleExport() {
+  async function handleExport(mode: 'push' | 'sync') {
     if (!selectedConnId || !organizationId) return;
     if (!exportOptions.vatCodeId) return toast.error('Select a VAT rate for EPOS products');
     setExporting(true);
+    setExportingMode(mode);
     setExportResult(null);
     try {
       const res = await exportToGoodTill({
@@ -329,15 +341,32 @@ export default function EposChannelsPage() {
         organizationId,
         exportAll: selectedItemIds.size === 0,
         catalogItemIds: selectedItemIds.size ? Array.from(selectedItemIds) : undefined,
-        ...exportOptions
+        mode,
+        duplicateMode: mode === 'sync' ? 'update' : 'skip',
+        vatCodeId: exportOptions.vatCodeId,
+        priceListId: exportOptions.priceListId || undefined,
+        warehouseId: exportOptions.warehouseId || undefined,
+        generateBarcodes: exportOptions.generateBarcodes
       });
       setExportResult(res.data);
-      toast.success(`Exported: ${res.data.created} created, ${res.data.updated} updated`);
+      if (mode === 'push') {
+        toast.success(
+          `Push complete: ${res.data.created} created, ${res.data.skipped} already in EPOS`
+        );
+      } else {
+        toast.success(
+          `Sync complete: ${res.data.created} added, ${res.data.updated} updated, ${res.data.unchanged ?? 0} unchanged`
+        );
+      }
+      if (res.data.errors?.length) {
+        toast.error(`${res.data.errors.length} error(s): ${res.data.errors[0]?.message}`);
+      }
       if (activeTab === 'browse') loadBrowse();
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message ?? 'Export to EPOS failed');
     } finally {
       setExporting(false);
+      setExportingMode(null);
     }
   }
 
@@ -373,21 +402,105 @@ export default function EposChannelsPage() {
     }
   }
 
+  async function runDeleteEpos(mode: 'one' | 'selected' | 'all', product?: GtProduct) {
+    if (!selectedConnId || !organizationId) return;
+    setDeletingEpos(true);
+    setConfirmDelete(null);
+    try {
+      let result: { deleted: number; failed: number; skipped: number; errors: Array<{ productId: string; message: string }> };
+      if (mode === 'one' && product) {
+        const res = await deleteGoodTillProduct({
+          connectionId: selectedConnId,
+          organizationId,
+          productId: product.product_id
+        });
+        result = res.data;
+      } else if (mode === 'all') {
+        const res = await deleteGoodTillProducts({
+          connectionId: selectedConnId,
+          organizationId,
+          deleteAll: true
+        });
+        result = res.data;
+      } else {
+        const res = await deleteGoodTillProducts({
+          connectionId: selectedConnId,
+          organizationId,
+          productIds: Array.from(selectedProductIds)
+        });
+        result = res.data;
+      }
+
+      if (result.deleted > 0) {
+        toast.success(`Deleted ${result.deleted} EPOS product(s)`);
+      } else if (result.failed === 0) {
+        toast.info('No matching EPOS products to delete');
+      }
+      if (result.failed > 0) {
+        toast.error(
+          `${result.failed} failed${result.errors[0] ? `: ${result.errors[0].message}` : ''}`
+        );
+      }
+
+      setSelectedProductIds(new Set());
+      if (detailProduct && mode === 'one' && product?.product_id === detailProduct.product_id) {
+        setDetailProduct(null);
+      }
+      await loadBrowse();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message ?? 'Failed to delete EPOS product(s)');
+    } finally {
+      setDeletingEpos(false);
+    }
+  }
+
+  function toLabelProducts(list: GtProduct[]): LabelProduct[] {
+    return list.map((p) => ({
+      product_id: p.product_id,
+      product_name: p.product_name,
+      product_sku: p.product_sku,
+      barcode: p.barcode,
+      selling_price: p.selling_price
+    }));
+  }
+
   function openLabelDesigner(products?: GtProduct[]) {
     const list = products ?? gtProducts.filter((p) => selectedProductIds.has(p.product_id));
     if (!list.length) {
       toast.error('Select at least one EPOS product');
       return;
     }
-    setLabelProducts(
-      list.map((p) => ({
-        product_id: p.product_id,
-        product_name: p.product_name,
-        product_sku: p.product_sku,
-        barcode: p.barcode,
-        selling_price: p.selling_price
-      }))
-    );
+    setLabelProducts(toLabelProducts(list));
+  }
+
+  /** Load every matching EPOS product (not just the current page) into the Brother label panel. */
+  async function openLabelDesignerForAll() {
+    if (!selectedConnId || !organizationId) return;
+    if (!browseTotal) {
+      toast.error('No EPOS products to download');
+      return;
+    }
+    setLoadingAllLabels(true);
+    try {
+      const res = await browseGoodTillProducts({
+        connectionId: selectedConnId,
+        organizationId,
+        page: 1,
+        perPage: Math.max(browseTotal, 1),
+        search: browseSearch.trim() || undefined
+      });
+      const list = res.data as GtProduct[];
+      if (!list.length) {
+        toast.error('No EPOS products to download');
+        return;
+      }
+      setLabelProducts(toLabelProducts(list));
+      toast.success(`Loaded ${list.length} product(s) for Brother QL-820 labels`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message ?? 'Failed to load products for labels');
+    } finally {
+      setLoadingAllLabels(false);
+    }
   }
 
   async function handleGenerateBarcodes() {
@@ -585,7 +698,7 @@ export default function EposChannelsPage() {
                     <button type="button" onClick={() => { setBrowsePage(1); loadBrowse(); }} className="rounded-md border px-4 py-2 text-sm">Search</button>
                     <button
                       type="button"
-                      disabled={generatingEposBarcodes || !selectedProductIds.size}
+                      disabled={generatingEposBarcodes || !selectedProductIds.size || deletingEpos}
                       onClick={() => handleGenerateEposBarcodes(true)}
                       className="inline-flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm disabled:opacity-50"
                     >
@@ -594,19 +707,47 @@ export default function EposChannelsPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={!selectedProductIds.size}
+                      disabled={!selectedProductIds.size || deletingEpos || loadingAllLabels}
                       onClick={() => openLabelDesigner()}
                       className="inline-flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm disabled:opacity-50"
                     >
-                      <Tag size={14} /> Preview &amp; PDF
+                      <Tag size={14} /> Labels (selected)
                     </button>
                     <button
                       type="button"
-                      disabled={!selectedProductIds.size || importing}
+                      disabled={!browseTotal || deletingEpos || loadingAllLabels}
+                      onClick={() => openLabelDesignerForAll()}
+                      className="inline-flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm disabled:opacity-50"
+                      title="Download Brother QL-820 29×90 mm labels for all products in one PDF"
+                    >
+                      {loadingAllLabels ? <Loader2 size={14} className="animate-spin" /> : <Barcode size={14} />}
+                      Download all labels
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!selectedProductIds.size || importing || deletingEpos}
                       onClick={() => handleImport(true)}
                       className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
                     >
                       Import selected ({selectedProductIds.size})
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!selectedProductIds.size || deletingEpos}
+                      onClick={() => setConfirmDelete({ mode: 'selected' })}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-red-300 px-4 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {deletingEpos ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      Delete selected ({selectedProductIds.size})
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!browseTotal || deletingEpos}
+                      onClick={() => setConfirmDelete({ mode: 'all' })}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-red-400 bg-red-50 px-4 py-2 text-sm text-red-800 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      <Trash2 size={14} />
+                      Delete all in EPOS
                     </button>
                   </div>
                   <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
@@ -625,13 +766,31 @@ export default function EposChannelsPage() {
                       <table className="w-full text-sm">
                         <thead className="bg-muted/50">
                           <tr>
-                            <th className="p-3 text-left w-8" />
+                            <th className="p-3 text-left w-8">
+                              <input
+                                type="checkbox"
+                                title="Select all on this page"
+                                checked={
+                                  gtProducts.length > 0 &&
+                                  gtProducts.every((p) => selectedProductIds.has(p.product_id))
+                                }
+                                onChange={(e) => {
+                                  const next = new Set(selectedProductIds);
+                                  if (e.target.checked) {
+                                    gtProducts.forEach((p) => next.add(p.product_id));
+                                  } else {
+                                    gtProducts.forEach((p) => next.delete(p.product_id));
+                                  }
+                                  setSelectedProductIds(next);
+                                }}
+                              />
+                            </th>
                             <th className="p-3 text-left">Product</th>
                             <th className="p-3 text-left">SKU</th>
                             <th className="p-3 text-left">Barcode</th>
                             <th className="p-3 text-right">Price</th>
                             <th className="p-3 text-right">Stock</th>
-                            <th className="p-3 text-right w-28">Actions</th>
+                            <th className="p-3 text-right w-36">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -675,11 +834,20 @@ export default function EposChannelsPage() {
                                   </button>
                                   <button
                                     type="button"
-                                    title="Open label designer"
+                                    title="Brother QL-820 labels"
                                     onClick={() => openLabelDesigner([p])}
                                     className="rounded border p-1.5 hover:bg-muted"
                                   >
                                     <Tag size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Delete from EPOS"
+                                    disabled={deletingEpos}
+                                    onClick={() => setConfirmDelete({ mode: 'one', product: p })}
+                                    className="rounded border border-red-200 p-1.5 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                  >
+                                    <Trash2 size={14} />
                                   </button>
                                 </div>
                               </td>
@@ -766,7 +934,68 @@ export default function EposChannelsPage() {
                         }}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
                       >
-                        <Tag size={14} /> Preview &amp; download PDF
+                        <Tag size={14} /> Brother QL-820 labels
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deletingEpos}
+                        onClick={() => setConfirmDelete({ mode: 'one', product: detailProduct })}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <Trash2 size={14} /> Delete from EPOS
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {confirmDelete && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+                  <div className="bg-card rounded-xl border shadow-xl max-w-md w-full p-5 space-y-4">
+                    <h3 className="font-semibold text-lg">
+                      {confirmDelete.mode === 'all'
+                        ? 'Delete all EPOS products?'
+                        : confirmDelete.mode === 'selected'
+                          ? `Delete ${selectedProductIds.size} selected product(s)?`
+                          : 'Delete this EPOS product?'}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {confirmDelete.mode === 'all' ? (
+                        <>
+                          This will permanently remove <strong>every product</strong> from Good Till / SumUp POS
+                          for this outlet (not just the current search page). This cannot be undone from Zaam.
+                        </>
+                      ) : confirmDelete.mode === 'one' && confirmDelete.product ? (
+                        <>
+                          Remove <strong>{confirmDelete.product.product_name}</strong>
+                          {confirmDelete.product.product_sku ? (
+                            <> (<span className="font-mono text-xs">{confirmDelete.product.product_sku}</span>)</>
+                          ) : null}{' '}
+                          from EPOS. Variants of this product (if any) will also be deleted.
+                        </>
+                      ) : (
+                        <>
+                          Selected products will be deleted from Good Till / SumUp POS. Variants are included when present.
+                        </>
+                      )}
+                    </p>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        disabled={deletingEpos}
+                        onClick={() => setConfirmDelete(null)}
+                        className="rounded-lg border px-4 py-2 text-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deletingEpos}
+                        onClick={() => runDeleteEpos(confirmDelete.mode, confirmDelete.product)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {deletingEpos ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                        {confirmDelete.mode === 'all' ? 'Delete all' : 'Delete'}
                       </button>
                     </div>
                   </div>
@@ -815,15 +1044,18 @@ export default function EposChannelsPage() {
             <div className="space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold">Push Zaam catalog → Good Till EPOS</h2>
-                  <p className="text-sm text-muted-foreground mt-1">Creates products in EPOS with barcodes for label printing and POS scanning.</p>
+                  <h2 className="text-lg font-semibold">Push &amp; sync Zaam → Good Till EPOS</h2>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+                    <strong>Push all</strong> creates catalog products that are missing in EPOS.
+                    <strong> Sync</strong> also updates name, description, price and stock quantity when ERP data changes, and adds any new products.
+                  </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={generatingBarcodes || !selectedConnId}
+                    disabled={generatingBarcodes || !selectedConnId || exporting}
                     onClick={handleGenerateBarcodes}
-                    className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm"
+                    className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
                   >
                     {generatingBarcodes ? <Loader2 size={14} className="animate-spin" /> : <Barcode size={14} />}
                     Generate barcodes
@@ -831,16 +1063,29 @@ export default function EposChannelsPage() {
                   <button
                     type="button"
                     disabled={exporting || !selectedConnId}
-                    onClick={handleExport}
+                    onClick={() => handleExport('push')}
+                    className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
+                  >
+                    {exportingMode === 'push' ? <Loader2 size={14} className="animate-spin" /> : <ArrowUpFromLine size={14} />}
+                    {selectedItemIds.size
+                      ? `Push selected (${selectedItemIds.size})`
+                      : 'Push all to EPOS'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={exporting || !selectedConnId}
+                    onClick={() => handleExport('sync')}
                     className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
                   >
-                    {exporting ? <Loader2 size={14} className="animate-spin" /> : <ArrowUpFromLine size={14} />}
-                    Push to EPOS
+                    {exportingMode === 'sync' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    {selectedItemIds.size
+                      ? `Sync selected (${selectedItemIds.size})`
+                      : 'Sync ERP → EPOS'}
                   </button>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 max-w-4xl">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl">
                 <label className="text-sm font-medium">
                   VAT rate *
                   <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" value={exportOptions.vatCodeId} onChange={(e) => setExportOptions({ ...exportOptions, vatCodeId: e.target.value })}>
@@ -851,22 +1096,15 @@ export default function EposChannelsPage() {
                 <label className="text-sm font-medium">
                   Price list
                   <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" value={exportOptions.priceListId} onChange={(e) => setExportOptions({ ...exportOptions, priceListId: e.target.value })}>
-                    <option value="">Use variant cost</option>
+                    <option value="">Product selling price</option>
                     {priceLists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </label>
                 <label className="text-sm font-medium">
-                  Warehouse (stock)
+                  Warehouse (stock qty)
                   <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" value={exportOptions.warehouseId} onChange={(e) => setExportOptions({ ...exportOptions, warehouseId: e.target.value })}>
-                    <option value="">None</option>
+                    <option value="">All warehouses (sum)</option>
                     {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                  </select>
-                </label>
-                <label className="text-sm font-medium">
-                  Duplicates
-                  <select className="mt-1 w-full rounded-md border px-3 py-2 text-sm" value={exportOptions.duplicateMode} onChange={(e) => setExportOptions({ ...exportOptions, duplicateMode: e.target.value as 'skip' | 'update' })}>
-                    <option value="update">Update by SKU</option>
-                    <option value="skip">Skip existing</option>
                   </select>
                 </label>
               </div>
@@ -882,7 +1120,12 @@ export default function EposChannelsPage() {
 
               {exportResult && (
                 <div className="rounded-xl border p-4 bg-muted/30 text-sm space-y-1">
-                  <p><strong>{exportResult.created}</strong> created · <strong>{exportResult.updated}</strong> updated · <strong>{exportResult.skipped}</strong> skipped</p>
+                  <p>
+                    <strong>{exportResult.created}</strong> created ·{' '}
+                    <strong>{exportResult.updated}</strong> updated ·{' '}
+                    <strong>{exportResult.unchanged ?? 0}</strong> unchanged ·{' '}
+                    <strong>{exportResult.skipped}</strong> skipped
+                  </p>
                   <p className="inline-flex items-center gap-1"><QrCode size={14} /> <strong>{exportResult.barcodesGenerated}</strong> barcodes generated</p>
                   {exportResult.errors.length > 0 && (
                     <ul className="text-red-600 mt-2 list-disc pl-5">
@@ -896,7 +1139,17 @@ export default function EposChannelsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50 sticky top-0">
                     <tr>
-                      <th className="p-3 w-8" />
+                      <th className="p-3 w-8">
+                        <input
+                          type="checkbox"
+                          title="Select all"
+                          checked={erpItems.length > 0 && erpItems.every((i) => selectedItemIds.has(i.id))}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedItemIds(new Set(erpItems.map((i) => i.id)));
+                            else setSelectedItemIds(new Set());
+                          }}
+                        />
+                      </th>
                       <th className="p-3 text-left">Name</th>
                       <th className="p-3 text-left">SKU</th>
                       <th className="p-3 text-left">Category</th>
@@ -926,7 +1179,9 @@ export default function EposChannelsPage() {
                 </table>
                 {!erpItems.length && <p className="p-6 text-center text-muted-foreground">No catalog items in this organization.</p>}
               </div>
-              <p className="text-xs text-muted-foreground">Leave none selected to push all catalog items. Barcodes sync to Good Till for receipt and label printing.</p>
+              <p className="text-xs text-muted-foreground">
+                Leave none selected to run against the full active catalog. Sync compares name, description, selling price, stock qty and barcode — unchanged products are skipped.
+              </p>
             </div>
           )}
         </div>

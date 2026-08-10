@@ -1579,6 +1579,48 @@ export async function browseGoodTillProducts(params: {
   };
 }
 
+export async function deleteGoodTillProduct(params: {
+  connectionId: string;
+  organizationId: string;
+  productId: string;
+}) {
+  const q = new URLSearchParams({ organizationId: params.organizationId });
+  const { data } = await axios.delete(
+    `${API_BASE}/api/catalog/epos-channels/${params.connectionId}/epos-products/${encodeURIComponent(params.productId)}?${q}`,
+    { headers: authHeaders(), timeout: 120000 }
+  );
+  return data as {
+    data: {
+      deleted: number;
+      failed: number;
+      skipped: number;
+      errors: Array<{ productId: string; message: string }>;
+    };
+  };
+}
+
+export async function deleteGoodTillProducts(payload: {
+  connectionId: string;
+  organizationId: string;
+  productIds?: string[];
+  deleteAll?: boolean;
+}) {
+  const { connectionId, ...body } = payload;
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/epos-channels/${connectionId}/epos-products/delete`,
+    body,
+    { headers: authHeaders(), timeout: 600000 }
+  );
+  return data as {
+    data: {
+      deleted: number;
+      failed: number;
+      skipped: number;
+      errors: Array<{ productId: string; message: string }>;
+    };
+  };
+}
+
 export async function importGoodTillProducts(payload: {
   connectionId: string;
   organizationId: string;
@@ -1611,6 +1653,7 @@ export async function exportToGoodTill(payload: {
   organizationId: string;
   catalogItemIds?: string[];
   exportAll?: boolean;
+  mode?: 'push' | 'sync';
   duplicateMode?: 'skip' | 'update';
   vatCodeId?: string;
   priceListId?: string;
@@ -1628,6 +1671,7 @@ export async function exportToGoodTill(payload: {
       created: number;
       updated: number;
       skipped: number;
+      unchanged: number;
       barcodesGenerated: number;
       errors: Array<{ sku: string; message: string }>;
     };

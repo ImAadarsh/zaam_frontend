@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import JsBarcode from 'jsbarcode';
-import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { Download, Loader2, Printer, X } from 'lucide-react';
+import { Download, Loader2, Minus, Plus, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { BarcodePreview } from '@/components/barcode-preview';
 import { resolveBarcodeSymbology, toJsBarcodeFormat } from '@/lib/barcodeSymbology';
 
 export type LabelProduct = {
@@ -18,185 +16,136 @@ export type LabelProduct = {
   selling_price: string;
 };
 
-export type LabelLayout = {
-  unit: 'inch' | 'mm';
-  sheetWidth: number;
-  sheetHeight: number;
-  verticalSpacing: number;
-  horizontalSpacing: number;
-  marginTop: number;
-  marginRight: number;
-  marginBottom: number;
-  marginLeft: number;
-  labelWidth: number;
-  labelHeight: number;
-  paddingTop: number;
-  paddingRight: number;
-  paddingBottom: number;
-  paddingLeft: number;
-  barcodeWidth: number;
-  barcodeHeight: number;
-  labelCount: number;
+/** Brother QL-820 / DK-11209 die-cut: 90 mm × 29 mm, one label per page. */
+export const BROTHER_QL820 = {
+  unit: 'mm' as const,
+  width: 90,
+  height: 29,
+  marginX: 2.5,
+  marginY: 1.8,
+  nameFontPt: 8,
+  barcodeHeightMm: 15
 };
-
-export const DEFAULT_LABEL_LAYOUT: LabelLayout = {
-  unit: 'inch',
-  sheetWidth: 8.5,
-  sheetHeight: 11,
-  verticalSpacing: 0,
-  horizontalSpacing: 0.125,
-  marginTop: 0.5,
-  marginRight: 0.188,
-  marginBottom: 0.5,
-  marginLeft: 0.188,
-  labelWidth: 2.625,
-  labelHeight: 1,
-  paddingTop: 0.1,
-  paddingRight: 0.1,
-  paddingBottom: 0.1,
-  paddingLeft: 0.1,
-  barcodeWidth: 2,
-  barcodeHeight: 0.5,
-  labelCount: 30
-};
-
-export const DEFAULT_LABEL_TEMPLATE = `<p style="padding: 0; margin: 0;">[op_product attribute="name"]</p>
-<p style="padding: 0; margin: 0;">[barcode]</p>
-<p style="padding: 0; margin: 0;">[op_product attribute="barcode"]</p>`;
-
-const DPI = 96;
-
-function toPx(value: number, unit: 'inch' | 'mm'): number {
-  if (unit === 'mm') return (value / 25.4) * DPI;
-  return value * DPI;
-}
-
-function pdfUnit(unit: 'inch' | 'mm'): 'in' | 'mm' {
-  return unit === 'inch' ? 'in' : 'mm';
-}
-
-function BarcodeSvg({
-  value,
-  widthIn,
-  heightIn,
-  unit
-}: {
-  value: string;
-  widthIn: number;
-  heightIn: number;
-  unit: 'inch' | 'mm';
-}) {
-  const svgRef = useRef<SVGSVGElement>(null);
-
-  useEffect(() => {
-    if (!svgRef.current || !value) return;
-    try {
-      const { symbology, encodeValue } = resolveBarcodeSymbology(value);
-      JsBarcode(svgRef.current, encodeValue, {
-        format: toJsBarcodeFormat(symbology),
-        width: 2,
-        height: Math.max(24, toPx(heightIn, unit) * 0.55),
-        displayValue: false,
-        margin: 0
-      });
-      svgRef.current.style.width = `${toPx(widthIn, unit)}px`;
-      svgRef.current.style.maxWidth = '100%';
-      svgRef.current.style.height = 'auto';
-    } catch {
-      /* invalid barcode value */
-    }
-  }, [value, widthIn, heightIn, unit]);
-
-  if (!value) {
-    return <span className="text-[10px] text-red-500">No barcode — generate first</span>;
-  }
-
-  return <svg ref={svgRef} />;
-}
-
-function LabelCell({
-  product,
-  layout,
-  template
-}: {
-  product: LabelProduct;
-  layout: LabelLayout;
-  template: string;
-}) {
-  const barcodeValue = product.barcode ?? '';
-  const showBarcodeImage = /\[barcode\]|\{\{barcode\}\}/i.test(template);
-
-  const textLines = template
-    .split('\n')
-    .map((line) =>
-      line
-        .replace(/<[^>]+>/g, '')
-        .replace(/\[op_product attribute="name"\]/gi, product.product_name)
-        .replace(/\[op_product attribute="barcode"\]/gi, barcodeValue)
-        .replace(/\[op_product attribute="sku"\]/gi, product.product_sku)
-        .replace(/\[op_product attribute="price"\]/gi, `£${product.selling_price}`)
-        .replace(/\[barcode[^\]]*\]/gi, '')
-        .replace(/\{\{name\}\}/gi, product.product_name)
-        .replace(/\{\{barcode\}\}/gi, barcodeValue)
-        .replace(/\{\{sku\}\}/gi, product.product_sku)
-        .replace(/\{\{price\}\}/gi, `£${product.selling_price}`)
-        .trim()
-    )
-    .filter(Boolean);
-
-  return (
-    <div
-      className="label-cell bg-white border border-dashed border-gray-400 overflow-hidden text-[10px] leading-snug flex flex-col items-center justify-center text-center"
-      style={{
-        width: toPx(layout.labelWidth, layout.unit),
-        height: toPx(layout.labelHeight, layout.unit),
-        padding: `${toPx(layout.paddingTop, layout.unit)}px ${toPx(layout.paddingRight, layout.unit)}px ${toPx(layout.paddingBottom, layout.unit)}px ${toPx(layout.paddingLeft, layout.unit)}px`,
-        boxSizing: 'border-box'
-      }}
-    >
-      {textLines.map((line, i) => {
-        const isBarcodeLine = template.split('\n')[i]?.toLowerCase().includes('[barcode]');
-        if (isBarcodeLine && showBarcodeImage) {
-          return (
-            <div key={i} className="w-full flex flex-col items-center gap-0.5">
-              <BarcodeSvg
-                value={barcodeValue}
-                widthIn={layout.barcodeWidth}
-                heightIn={layout.barcodeHeight}
-                unit={layout.unit}
-              />
-            </div>
-          );
-        }
-        if (!line) return null;
-        const isBarcodeNumberLine = /\[op_product attribute="barcode"\]|\{\{barcode\}\}/i.test(
-          template.split('\n')[i] ?? ''
-        );
-        return (
-          <p
-            key={i}
-            className={`m-0 p-0 w-full ${isBarcodeNumberLine ? 'font-mono text-[8px]' : 'truncate'}`}
-            style={{ fontSize: isBarcodeNumberLine ? '8px' : '9px' }}
-          >
-            {line}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
 
 type Props = {
   products: LabelProduct[];
   onClose: () => void;
 };
 
+type BarRect = { x: number; y: number; w: number; h: number };
+
+type BarcodeGeometry = {
+  moduleWidth: number;
+  totalWidth: number;
+  height: number;
+  bars: BarRect[];
+};
+
+function truncateName(name: string, max = 90): string {
+  const t = name.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+/**
+ * Build barcode geometry from a canvas render (not SVG).
+ * SVG groups use translate() — parsing raw rect x without transforms caused overlapping bars.
+ */
+function buildBarcodeGeometry(value: string): BarcodeGeometry | null {
+  try {
+    const { symbology, encodeValue } = resolveBarcodeSymbology(value);
+    const modulePx = 4;
+    const heightPx = 120;
+    const canvas = document.createElement('canvas');
+    JsBarcode(canvas, encodeValue, {
+      format: toJsBarcodeFormat(symbology),
+      width: modulePx,
+      height: heightPx,
+      displayValue: false,
+      margin: 0,
+      background: '#ffffff',
+      lineColor: '#000000'
+    });
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx || canvas.width < 8) return null;
+
+    const { width, height } = canvas;
+    const mid = ctx.getImageData(0, Math.floor(height / 2), width, 1).data;
+    // Guard bars are taller — sample near the top too for full-height bars
+    const top = ctx.getImageData(0, Math.max(0, Math.floor(height * 0.02)), width, 1).data;
+
+    const isBlack = (data: Uint8ClampedArray, x: number) => data[x * 4]! < 128;
+
+    const bars: BarRect[] = [];
+    let x = 0;
+    while (x < width) {
+      if (!isBlack(mid, x)) {
+        x++;
+        continue;
+      }
+      const start = x;
+      while (x < width && isBlack(mid, x)) x++;
+      const w = x - start;
+      // Taller if top row is also black across this run (EAN guard bars)
+      let guard = true;
+      for (let i = start; i < x; i++) {
+        if (!isBlack(top, i)) {
+          guard = false;
+          break;
+        }
+      }
+      bars.push({
+        x: start,
+        y: 0,
+        w,
+        h: guard ? heightPx : Math.round(heightPx * 0.88)
+      });
+    }
+
+    if (!bars.length) return null;
+
+    return {
+      moduleWidth: modulePx,
+      totalWidth: width,
+      height: heightPx,
+      bars
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Draw barcode as solid PDF rectangles — print-sharp at any zoom. */
+function drawVectorBarcode(
+  pdf: jsPDF,
+  geometry: BarcodeGeometry,
+  xMm: number,
+  yMm: number,
+  widthMm: number,
+  heightMm: number
+) {
+  const scaleX = widthMm / geometry.totalWidth;
+  const scaleY = heightMm / geometry.height;
+
+  pdf.setFillColor(0, 0, 0);
+  for (const bar of geometry.bars) {
+    const bx = xMm + bar.x * scaleX;
+    // Align shorter bars to the bottom (like EAN guard vs data bars)
+    const bh = bar.h * scaleY;
+    const by = yMm + (geometry.height - bar.h) * scaleY;
+    const bw = bar.w * scaleX;
+    if (bw <= 0 || bh <= 0) continue;
+    pdf.rect(bx, by, bw, bh, 'F');
+  }
+}
+
 export function EposLabelDesigner({ products, onClose }: Props) {
-  const [layout, setLayout] = useState<LabelLayout>(DEFAULT_LABEL_LAYOUT);
-  const [template, setTemplate] = useState(DEFAULT_LABEL_TEMPLATE);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const printRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [defaultCopies, setDefaultCopies] = useState(1);
+  const [copiesById, setCopiesById] = useState<Record<string, number>>({});
+  const [productSearch, setProductSearch] = useState('');
 
   useEffect(() => {
     setMounted(true);
@@ -216,133 +165,160 @@ export function EposLabelDesigner({ products, onClose }: Props) {
     });
   }, [products]);
 
+  useEffect(() => {
+    setCopiesById((prev) => {
+      const next = { ...prev };
+      for (const p of uniqueProducts) {
+        if (next[p.product_id] == null) next[p.product_id] = defaultCopies;
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uniqueProducts]);
+
+  const getCopies = useCallback(
+    (productId: string) => Math.max(0, Math.floor(copiesById[productId] ?? defaultCopies)),
+    [copiesById, defaultCopies]
+  );
+
+  const setCopies = (productId: string, value: number) => {
+    const n = Math.max(0, Math.min(99, Math.floor(value) || 0));
+    setCopiesById((prev) => ({ ...prev, [productId]: n }));
+  };
+
+  const applyDefaultToAll = () => {
+    const next: Record<string, number> = {};
+    for (const p of uniqueProducts) next[p.product_id] = defaultCopies;
+    setCopiesById(next);
+  };
+
   const missingBarcodes = uniqueProducts.filter((p) => !p.barcode?.trim());
-
-  const sheetPx = useMemo(
-    () => ({
-      w: toPx(layout.sheetWidth, layout.unit),
-      h: toPx(layout.sheetHeight, layout.unit)
-    }),
-    [layout]
-  );
-
-  const labelPx = useMemo(
-    () => ({
-      w: toPx(layout.labelWidth, layout.unit),
-      h: toPx(layout.labelHeight, layout.unit),
-      gapX: toPx(layout.horizontalSpacing, layout.unit),
-      gapY: toPx(layout.verticalSpacing, layout.unit),
-      mt: toPx(layout.marginTop, layout.unit),
-      ml: toPx(layout.marginLeft, layout.unit)
-    }),
-    [layout]
-  );
-
-  const cols = Math.max(
-    1,
-    Math.floor(
-      (sheetPx.w - labelPx.ml - toPx(layout.marginRight, layout.unit) + labelPx.gapX) /
-        (labelPx.w + labelPx.gapX)
-    )
-  );
-
-  const previewProducts = useMemo(() => {
-    const source = products.length ? products : [];
+  const printable = useMemo(() => {
     const out: LabelProduct[] = [];
-    const sample: LabelProduct = source[0] ?? {
-      product_id: 'sample',
-      product_name: 'Sample Product',
-      product_sku: 'SKU-001',
-      barcode: '2001234567890',
-      selling_price: '9.99'
-    };
-    for (let i = 0; i < layout.labelCount; i++) {
-      out.push(source[i % source.length] ?? sample);
+    for (const p of uniqueProducts) {
+      const n = getCopies(p.product_id);
+      for (let i = 0; i < n; i++) out.push(p);
     }
     return out;
-  }, [products, layout.labelCount]);
+  }, [uniqueProducts, getCopies]);
 
-  const waitForBarcodes = useCallback(async () => {
-    await new Promise((r) => setTimeout(r, 400));
-  }, []);
+  const totalLabels = printable.length;
+
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return uniqueProducts;
+    return uniqueProducts.filter(
+      (p) =>
+        p.product_name.toLowerCase().includes(q) ||
+        p.product_sku.toLowerCase().includes(q) ||
+        (p.barcode ?? '').toLowerCase().includes(q)
+    );
+  }, [uniqueProducts, productSearch]);
+
+  const previewProduct =
+    filteredProducts.find((p) => p.barcode?.trim()) ??
+    uniqueProducts.find((p) => p.barcode?.trim()) ??
+    filteredProducts[0] ??
+    uniqueProducts[0] ??
+    null;
 
   const handleDownloadPdf = useCallback(async () => {
-    const sheet = printRef.current?.querySelector('.sheet') as HTMLElement | null;
-    if (!sheet) return;
-    if (missingBarcodes.length) return;
+    if (!printable.length) {
+      toast.error('Set at least 1 copy for a product with a barcode');
+      return;
+    }
+    const withoutCode = printable.filter((p) => !p.barcode?.trim());
+    if (withoutCode.length) {
+      toast.error(`${missingBarcodes.length} product(s) missing barcodes — generate them first`);
+      return;
+    }
 
-    setDownloadingPdf(true);
+    setDownloading(true);
     try {
-      await waitForBarcodes();
-      const canvas = await html2canvas(sheet, {
-        scale: 3,
-        backgroundColor: '#f5e6a3',
-        useCORS: true,
-        logging: false
-      });
-
+      const { width, height, marginX, marginY, nameFontPt, barcodeHeightMm } = BROTHER_QL820;
       const pdf = new jsPDF({
-        orientation: layout.sheetWidth > layout.sheetHeight ? 'landscape' : 'portrait',
-        unit: pdfUnit(layout.unit),
-        format: [layout.sheetWidth, layout.sheetHeight]
+        orientation: 'landscape',
+        unit: 'mm',
+        format: [width, height],
+        compress: true
       });
 
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      pdf.addImage(imgData, 'PNG', 0, 0, layout.sheetWidth, layout.sheetHeight);
+      const geometryCache = new Map<string, BarcodeGeometry | null>();
 
+      for (let i = 0; i < printable.length; i++) {
+        const product = printable[i]!;
+        const code = product.barcode!.trim();
+        if (i > 0) pdf.addPage([width, height], 'landscape');
+
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, width, height, 'F');
+
+        // Product name (vector text)
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFont('times', 'normal');
+        pdf.setFontSize(nameFontPt);
+        const nameW = width - marginX * 2;
+        const nameLines = pdf.splitTextToSize(truncateName(product.product_name, 110), nameW);
+        pdf.text(nameLines.slice(0, 1), width / 2, marginY + 3.2, { align: 'center' });
+
+        // Vector barcode (no PNG blur)
+        let geometry = geometryCache.get(code);
+        if (geometry === undefined) {
+          geometry = buildBarcodeGeometry(code);
+          geometryCache.set(code, geometry);
+        }
+        if (!geometry) {
+          throw new Error(`Could not encode barcode: ${code}`);
+        }
+
+        const barMaxW = width - marginX * 2;
+        // Match sample density: ~78% of label width, centered (not overstretched edge-to-edge)
+        const barW = Math.min(barMaxW, width * 0.78);
+        const barH = barcodeHeightMm;
+        const barX = (width - barW) / 2;
+        const barY = height - marginY - barH;
+        drawVectorBarcode(pdf, geometry, barX, barY, barW, barH);
+      }
+
+      const stamp = new Date().toISOString().slice(0, 10);
       const name =
         uniqueProducts.length === 1
-          ? `barcode-${uniqueProducts[0]!.product_sku.slice(0, 30)}.pdf`
-          : `barcode-labels-${new Date().toISOString().slice(0, 10)}.pdf`;
+          ? `brother-ql820-${uniqueProducts[0]!.product_sku.slice(0, 24)}.pdf`
+          : `brother-ql820-labels-${stamp}.pdf`;
       pdf.save(name);
-      toast.success('PDF downloaded');
+      toast.success(`Downloaded ${totalLabels} crisp barcode label${totalLabels === 1 ? '' : 's'}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to generate PDF');
     } finally {
-      setDownloadingPdf(false);
+      setDownloading(false);
     }
-  }, [layout, missingBarcodes.length, uniqueProducts, waitForBarcodes]);
-
-  const handlePrint = useCallback(async () => {
-    const node = printRef.current;
-    if (!node) return;
-    await waitForBarcodes();
-    const w = window.open('', '_blank');
-    if (!w) return;
-    w.document.write(`
-      <!DOCTYPE html><html><head><title>Print Labels</title>
-      <style>
-        body { margin: 0; }
-        .sheet { background: #fff !important; }
-        @page { size: ${layout.sheetWidth}${layout.unit === 'mm' ? 'mm' : 'in'} ${layout.sheetHeight}${layout.unit === 'mm' ? 'mm' : 'in'}; margin: 0; }
-      </style></head><body>${node.innerHTML}</body></html>`);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 400);
-  }, [layout.sheetWidth, layout.sheetHeight, layout.unit, waitForBarcodes]);
-
-  const setNum = (key: keyof LabelLayout, value: string) => {
-    const n = parseFloat(value);
-    if (!Number.isNaN(n)) setLayout((l) => ({ ...l, [key]: n }));
-  };
+  }, [printable, missingBarcodes.length, uniqueProducts, totalLabels]);
 
   if (!mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex bg-black/50">
       <div className="flex flex-1 flex-col lg:flex-row bg-background m-2 lg:m-4 rounded-xl overflow-hidden shadow-2xl max-h-[calc(100vh-1rem)]">
-        {/* Left — settings */}
-        <div className="w-full lg:w-[380px] shrink-0 border-r overflow-y-auto p-4 space-y-4 bg-card">
+        <div className="w-full lg:w-[400px] shrink-0 border-r overflow-y-auto p-4 space-y-4 bg-card">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Barcode Labels</h2>
+            <div>
+              <h2 className="text-lg font-semibold">Brother QL-820 Labels</h2>
+              <p className="text-xs text-muted-foreground">29 × 90 mm · barcode only · vector print</p>
+            </div>
             <button type="button" onClick={onClose} className="rounded-md p-1 hover:bg-muted">
               <X size={18} />
             </button>
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            Step 1: review barcodes below. Step 2: check the sheet preview. Step 3: download PDF or print.
-          </p>
+          <div className="rounded-lg border bg-muted/40 px-3 py-2 text-xs space-y-1">
+            <p>
+              <strong>{uniqueProducts.length}</strong> product{uniqueProducts.length !== 1 ? 's' : ''} ·{' '}
+              <strong>{totalLabels}</strong> label{totalLabels !== 1 ? 's' : ''} in PDF
+            </p>
+            <p className="text-muted-foreground">
+              Name + 1D barcode, drawn as vectors (sharp on Brother QL-820).
+            </p>
+          </div>
 
           {missingBarcodes.length > 0 && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
@@ -350,131 +326,218 @@ export function EposLabelDesigner({ products, onClose }: Props) {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <label className="col-span-2 font-medium">Unit
-              <select className="mt-1 w-full rounded border px-2 py-1.5" value={layout.unit} onChange={(e) => setLayout({ ...layout, unit: e.target.value as 'inch' | 'mm' })}>
-                <option value="inch">Inch</option>
-                <option value="mm">mm</option>
-              </select>
+          <div className="rounded-lg border p-3 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Copies</p>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Default copies per product</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="rounded border p-1 hover:bg-muted"
+                  onClick={() => setDefaultCopies((n) => Math.max(1, n - 1))}
+                >
+                  <Minus size={14} />
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  className="w-14 rounded border px-2 py-1 text-center text-sm"
+                  value={defaultCopies}
+                  onChange={(e) => setDefaultCopies(Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))}
+                />
+                <button
+                  type="button"
+                  className="rounded border p-1 hover:bg-muted"
+                  onClick={() => setDefaultCopies((n) => Math.min(99, n + 1))}
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
             </label>
-            <label>Sheet W<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.sheetWidth} onChange={(e) => setNum('sheetWidth', e.target.value)} /></label>
-            <label>Sheet H<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.sheetHeight} onChange={(e) => setNum('sheetHeight', e.target.value)} /></label>
-            <label>V. Spacing<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.verticalSpacing} onChange={(e) => setNum('verticalSpacing', e.target.value)} /></label>
-            <label>H. Spacing<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.horizontalSpacing} onChange={(e) => setNum('horizontalSpacing', e.target.value)} /></label>
-            <label>Margin T<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.marginTop} onChange={(e) => setNum('marginTop', e.target.value)} /></label>
-            <label>Margin R<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.marginRight} onChange={(e) => setNum('marginRight', e.target.value)} /></label>
-            <label>Margin B<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.marginBottom} onChange={(e) => setNum('marginBottom', e.target.value)} /></label>
-            <label>Margin L<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.marginLeft} onChange={(e) => setNum('marginLeft', e.target.value)} /></label>
-            <label>Label W<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.labelWidth} onChange={(e) => setNum('labelWidth', e.target.value)} /></label>
-            <label>Label H<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.labelHeight} onChange={(e) => setNum('labelHeight', e.target.value)} /></label>
-            <label>Pad T/R/B/L<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.paddingTop} onChange={(e) => setLayout({ ...layout, paddingTop: parseFloat(e.target.value) || 0, paddingRight: parseFloat(e.target.value) || 0, paddingBottom: parseFloat(e.target.value) || 0, paddingLeft: parseFloat(e.target.value) || 0 })} /></label>
-            <label>Barcode W<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.barcodeWidth} onChange={(e) => setNum('barcodeWidth', e.target.value)} /></label>
-            <label>Barcode H<input type="number" step="0.001" className="mt-1 w-full rounded border px-2 py-1" value={layout.barcodeHeight} onChange={(e) => setNum('barcodeHeight', e.target.value)} /></label>
-            <label className="col-span-2">Number of labels
-              <input type="number" className="mt-1 w-full rounded border px-2 py-1" value={layout.labelCount} onChange={(e) => setNum('labelCount', e.target.value)} />
-            </label>
+            <button
+              type="button"
+              onClick={applyDefaultToAll}
+              className="w-full rounded-md border px-3 py-1.5 text-xs hover:bg-muted"
+            >
+              Apply {defaultCopies} to all products
+            </button>
+            <p className="text-[11px] text-muted-foreground">
+              Set copies to 0 to skip. Use 2+ for multiple labels of the same product.
+            </p>
           </div>
 
-          <label className="block text-xs font-medium">Template
-            <textarea
-              className="mt-1 w-full rounded border px-2 py-2 font-mono text-[11px] h-24"
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
-            />
-          </label>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Products ({filteredProducts.length}
+              {productSearch.trim() ? ` of ${uniqueProducts.length}` : ''})
+            </p>
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="search"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder="Search name, SKU, or barcode…"
+                className="w-full rounded-md border bg-background pl-8 pr-8 py-2 text-sm"
+              />
+              {productSearch.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setProductSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  title="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              ) : null}
+            </div>
+            <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-1">
+              {filteredProducts.map((p) => {
+                const copies = getCopies(p.product_id);
+                return (
+                  <div key={p.product_id} className="rounded-lg border bg-background px-3 py-2 space-y-1.5">
+                    <p className="text-xs font-medium line-clamp-2" title={p.product_name}>
+                      {p.product_name}
+                    </p>
+                    <p className="text-[10px] font-mono text-muted-foreground truncate">
+                      {p.barcode ?? 'No barcode'}
+                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-muted-foreground">Copies</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="rounded border p-1 hover:bg-muted"
+                          onClick={() => setCopies(p.product_id, copies - 1)}
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <input
+                          type="number"
+                          min={0}
+                          max={99}
+                          className="w-12 rounded border px-1.5 py-0.5 text-center text-xs"
+                          value={copies}
+                          onChange={(e) => setCopies(p.product_id, parseInt(e.target.value, 10) || 0)}
+                        />
+                        <button
+                          type="button"
+                          className="rounded border p-1 hover:bg-muted"
+                          onClick={() => setCopies(p.product_id, copies + 1)}
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {!filteredProducts.length && (
+                <p className="text-xs text-muted-foreground text-center py-6">
+                  No products match “{productSearch.trim()}”
+                </p>
+              )}
+            </div>
+          </div>
 
-          <button type="button" onClick={onClose} className="w-full rounded-lg border px-4 py-2 text-sm">Close</button>
+          <button type="button" onClick={onClose} className="w-full rounded-lg border px-4 py-2 text-sm">
+            Close
+          </button>
         </div>
 
-        {/* Right — preview first, then download */}
         <div className="flex-1 flex flex-col overflow-hidden bg-muted/30">
           <div className="border-b bg-card px-4 py-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold">Preview</h3>
-              <p className="text-xs text-muted-foreground">{cols} columns · {layout.labelCount} labels on sheet</p>
+              <h3 className="text-sm font-semibold">Label preview</h3>
+              <p className="text-xs text-muted-foreground">
+                PDF pages: {totalLabels} · {BROTHER_QL820.width}×{BROTHER_QL820.height} mm · vector barcode
+              </p>
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={downloadingPdf || missingBarcodes.length > 0}
-                onClick={handleDownloadPdf}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-              >
-                {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                Download PDF
-              </button>
-              <button
-                type="button"
-                disabled={missingBarcodes.length > 0}
-                onClick={handlePrint}
-                className="inline-flex items-center gap-2 rounded-lg border bg-background px-4 py-2 text-sm disabled:opacity-50"
-              >
-                <Printer size={16} /> Print
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={downloading || totalLabels === 0 || missingBarcodes.length === uniqueProducts.length}
+              onClick={handleDownloadPdf}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            >
+              {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              Download all ({totalLabels})
+            </button>
           </div>
 
-          <div className="flex-1 overflow-auto p-4 space-y-4">
-            {/* Individual barcode preview — show first */}
-            <div className="rounded-xl border bg-card p-4">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-                Barcode preview ({uniqueProducts.length} product{uniqueProducts.length !== 1 ? 's' : ''})
-              </h4>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {uniqueProducts.map((p) => (
-                  <div
-                    key={p.product_id}
-                    className="rounded-lg border bg-white p-3 flex flex-col items-center gap-2 min-h-[100px]"
-                  >
-                    <p className="text-xs font-medium text-center line-clamp-2 w-full" title={p.product_name}>
-                      {p.product_name}
-                    </p>
-                    {p.barcode ? (
-                      <>
-                        <BarcodePreview value={p.barcode} width={1.8} height={36} showText={false} />
-                        <p className="text-[10px] text-muted-foreground font-mono">{p.barcode}</p>
-                      </>
-                    ) : (
-                      <span className="text-xs text-amber-600 py-4">Generate barcode first</span>
-                    )}
-                    <p className="text-[10px] text-muted-foreground truncate w-full text-center" title={p.product_sku}>
-                      {p.product_sku.length > 40 ? `${p.product_sku.slice(0, 40)}…` : p.product_sku}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="flex-1 overflow-auto p-6 flex flex-col items-center gap-6">
+            {previewProduct ? (
+              <BrotherLabelPreview product={previewProduct} />
+            ) : (
+              <p className="text-sm text-muted-foreground">No products selected</p>
+            )}
 
-            {/* Full sheet preview */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                Sheet layout preview
-              </h4>
-              <div ref={printRef} className="inline-block">
-                <div
-                  className="sheet bg-[#f5e6a3] shadow-lg"
-                  style={{
-                    width: sheetPx.w,
-                    height: sheetPx.h,
-                    padding: `${labelPx.mt}px ${toPx(layout.marginRight, layout.unit)}px ${toPx(layout.marginBottom, layout.unit)}px ${labelPx.ml}px`,
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <div
-                    className="flex flex-wrap content-start"
-                    style={{ gap: `${labelPx.gapY}px ${labelPx.gapX}px`, width: '100%' }}
-                  >
-                    {previewProducts.map((p, i) => (
-                      <LabelCell key={`${p.product_id}-${i}`} product={p} layout={layout} template={template} />
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div className="w-full max-w-lg rounded-xl border bg-card p-4 text-xs text-muted-foreground space-y-2">
+              <p className="font-medium text-foreground text-sm">How to print</p>
+              <ol className="list-decimal pl-4 space-y-1">
+                <li>Download the PDF (all products in one file).</li>
+                <li>Open in Brother iPrint&amp;Label or print to QL-820.</li>
+                <li>Select die-cut 29 mm × 90 mm (DK-11209) — do not scale to fit.</li>
+              </ol>
             </div>
           </div>
         </div>
       </div>
     </div>,
     document.body
+  );
+}
+
+function BrotherLabelPreview({ product }: { product: LabelProduct }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const code = product.barcode?.trim() ?? '';
+
+  useEffect(() => {
+    if (!svgRef.current || !code) return;
+    try {
+      const { symbology, encodeValue } = resolveBarcodeSymbology(code);
+      JsBarcode(svgRef.current, encodeValue, {
+        format: toJsBarcodeFormat(symbology),
+        width: 2,
+        height: 56,
+        displayValue: false,
+        margin: 0,
+        background: '#ffffff',
+        lineColor: '#000000'
+      });
+      svgRef.current.style.width = '100%';
+      svgRef.current.style.height = '56px';
+    } catch {
+      /* invalid */
+    }
+  }, [code]);
+
+  const scale = 3.6;
+  const w = BROTHER_QL820.width * scale;
+  const h = BROTHER_QL820.height * scale;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-center text-muted-foreground">Actual ratio · 90 × 29 mm · barcode only</p>
+      <div
+        className="bg-white border shadow-md overflow-hidden flex flex-col items-center justify-between"
+        style={{
+          width: w,
+          height: h,
+          padding: `${BROTHER_QL820.marginY * scale}px ${BROTHER_QL820.marginX * scale}px`
+        }}
+      >
+        {!code ? (
+          <p className="text-xs text-amber-600 w-full text-center my-auto">Generate barcode first</p>
+        ) : (
+          <>
+            <p className="text-center font-serif leading-tight line-clamp-1 w-full" style={{ fontSize: 13 }}>
+              {product.product_name}
+            </p>
+            <svg ref={svgRef} className="w-full" />
+          </>
+        )}
+      </div>
+    </div>
   );
 }
