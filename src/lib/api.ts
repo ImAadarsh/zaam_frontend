@@ -4963,9 +4963,64 @@ export async function getMetaStatus() {
   const { data } = await axios.get(`${API_BASE}/api/social/meta/status`, { headers: authHeaders() });
   return data as { data: any };
 }
-export async function getMetaConnectUrl() {
-  const { data } = await axios.get(`${API_BASE}/api/social/meta/connect`, { headers: authHeaders() });
-  return data as { data: { authUrl: string; redirectUri: string; configIdConfigured: boolean; webhookUrl: string } };
+export async function getMetaConnectUrl(intent?: 'ads' | 'default') {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/connect`, {
+    headers: authHeaders(),
+    params: intent && intent !== 'default' ? { intent } : undefined
+  });
+  return data as { data: { authUrl: string; redirectUri: string; configIdConfigured: boolean; webhookUrl: string; oauthScopes?: string } };
+}
+export async function getMetaCapabilities() {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/capabilities`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function syncMetaAccounts() {
+  const { data } = await axios.post(`${API_BASE}/api/social/meta/sync`, {}, { headers: authHeaders() });
+  return data as { data: { refreshed: number; discovered: number; ads: number; errors: string[] } };
+}
+export async function listMetaFeed(params: {
+  accountId: string;
+  after?: string;
+  mediaType?: string;
+  since?: string;
+  until?: string;
+  limit?: number;
+}) {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/feed`, { headers: authHeaders(), params });
+  return data as { data: any[]; paging?: { after?: string; before?: string }; account?: any };
+}
+export async function getMetaFeedPost(accountId: string, postId: string) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/social/meta/feed/${accountId}/posts/${encodeURIComponent(postId)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+export async function listMetaInbox(params?: { accountId?: string; platform?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/inbox`, { headers: authHeaders(), params });
+  return data as { data: any[]; unreadTotal?: number; igLocked?: any };
+}
+export async function getMetaThread(threadId: string, accountId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/inbox/${encodeURIComponent(threadId)}`, {
+    headers: authHeaders(),
+    params: { accountId }
+  });
+  return data as { data: { conversation: any; messages: any[] } };
+}
+export async function getMetaInsights(params: { accountId: string; preset?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/insights`, { headers: authHeaders(), params });
+  return data as { data: any };
+}
+export async function publishSocialNow(payload: {
+  accountIds: string[];
+  content: string;
+  postType?: string;
+  mediaUrls?: string[];
+  linkUrl?: string;
+  hashtags?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/social/posts/publish-now`, payload, { headers: authHeaders() });
+  return data as { data: any[] };
 }
 export async function publishSocialPostToMeta(id: string) {
   const { data } = await axios.post(`${API_BASE}/api/social/posts/${id}/publish`, {}, { headers: authHeaders() });
@@ -4997,10 +5052,23 @@ export async function replySocialMessageViaMeta(payload: {
 }
 export async function listMetaAdAccounts() {
   const { data } = await axios.get(`${API_BASE}/api/social/meta/ads`, { headers: authHeaders() });
-  return data as { data: any[] };
+  return data as { data: any[]; permission?: { granted: boolean; message?: string; missingPermission?: string } };
 }
 export async function listMetaAdCampaigns(accountId: string) {
   const { data } = await axios.get(`${API_BASE}/api/social/meta/ads/${accountId}/campaigns`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function listMetaAdSets(accountId: string, campaignId: string) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/social/meta/ads/${accountId}/campaigns/${campaignId}/adsets`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+export async function listMetaAdsInSet(accountId: string, adsetId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/ads/${accountId}/adsets/${adsetId}/ads`, {
+    headers: authHeaders()
+  });
   return data as { data: any[] };
 }
 

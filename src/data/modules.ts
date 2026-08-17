@@ -50,7 +50,7 @@ export const modules = [
   },
   {
     slug: 'social', name: 'Social Media', icon: Share2, color: '#0A0A0A',
-    description: 'Posts, Inbox, Creators'
+    description: 'Posts, inbox, ads, insights'
   },
   {
     slug: 'analytics', name: 'Reporting & Analytics', icon: BarChart3, color: '#0A0A0A',

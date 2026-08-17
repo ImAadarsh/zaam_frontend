@@ -1,26 +1,31 @@
 'use client';
-import { useEffect, useState } from 'react';
+
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sidebar } from '@/components/sidebar';
-import { Header } from '@/components/header';
+import Link from 'next/link';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { AtSign, Inbox, Megaphone, PenLine, Share2, Users } from 'lucide-react';
+import { toast } from 'sonner';
+import { SocialPage } from '@/components/social/social-page';
 import { StatCard } from '@/components/stat-card';
+import { PermissionLock } from '@/components/social/permission-lock';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
-import { listSocialAccounts, listSocialPosts, listCreators, listSocialMessages } from '@/lib/api';
-import { Users, Share2, MessageSquare, AtSign, Megaphone } from 'lucide-react';
-import Link from 'next/link';
+import {
+  getMetaCapabilities,
+  getMetaInsights,
+  listMetaInbox
+} from '@/lib/api';
 
 export default function SocialDashboard() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SOCIAL_MANAGER']);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    accounts: 0,
-    posts: 0,
-    creators: 0,
-    messages: 0,
-  });
+  const [caps, setCaps] = useState<any>(null);
+  const [unread, setUnread] = useState(0);
+  const [chart, setChart] = useState<any[]>([]);
+  const [chartLabel, setChartLabel] = useState('');
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -30,114 +35,143 @@ export default function SocialDashboard() {
     }
     (async () => {
       try {
-        const [accRes, postRes, creatorRes, msgRes] = await Promise.all([
-          listSocialAccounts(),
-          listSocialPosts(),
-          listCreators(),
-          listSocialMessages()
+        const [capRes, inboxRes] = await Promise.all([
+          getMetaCapabilities().catch(() => ({ data: null })),
+          listMetaInbox().catch(() => ({ data: [], unreadTotal: 0 }))
         ]);
-
-        setStats({
-          accounts: accRes.data?.length || 0,
-          posts: postRes.data?.length || 0,
-          creators: creatorRes.data?.length || 0,
-          messages: msgRes.data?.length || 0,
-        });
+        setCaps(capRes.data);
+        setUnread(inboxRes.unreadTotal || 0);
+        const page = (capRes.data?.accounts || []).find((a: any) => a.kind === 'page' && a.hasToken);
+        if (page?.id) {
+          try {
+            const ins = await getMetaInsights({ accountId: page.id, preset: 'last_28d' });
+            const series = (ins.data?.series || []).find((s: any) => s.name === 'page_media_view') ||
+              (ins.data?.series || []).find((s: any) => s.points?.length);
+            if (series?.points?.length) {
+              setChartLabel(`${page.accountName} · ${series.name}`);
+              setChart(
+                series.points.map((p: any) => ({
+                  day: String(p.endTime || '').slice(0, 10),
+                  value: p.value
+                }))
+              );
+            }
+          } catch {
+            // no fake series
+          }
+        }
       } catch (e: any) {
-        console.error('Failed to load social stats:', e);
+        toast.error(e.response?.data?.error?.message || 'Failed to load social overview');
       } finally {
         setLoading(false);
       }
     })();
-  }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
+  }, [hydrated, hasAccess, router, session?.accessToken]);
 
-  if (!hydrated || loading) {
-    return (
-      <div className="min-h-screen app-surface">
-        <Sidebar />
-        <div className="flex flex-col overflow-hidden lg:ml-[280px]">
-          <Header title="Social · Dashboard" />
-          <main className="flex-1 overflow-auto p-4 md:p-6">
-            <div className="flex items-center justify-center h-full">
-              <div className="text-muted-foreground animate-pulse">Loading...</div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+  const accounts = caps?.accounts || [];
+  const pages = accounts.filter((a: any) => a.kind === 'page');
+  const ig = accounts.filter((a: any) => a.kind === 'instagram');
+  const ads = accounts.filter((a: any) => a.kind === 'ads');
+  const adsLocked = (caps?.missingForAds || []).length > 0;
+  const publishLocked = (caps?.missingForPublish || []).length > 0;
 
-  if (!hasAccess) {
-    return (
-      <div className="min-h-screen app-surface">
-        <Sidebar />
-        <div className="flex flex-col overflow-hidden lg:ml-[280px]">
-          <Header title="Social · Dashboard" />
-          <main className="flex-1 overflow-auto p-4 md:p-6">
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold mb-2 text-destructive">Access Denied</h2>
-                <p className="text-muted-foreground">You do not have permission to view the Social Dashboard.</p>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+  const capChips = useMemo(
+    () =>
+      (caps?.capabilities || []).map((c: any) => (
+        <span
+          key={c.key}
+          className={`rounded-full px-2.5 py-1 text-xs ${
+            c.granted ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-muted text-muted-foreground'
+          }`}
+          title={c.notes || c.requiredPermissions?.join(', ')}
+        >
+          {c.granted ? '✓' : '✕'} {c.label}
+        </span>
+      )),
+    [caps]
+  );
 
   return (
-    <div className="min-h-screen app-surface">
-      <Sidebar />
-      <div className="flex flex-col overflow-hidden lg:ml-[280px]">
-        <Header title="Social · Dashboard" />
-        <main className="flex-1 overflow-auto p-4 md:p-6">
-          <div className="space-y-6">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">Social Media Overview</h1>
-              <p className="text-muted-foreground">Manage social accounts, posts, influencers, and messages</p>
-            </div>
+    <SocialPage
+      title="Social · Overview"
+      crumbs={[{ label: 'Social' }, { label: 'Overview' }]}
+      loading={!hydrated || loading}
+      denied={!hasAccess}
+    >
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold mb-1">Social Media</h1>
+          <p className="text-muted-foreground text-sm">
+            Live Facebook + Instagram from connected Meta tokens — no placeholder metrics.
+          </p>
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Link href="/social/accounts">
-                <StatCard title="Accounts Linked" value={stats.accounts.toString()} icon={<AtSign className="h-5 w-5" />} hint="Connected platforms" />
-              </Link>
-              <Link href="/social/posts">
-                <StatCard title="Posts" value={stats.posts.toString()} icon={<Share2 className="h-5 w-5" />} hint="Total posts logged" />
-              </Link>
-              <Link href="/social/creators">
-                <StatCard title="Creators" value={stats.creators.toString()} icon={<Users className="h-5 w-5" />} hint="Influencers managed" />
-              </Link>
-              <Link href="/social/messages">
-                <StatCard title="Messages" value={stats.messages.toString()} icon={<MessageSquare className="h-5 w-5" />} hint="Inbound / Outbound" />
-              </Link>
-            </div>
+        <div className="flex flex-wrap gap-2">{capChips}</div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
-              <Link href="/social/accounts" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <h3 className="font-semibold mb-2">Accounts</h3>
-                <p className="text-sm text-muted-foreground">Connect Meta Pages, Instagram &amp; ads</p>
-              </Link>
-              <Link href="/social/posts" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <h3 className="font-semibold mb-2">Posts</h3>
-                <p className="text-sm text-muted-foreground">Publish and track performance</p>
-              </Link>
-              <Link href="/social/messages" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <h3 className="font-semibold mb-2">Messages</h3>
-                <p className="text-sm text-muted-foreground">Inbox &amp; reply via Messenger / IG</p>
-              </Link>
-              <Link href="/social/ads" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <h3 className="font-semibold mb-2 flex items-center gap-2"><Megaphone className="h-4 w-4" /> Ads</h3>
-                <p className="text-sm text-muted-foreground">Campaigns and spend insights</p>
-              </Link>
-              <Link href="/social/creators" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <h3 className="font-semibold mb-2">Creators</h3>
-                <p className="text-sm text-muted-foreground">Manage influencer relationships</p>
-              </Link>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link href="/social/accounts">
+            <StatCard title="Pages" value={String(pages.length)} icon={<AtSign className="h-5 w-5" />} hint="Facebook Pages" />
+          </Link>
+          <Link href="/social/accounts">
+            <StatCard title="Instagram" value={String(ig.length)} icon={<Share2 className="h-5 w-5" />} hint="Professional accounts" />
+          </Link>
+          <Link href="/social/messages">
+            <StatCard title="Unread threads" value={String(unread)} icon={<Inbox className="h-5 w-5" />} hint="Page inbox from Graph" />
+          </Link>
+          <Link href="/social/ads">
+            <StatCard title="Ad accounts" value={String(ads.length)} icon={<Megaphone className="h-5 w-5" />} hint={adsLocked ? 'Permission missing' : 'Marketing API'} />
+          </Link>
+        </div>
+
+        {chart.length > 0 ? (
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <h3 className="font-semibold mb-4">{chartLabel || 'Page media views'}</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chart}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="value" stroke="#D4A017" fill="#D4A01733" />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
-        </main>
+        ) : (
+          <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
+            No insight series yet. Open Insights after a Page is connected with <code>pages_read_engagement</code>.
+          </div>
+        )}
+
+        {publishLocked && (
+          <PermissionLock
+            title="Publishing is locked"
+            message="This Page token can read posts but Graph refused publish. Facebook needs pages_manage_posts; Instagram needs instagram_content_publish. Add Pages API + Instagram on the Meta app, then App Review (or keep Development mode for admins)."
+            missingPermission={caps?.missingForPublish?.[0]}
+            product="Pages API + Instagram"
+          />
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link href="/social/compose" className="p-6 bg-card rounded-lg border hover:border-primary/50">
+            <h3 className="font-semibold mb-1 flex items-center gap-2"><PenLine className="h-4 w-4" /> Composer</h3>
+            <p className="text-sm text-muted-foreground">Post to Pages and Instagram</p>
+          </Link>
+          <Link href="/social/posts" className="p-6 bg-card rounded-lg border hover:border-primary/50">
+            <h3 className="font-semibold mb-1">Posts</h3>
+            <p className="text-sm text-muted-foreground">Historical Graph feed, reels, filters</p>
+          </Link>
+          <Link href="/social/messages" className="p-6 bg-card rounded-lg border hover:border-primary/50">
+            <h3 className="font-semibold mb-1">Inbox</h3>
+            <p className="text-sm text-muted-foreground">Messenger threads with tags</p>
+          </Link>
+          <Link href="/social/creators" className="p-6 bg-card rounded-lg border hover:border-primary/50">
+            <h3 className="font-semibold mb-1 flex items-center gap-2"><Users className="h-4 w-4" /> Creators</h3>
+            <p className="text-sm text-muted-foreground">Influencer relationships</p>
+          </Link>
+        </div>
       </div>
-    </div>
+    </SocialPage>
   );
 }

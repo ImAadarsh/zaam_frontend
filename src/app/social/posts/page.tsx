@@ -1,66 +1,73 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sidebar } from '@/components/sidebar';
-import { Header } from '@/components/header';
-import {
-  listSocialPosts,
-  createSocialPost,
-  updateSocialPost,
-  deleteSocialPost,
-  listSocialAccounts,
-  publishSocialPostToMeta,
-  syncSocialPostInsights,
-  syncAllSocialPostInsights,
-  editSocialPostOnMeta
-} from '@/lib/api';
+import Link from 'next/link';
 import { toast } from 'sonner';
-import { RichDataTable } from '@/components/rich-data-table';
+import { FilterBar } from '@/components/filter-bar';
+import { SocialPage } from '@/components/social/social-page';
+import { PlatformTag } from '@/components/social/platform-tag';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
-import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X, Send, RefreshCw, BarChart3 } from 'lucide-react';
+import { listMetaFeed, listSocialAccounts, listSocialPosts } from '@/lib/api';
+import { Film, Image as ImageIcon, RefreshCw } from 'lucide-react';
+
+function isOrganic(a: any) {
+  return (
+    (a.platform === 'facebook' || a.platform === 'instagram') &&
+    a.accountHandle !== 'ads' &&
+    a.accountHandle !== '__meta_user__' &&
+    !String(a.accountId || '').startsWith('act_')
+  );
+}
 
 export default function SocialPostsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SOCIAL_MANAGER']);
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({
-    socialAccountId: '',
-    postType: 'text',
-    content: '',
-    status: 'draft',
-    scheduledAt: '',
-    mediaUrlsText: '',
-    linkUrl: '',
-    hashtags: ''
+  const [live, setLive] = useState<any[]>([]);
+  const [drafts, setDrafts] = useState<any[]>([]);
+  const [paging, setPaging] = useState<{ after?: string }>({});
+  const [tab, setTab] = useState<'live' | 'reels' | 'drafts'>('live');
+  const [filters, setFilters] = useState<Record<string, string>>({
+    accountId: '',
+    platform: '',
+    mediaType: '',
+    since: '',
+    until: ''
   });
-  const [editing, setEditing] = useState<any>(null);
-  const [confirmDel, setConfirmDel] = useState<any>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [q, setQ] = useState('');
 
-  const publishableAccounts = accounts.filter(
-    (a) =>
-      (a.platform === 'facebook' || a.platform === 'instagram') &&
-      a.accountHandle !== 'ads' &&
-      a.isActive
-  );
+  const organic = useMemo(() => accounts.filter(isOrganic), [accounts]);
 
-  const loadData = async () => {
-    try {
-      const [posRes, accRes] = await Promise.all([listSocialPosts(), listSocialAccounts()]);
-      setItems(posRes.data || []);
-      setAccounts(accRes.data || []);
-    } catch {
-      toast.error('Failed to load posts');
-    } finally {
-      setLoading(false);
+  const loadAccounts = async () => {
+    const acc = await listSocialAccounts();
+    setAccounts(acc.data || []);
+    return acc.data || [];
+  };
+
+  const loadLive = async (accountId: string, mediaType?: string, after?: string) => {
+    if (!accountId) {
+      setLive([]);
+      return;
     }
+    const res = await listMetaFeed({
+      accountId,
+      mediaType: mediaType || undefined,
+      after,
+      since: filters.since || undefined,
+      until: filters.until || undefined,
+      limit: 25
+    });
+    setLive(after ? [...live, ...(res.data || [])] : res.data || []);
+    setPaging(res.paging || {});
+  };
+
+  const loadDrafts = async () => {
+    const res = await listSocialPosts();
+    setDrafts((res.data || []).filter((p: any) => p.status !== 'deleted'));
   };
 
   useEffect(() => {
@@ -69,451 +76,207 @@ export default function SocialPostsPage() {
       router.replace('/login');
       return;
     }
-    loadData();
-  }, [hydrated, hasAccess, router, session?.accessToken]);
-
-  const parseMediaUrls = (text: string) =>
-    text
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.socialAccountId) {
-      toast.error('Please select an account');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const mediaUrls = parseMediaUrls(form.mediaUrlsText);
-      const payload: any = {
-        socialAccountId: form.socialAccountId,
-        postType: form.postType,
-        content: form.content,
-        status: form.status,
-        linkUrl: form.linkUrl || undefined,
-        hashtags: form.hashtags || undefined,
-        mediaUrls: mediaUrls.length ? mediaUrls : undefined,
-        scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null
-      };
-      if (editing) {
-        await updateSocialPost(editing.id, payload);
-        if (editing.status === 'published' && editing.platformPostId && editing.socialAccount?.platform === 'facebook') {
-          try {
-            await editSocialPostOnMeta(editing.id, form.content);
-            toast.success('Post updated on Facebook');
-          } catch (err: any) {
-            toast.success('Saved locally');
-            toast.error(err.response?.data?.error?.message || 'Remote Meta edit failed');
-          }
-        } else {
-          toast.success('Post updated');
-        }
-      } else {
-        await createSocialPost({ ...payload, organizationId: session?.user?.organizationId });
-        toast.success('Post created');
+    (async () => {
+      try {
+        const accs = await loadAccounts();
+        const preferred =
+          filters.accountId ||
+          accs.find((a: any) => String(a.accountHandle || '').toLowerCase().includes('zaam'))?.id ||
+          accs.find(isOrganic)?.id ||
+          '';
+        if (!filters.accountId && preferred) setFilters((f) => ({ ...f, accountId: preferred }));
+        await Promise.all([
+          preferred ? loadLive(preferred, tab === 'reels' ? 'reel' : filters.mediaType) : Promise.resolve(),
+          loadDrafts()
+        ]);
+      } catch (e: any) {
+        toast.error(e.response?.data?.error?.message || 'Failed to load posts');
+      } finally {
+        setLoading(false);
       }
-      setShowCreate(false);
-      setEditing(null);
-      setForm({
-        socialAccountId: '',
-        postType: 'text',
-        content: '',
-        status: 'draft',
-        scheduledAt: '',
-        mediaUrlsText: '',
-        linkUrl: '',
-        hashtags: ''
-      });
-      loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error?.message || 'Error saving post');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, hasAccess, session?.accessToken]);
 
-  const handlePublish = async (id: string) => {
-    setBusyId(id);
-    try {
-      await publishSocialPostToMeta(id);
-      toast.success('Published to Meta');
-      loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error?.message || 'Publish failed');
-      loadData();
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleSyncInsights = async (id: string) => {
-    setBusyId(id);
-    try {
-      await syncSocialPostInsights(id);
-      toast.success('Insights synced');
-      loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error?.message || 'Insights sync failed');
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleSyncAll = async () => {
-    setSubmitting(true);
-    try {
-      const { data } = await syncAllSocialPostInsights();
-      toast.success(`Synced ${data.synced} posts (${data.failed} failed)`);
-      loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error?.message || 'Bulk sync failed');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    setSubmitting(true);
-    try {
-      await deleteSocialPost(confirmDel.id);
-      toast.success('Post deleted');
-      setConfirmDel(null);
-      loadData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error?.message || 'Error deleting post');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const columns = useMemo<ColumnDef<any>[]>(
-    () => [
-      { accessorKey: 'socialAccount.accountName', header: 'Account' },
-      {
-        id: 'platform',
-        header: 'Platform',
-        cell: ({ row }) => row.original.socialAccount?.platform || '—'
-      },
-      { accessorKey: 'postType', header: 'Type' },
-      {
-        accessorKey: 'content',
-        header: 'Content',
-        cell: ({ row }) => <div className="max-w-[200px] truncate">{row.original.content}</div>
-      },
-      { accessorKey: 'status', header: 'Status' },
-      {
-        id: 'perf',
-        header: 'Performance',
-        cell: ({ row }) => {
-          const p = row.original;
-          if (p.status !== 'published') return '—';
-          return (
-            <span className="text-xs text-muted-foreground">
-              👍 {p.likes || 0} · 💬 {p.comments || 0} · 👁 {p.reach || 0}
-            </span>
-          );
-        }
-      },
-      {
-        id: 'actions',
-        header: 'Actions',
-        cell: ({ row }) => {
-          const p = row.original;
-          const canPublish =
-            ['draft', 'scheduled', 'failed'].includes(p.status) &&
-            (p.socialAccount?.platform === 'facebook' || p.socialAccount?.platform === 'instagram');
-          return (
-            <div className="flex gap-1">
-              {canPublish && (
-                <button
-                  onClick={() => handlePublish(p.id)}
-                  disabled={busyId === p.id}
-                  className="p-1 hover:bg-secondary rounded text-primary transition-colors"
-                  title="Publish to Meta"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
-              )}
-              {p.status === 'published' && p.platformPostId && (
-                <button
-                  onClick={() => handleSyncInsights(p.id)}
-                  disabled={busyId === p.id}
-                  className="p-1 hover:bg-secondary rounded text-muted-foreground transition-colors"
-                  title="Sync insights"
-                >
-                  <BarChart3 className="h-4 w-4" />
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  setEditing(p);
-                  setForm({
-                    socialAccountId: p.socialAccountId,
-                    postType: p.postType,
-                    content: p.content,
-                    status: p.status,
-                    scheduledAt: p.scheduledAt ? new Date(p.scheduledAt).toISOString().slice(0, 16) : '',
-                    mediaUrlsText: Array.isArray(p.mediaUrls) ? p.mediaUrls.join('\n') : '',
-                    linkUrl: p.linkUrl || '',
-                    hashtags: p.hashtags || ''
-                  });
-                  setShowCreate(true);
-                }}
-                className="p-1 hover:bg-secondary rounded text-primary transition-colors"
-                title="Edit"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setConfirmDel(p)}
-                className="p-1 hover:bg-destructive/10 rounded text-destructive transition-colors"
-                title="Delete"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          );
-        }
-      }
-    ],
-    [busyId]
-  );
-
-  if (!hydrated || loading) {
-    return (
-      <div className="min-h-screen app-surface">
-        <Sidebar />
-        <div className="flex flex-col overflow-hidden lg:ml-[280px]">
-          <Header title="Social · Posts" />
-          <main className="flex-1 p-6 flex justify-center items-center">
-            <div className="text-muted-foreground animate-pulse">Loading...</div>
-          </main>
-        </div>
-      </div>
+  useEffect(() => {
+    if (loading) return;
+    if (tab === 'drafts') return;
+    const accountId = filters.accountId;
+    if (!accountId) return;
+    loadLive(accountId, tab === 'reels' ? 'reel' : filters.mediaType).catch((e: any) =>
+      toast.error(e.response?.data?.error?.message || 'Feed failed')
     );
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.accountId, filters.mediaType, filters.since, filters.until, tab]);
 
-  if (!hasAccess) {
-    return (
-      <div className="min-h-screen app-surface">
-        <Sidebar />
-        <div className="flex flex-col overflow-hidden lg:ml-[280px]">
-          <Header title="Social · Posts" />
-          <main className="flex-1 p-6 flex justify-center items-center">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2 text-destructive">Access Denied</h2>
-              <p className="text-muted-foreground">You do not have permission to view posts.</p>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+  const filteredLive = live.filter((p) => {
+    if (filters.platform && p.platform !== filters.platform) return false;
+    if (q && !String(p.message || '').toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  });
+
+  const filteredDrafts = drafts.filter((p) => {
+    if (filters.accountId && String(p.socialAccountId) !== String(filters.accountId)) return false;
+    if (filters.platform && p.socialAccount?.platform !== filters.platform) return false;
+    if (q && !String(p.content || '').toLowerCase().includes(q.toLowerCase())) return false;
+    if (tab === 'reels' && p.postType !== 'reel') return false;
+    return true;
+  });
 
   return (
-    <div className="min-h-screen app-surface">
-      <Sidebar />
-      <div className="flex flex-col overflow-hidden lg:ml-[280px]">
-        <Header title="Social · Posts" />
-        <main className="flex-1 overflow-auto p-4 md:p-6 pb-24">
-          <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center mb-6">
-            <div>
-              <h1 className="text-2xl font-bold">Posts</h1>
-              <p className="text-muted-foreground text-sm">Compose, publish to Facebook/Instagram, and sync performance</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={handleSyncAll}
-                disabled={submitting}
-                className="px-4 py-2 border border-input rounded-md text-sm font-medium hover:bg-secondary/80 transition-colors flex items-center gap-2"
-              >
-                <RefreshCw className="h-4 w-4" /> Sync all insights
-              </button>
-              <button
-                onClick={() => {
-                  setEditing(null);
-                  setForm({
-                    socialAccountId: '',
-                    postType: 'text',
-                    content: '',
-                    status: 'draft',
-                    scheduledAt: '',
-                    mediaUrlsText: '',
-                    linkUrl: '',
-                    hashtags: ''
-                  });
-                  setShowCreate(true);
-                }}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" /> Create Post
-              </button>
-            </div>
+    <SocialPage
+      title="Social · Posts"
+      crumbs={[{ label: 'Social', href: '/social/dashboard' }, { label: 'Posts' }]}
+      loading={!hydrated || loading}
+      denied={!hasAccess}
+    >
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Posts</h1>
+            <p className="text-sm text-muted-foreground">Live Graph history — not just ERP drafts</p>
           </div>
+          <Link
+            href="/social/compose"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+          >
+            New post
+          </Link>
+        </div>
 
-          <div className="bg-card rounded-lg border shadow-sm">
-            <RichDataTable columns={columns} data={items} />
+        <div className="flex gap-2">
+          {(['live', 'reels', 'drafts'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`rounded-full px-3 py-1.5 text-sm ${
+                tab === t ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {t === 'live' ? 'Live feed' : t === 'reels' ? 'Shorts / Reels' : 'ERP drafts'}
+            </button>
+          ))}
+        </div>
+
+        <FilterBar
+          searchValue={q}
+          onSearchChange={setQ}
+          searchPlaceholder="Search captions…"
+          values={filters}
+          onChange={setFilters}
+          fields={[
+            {
+              key: 'accountId',
+              label: 'Account',
+              type: 'select',
+              primary: true,
+              options: organic.map((a) => ({
+                value: String(a.id),
+                label: `${a.accountName} (${a.platform})`
+              }))
+            },
+            {
+              key: 'platform',
+              label: 'Platform',
+              type: 'select',
+              primary: true,
+              options: [
+                { value: 'facebook', label: 'Facebook' },
+                { value: 'instagram', label: 'Instagram' }
+              ]
+            },
+            {
+              key: 'mediaType',
+              label: 'Media',
+              type: 'select',
+              options: [
+                { value: 'image', label: 'Image' },
+                { value: 'video', label: 'Video' },
+                { value: 'reel', label: 'Reel / Short' },
+                { value: 'carousel', label: 'Carousel' },
+                { value: 'text', label: 'Text' }
+              ]
+            },
+            { key: 'since', label: 'From', type: 'date' },
+            { key: 'until', label: 'To', type: 'date' }
+          ]}
+          actions={
+            <button
+              onClick={() => filters.accountId && loadLive(filters.accountId, tab === 'reels' ? 'reel' : filters.mediaType)}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm"
+            >
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </button>
+          }
+          stats={[{ label: 'Shown', value: String(tab === 'drafts' ? filteredDrafts.length : filteredLive.length) }]}
+        />
+
+        {tab !== 'drafts' ? (
+          <div className="grid gap-3">
+            {filteredLive.length === 0 ? (
+              <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
+                {tab === 'reels' ? 'No reels/shorts on this account yet.' : 'No posts returned from Graph for these filters.'}
+              </div>
+            ) : (
+              filteredLive.map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/social/posts/view?accountId=${p.socialAccountId}&postId=${encodeURIComponent(p.id)}`}
+                  className="flex gap-4 rounded-xl border bg-card p-4 hover:border-primary/40"
+                >
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted flex items-center justify-center">
+                    {p.thumbnailUrl || p.mediaUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.thumbnailUrl || p.mediaUrl} alt="" className="h-full w-full object-cover" />
+                    ) : p.mediaType === 'reel' ? (
+                      <Film className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <PlatformTag platform={p.platform} extra={p.mediaType} />
+                      <span className="text-xs text-muted-foreground">{p.accountName}</span>
+                      <span className="text-xs text-muted-foreground">{p.createdTime ? new Date(p.createdTime).toLocaleString() : ''}</span>
+                    </div>
+                    <p className="text-sm line-clamp-2">{p.message || '(no caption)'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {p.likes != null ? `♥ ${p.likes}` : ''} {p.comments != null ? `· 💬 ${p.comments}` : ''}
+                    </p>
+                  </div>
+                </Link>
+              ))
+            )}
+            {paging.after && (
+              <button
+                className="rounded-md border px-4 py-2 text-sm"
+                onClick={() => loadLive(filters.accountId, tab === 'reels' ? 'reel' : filters.mediaType, paging.after)}
+              >
+                Load more
+              </button>
+            )}
           </div>
-
-          {showCreate && (
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-card w-full max-w-lg rounded-lg shadow-lg border border-border flex flex-col max-h-[90vh] overflow-auto">
-                <div className="p-4 border-b border-border flex justify-between items-center bg-muted/50 rounded-t-lg sticky top-0">
-                  <h3 className="font-semibold">{editing ? 'Edit Post' : 'Create Post'}</h3>
-                  <button onClick={() => setShowCreate(false)} className="text-muted-foreground hover:text-foreground">
-                    <X className="h-5 w-5" />
-                  </button>
+        ) : (
+          <div className="grid gap-3">
+            {filteredDrafts.length === 0 ? (
+              <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">No ERP drafts.</div>
+            ) : (
+              filteredDrafts.map((p) => (
+                <div key={p.id} className="rounded-xl border bg-card p-4">
+                  <div className="flex flex-wrap gap-2 mb-1">
+                    <PlatformTag platform={p.socialAccount?.platform} extra={p.postType} />
+                    <span className="text-xs rounded-full bg-muted px-2 py-0.5">{p.status}</span>
+                    <span className="text-xs text-muted-foreground">{p.socialAccount?.accountName}</span>
+                  </div>
+                  <p className="text-sm">{p.content}</p>
+                  {p.failureReason && <p className="text-xs text-destructive mt-2">{p.failureReason}</p>}
                 </div>
-                <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Select Account <span className="text-destructive">*</span></label>
-                    <select
-                      required
-                      value={form.socialAccountId}
-                      onChange={(e) => setForm({ ...form, socialAccountId: e.target.value })}
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none"
-                    >
-                      <option value="">-- Choose Account --</option>
-                      {publishableAccounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.accountName} ({a.platform})
-                        </option>
-                      ))}
-                      {accounts
-                        .filter((a) => !publishableAccounts.find((p) => p.id === a.id))
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.accountName} ({a.platform}) — manual only
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Type</label>
-                      <select
-                        value={form.postType}
-                        onChange={(e) => setForm({ ...form, postType: e.target.value })}
-                        className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none"
-                      >
-                        <option value="text">Text Only</option>
-                        <option value="image">Image</option>
-                        <option value="video">Video</option>
-                        <option value="carousel">Carousel</option>
-                        <option value="reel">Reel</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Status</label>
-                      <select
-                        value={form.status}
-                        onChange={(e) => setForm({ ...form, status: e.target.value })}
-                        className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none"
-                      >
-                        <option value="draft">Draft</option>
-                        <option value="scheduled">Scheduled</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Content / Caption <span className="text-destructive">*</span></label>
-                    <textarea
-                      required
-                      value={form.content}
-                      onChange={(e) => setForm({ ...form, content: e.target.value })}
-                      className="w-full min-h-24 p-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none resize-y"
-                      placeholder="Write your post..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Media URLs (one per line) — required for Instagram</label>
-                    <textarea
-                      value={form.mediaUrlsText}
-                      onChange={(e) => setForm({ ...form, mediaUrlsText: e.target.value })}
-                      className="w-full min-h-16 p-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none resize-y text-sm"
-                      placeholder="https://...jpg"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Link URL (FB)</label>
-                      <input
-                        type="url"
-                        value={form.linkUrl}
-                        onChange={(e) => setForm({ ...form, linkUrl: e.target.value })}
-                        className="w-full h-10 px-3 rounded-md border border-input bg-background/50 outline-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Hashtags</label>
-                      <input
-                        type="text"
-                        value={form.hashtags}
-                        onChange={(e) => setForm({ ...form, hashtags: e.target.value })}
-                        className="w-full h-10 px-3 rounded-md border border-input bg-background/50 outline-none"
-                        placeholder="#brand #sale"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Scheduled Time</label>
-                    <input
-                      type="datetime-local"
-                      value={form.scheduledAt}
-                      onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background/50 outline-none"
-                    />
-                  </div>
-                  <div className="pt-4 flex justify-end gap-2 border-t border-border">
-                    <button
-                      type="button"
-                      onClick={() => setShowCreate(false)}
-                      className="px-4 py-2 rounded-md hover:bg-secondary/80 text-sm font-medium"
-                      disabled={submitting}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={submitting}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90"
-                    >
-                      {submitting ? 'Saving...' : 'Save Post'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {confirmDel && (
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-card w-full max-w-sm rounded-lg shadow-lg border border-border p-6 text-center">
-                <h3 className="text-lg font-bold mb-2">Confirm Delete</h3>
-                <p className="text-muted-foreground text-sm mb-6">Delete this post from the ERP?</p>
-                <div className="flex justify-center gap-3">
-                  <button
-                    onClick={() => setConfirmDel(null)}
-                    className="px-4 py-2 rounded-md border border-input text-sm"
-                    disabled={submitting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={submitting}
-                    className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md text-sm"
-                  >
-                    {submitting ? 'Deleting...' : 'Delete'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </main>
+              ))
+            )}
+          </div>
+        )}
       </div>
-    </div>
+    </SocialPage>
   );
 }

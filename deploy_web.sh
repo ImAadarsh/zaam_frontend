@@ -2,7 +2,7 @@
 # Deploy Zaam Panels (Next.js ERP UI) to Zaam Hostinger VPS.
 #
 # Portal: https://erp.zaamaitech.co.uk
-# API:    https://zaam-erp.endeavourdigital.in  (existing production API; not on this VPS)
+# API:    https://erp-api.zaamaitech.co.uk  (Hostinger VPS PM2 zaam-api :4011)
 #
 # Edge: Traefik (:80/:443) → PM2 Next.js on :4010
 # Auth: ~/.ssh/id_ed25519_hostinger (no password)
@@ -25,7 +25,7 @@ api_port="${PORT:-4010}"
 domain="${WEB_DOMAIN:-erp.zaamaitech.co.uk}"
 traefik_dir="${TRAEFIK_DIR:-/docker/traefik-xtyj}"
 # Browser-facing API origin (paths use ${NEXT_PUBLIC_API_BASE}/api/...)
-next_public_api_base="${NEXT_PUBLIC_API_BASE:-https://zaam-erp.endeavourdigital.in}"
+next_public_api_base="${NEXT_PUBLIC_API_BASE:-https://erp-api.zaamaitech.co.uk}"
 portal_origin="https://${domain}"
 
 ssh_target="${ssh_user}@${ssh_host}"
@@ -178,7 +178,7 @@ exit 1
   log "Web deploy complete."
   log "Portal: ${portal_origin}"
   log "API:    ${next_public_api_base}"
-  log "Note: zaam-api stays on existing host; FRONTEND_URL / Google OAuth redirect may still point at the old frontend until updated on that API."
+  log "Note: zaam-api runs on this VPS at https://erp-api.zaamaitech.co.uk (PM2 zaam-api :4011)."
 }
 
 [[ "${1:-}" == "--help" ]] && { sed -n '2,16p' "$0"; exit 0; }

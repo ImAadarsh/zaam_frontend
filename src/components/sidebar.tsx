@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -359,6 +359,7 @@ export function Sidebar() {
               )}
             </>
           )}
+          {isSocial && <SocialNav pathname={pathname} />}
         </nav>
         <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
           <Link
@@ -666,6 +667,7 @@ export function Sidebar() {
                   )}
                 </>
               )}
+              {isSocial && <SocialNav pathname={pathname} />}
             </nav>
             <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
               <Link
@@ -693,6 +695,25 @@ export function Sidebar() {
           </aside>
         </div>
       )}
+    </>
+  );
+}
+
+function SocialNav({ pathname }: { pathname: string | null }) {
+  return (
+    <>
+      <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+        <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+        <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Social Media</div>
+      </div>
+      <Item href="/social/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/social/dashboard'} />
+      <Item href="/social/compose" icon={<PenLine size={18} />} label="Composer" active={pathname?.startsWith('/social/compose')} />
+      <Item href="/social/posts" icon={<Share2 size={18} />} label="Posts" active={pathname?.startsWith('/social/posts')} />
+      <Item href="/social/messages" icon={<Inbox size={18} />} label="Inbox" active={pathname?.startsWith('/social/messages')} />
+      <Item href="/social/ads" icon={<Megaphone size={18} />} label="Ads" active={pathname?.startsWith('/social/ads')} />
+      <Item href="/social/insights" icon={<LineChart size={18} />} label="Insights" active={pathname?.startsWith('/social/insights')} />
+      <Item href="/social/accounts" icon={<AtSign size={18} />} label="Accounts" active={pathname?.startsWith('/social/accounts')} />
+      <Item href="/social/creators" icon={<Users size={18} />} label="Creators" active={pathname?.startsWith('/social/creators')} />
     </>
   );
 }
