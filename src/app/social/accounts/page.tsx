@@ -65,9 +65,13 @@ export default function SocialAccountsPage() {
       toast.success(
         `Meta connected — FB: ${params.get('facebook') || 0}, IG: ${params.get('instagram') || 0}, Ads: ${params.get('ads') || 0}`
       );
+      const declined = (params.get('declined') || '').split(',').filter(Boolean);
+      if (declined.length) {
+        toast.warning(`Some permissions were not granted: ${declined.join(', ')}. Reconnect and enable them for full features.`);
+      }
       loadData();
     } else if (meta === 'error') {
-      toast.error(params.get('message') || 'Meta connect failed');
+      toast.error(params.get('message') || 'Meta connect failed', { duration: 8000 });
     }
     router.replace('/social/accounts');
   }, [router]);

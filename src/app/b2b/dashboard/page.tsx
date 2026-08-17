@@ -7,8 +7,8 @@ import { Header } from '@/components/header';
 import { StatCard } from '@/components/stat-card';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
-import { getB2bDashboard } from '@/lib/api';
-import { Package2, Store, ShoppingCart, DollarSign, Settings, Users } from 'lucide-react';
+import { getB2bDashboard, getMarketingDashboard } from '@/lib/api';
+import { Package2, Store, ShoppingCart, DollarSign, Settings, Users, Share2 } from 'lucide-react';
 
 export default function B2bDashboard() {
   const router = useRouter();
@@ -23,6 +23,7 @@ export default function B2bDashboard() {
     openOrders: 0,
     gmv: 0
   });
+  const [affiliateStats, setAffiliateStats] = useState({ b2bConversions: 0, b2bRevenue: 0 });
   const [publishMode, setPublishMode] = useState('all_active');
 
   useEffect(() => {
@@ -33,9 +34,19 @@ export default function B2bDashboard() {
     }
     (async () => {
       try {
-        const res = await getB2bDashboard(session.user.organizationId);
+        const [res, mkt] = await Promise.all([
+          getB2bDashboard(session.user.organizationId),
+          getMarketingDashboard().catch(() => null)
+        ]);
         setStats(res.data?.stats || stats);
         setPublishMode(res.data?.settings?.publishMode || 'all_active');
+        const totals = mkt?.data?.totals;
+        if (totals) {
+          setAffiliateStats({
+            b2bConversions: Number(totals.b2bConversions || 0),
+            b2bRevenue: Number(totals.b2bRevenue || 0)
+          });
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -70,11 +81,19 @@ export default function B2bDashboard() {
               Publish ERP products, manage retailers, and take B2B orders. Publish mode: {publishMode === 'all_active' ? 'all active catalog items' : 'mapped products only'}.
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
             <StatCard title="ERP products" value={String(stats.catalogProducts)} hint="Active catalog items" icon={<Package2 size={18} />} />
             <StatCard title="On B2B portal" value={String(stats.publishedProducts)} hint="Visible to retailers" icon={<Store size={18} />} />
             <StatCard title="Retailers" value={String(stats.retailers)} hint="Portal logins" icon={<Users size={18} />} />
             <StatCard title="Open orders" value={String(stats.openOrders)} hint={`GMV £${Number(stats.gmv).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`} icon={<ShoppingCart size={18} />} />
+            <Link href="/marketing/affiliates?channel=b2b">
+              <StatCard
+                title="B2B affiliate GMV"
+                value={`£${Number(affiliateStats.b2bRevenue).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`}
+                hint={`${affiliateStats.b2bConversions} attributed conversion${affiliateStats.b2bConversions === 1 ? '' : 's'}`}
+                icon={<Share2 size={18} />}
+              />
+            </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link href="/b2b/products" className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 transition-colors">
@@ -101,6 +120,11 @@ export default function B2bDashboard() {
               <DollarSign className="mb-3" />
               <div className="font-semibold">Pricing</div>
               <p className="text-sm text-muted-foreground">Assign the wholesale price list used at checkout.</p>
+            </Link>
+            <Link href="/marketing/affiliates?channel=b2b" className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 transition-colors">
+              <Share2 className="mb-3" />
+              <div className="font-semibold">Affiliates & Referrals</div>
+              <p className="text-sm text-muted-foreground">B2B portal clicks, conversions and partner performance in Marketing.</p>
             </Link>
           </div>
         </main>

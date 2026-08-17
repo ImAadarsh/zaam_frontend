@@ -5183,6 +5183,27 @@ export async function updateB2bShipment(id: string, payload: any) {
   const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/shipments/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
 }
+export async function listB2bShippingMethods(params?: { organizationId?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/shipping-methods`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function upsertB2bShippingMethod(payload: {
+  organizationId: string;
+  id?: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  price?: number;
+  freeOverAmount?: number | null;
+  minOrderAmount?: number | null;
+  etaLabel?: string | null;
+  icon?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/b2b/admin/shipping-methods`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
 export async function listB2bCreditRequests(params?: { organizationId?: string }) {
   const { data } = await axios.get(`${API_BASE}/api/b2b/admin/credit-requests`, { params, headers: authHeaders() });
   return data as { data: any[] };

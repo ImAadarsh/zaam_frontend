@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { listAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, listAffiliateConversions, listAffiliateLinks, createAffiliatePayout } from '@/lib/api';
@@ -13,6 +13,9 @@ import { Pencil, Trash2, Plus, X, Link2, BarChart3 } from 'lucide-react';
 
 export default function AffiliatesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const channelFilter = searchParams.get('channel');
+  const preferB2b = channelFilter === 'b2b' || channelFilter === 'b2b_portal';
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'MARKETING']);
   const [loading, setLoading] = useState(true);
@@ -25,12 +28,20 @@ export default function AffiliatesPage() {
   const [detail, setDetail] = useState<any>(null);
   const [links, setLinks] = useState<any[]>([]);
   const [conversions, setConversions] = useState<any[]>([]);
-  const [b2bOnly, setB2bOnly] = useState(false);
+  const [b2bOnly, setB2bOnly] = useState(preferB2b);
+  const [b2bSummary, setB2bSummary] = useState<any[]>([]);
+  const autoOpened = useRef(false);
 
   const loadData = async () => {
     try {
-      const res = await listAffiliates();
+      const [res, b2b] = await Promise.all([
+        listAffiliates(),
+        preferB2b
+          ? listAffiliateConversions({ channel: 'b2b_portal' }).catch(() => ({ data: [] as any[] }))
+          : Promise.resolve({ data: [] as any[] })
+      ]);
       setItems(res.data || []);
+      if (preferB2b) setB2bSummary(b2b.data || []);
     } catch (e: any) {
       toast.error('Failed to load affiliates');
     } finally {
@@ -45,7 +56,13 @@ export default function AffiliatesPage() {
       return;
     }
     loadData();
-  }, [hydrated, hasAccess, router, session?.accessToken]);
+  }, [hydrated, hasAccess, router, session?.accessToken, preferB2b]);
+
+  useEffect(() => {
+    if (!preferB2b || autoOpened.current || loading || items.length === 0) return;
+    autoOpened.current = true;
+    openDetail(items[0], true);
+  }, [preferB2b, loading, items]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,7 +220,11 @@ export default function AffiliatesPage() {
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-2xl font-bold">Affiliates</h1>
-              <p className="text-muted-foreground text-sm">Manage referral partners and affiliates</p>
+              <p className="text-muted-foreground text-sm">
+                {preferB2b
+                  ? 'B2B portal attribution — clicks and conversions from the wholesale website'
+                  : 'Manage referral partners and affiliates'}
+              </p>
             </div>
             <button
               onClick={() => {
@@ -216,6 +237,19 @@ export default function AffiliatesPage() {
               <Plus className="h-4 w-4" /> New Affiliate
             </button>
           </div>
+
+          {preferB2b && (
+            <div className="mb-4 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+              <div className="font-medium">B2B channel filter active</div>
+              <p className="text-muted-foreground text-xs mt-1">
+                {b2bSummary.length} conversion{b2bSummary.length === 1 ? '' : 's'} with channel <code className="font-mono">b2b_portal</code>
+                {b2bSummary[0]
+                  ? ` · latest order ${b2bSummary[0].orderId} (£${Number(b2bSummary[0].orderValue).toFixed(2)})`
+                  : ''}
+                . Use the chart icon on a row to inspect partner links and B2B conversions.
+              </p>
+            </div>
+          )}
 
           <div className="bg-card rounded-lg border shadow-sm">
             <RichDataTable columns={columns} data={items} />

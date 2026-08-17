@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { RichDataTable } from '@/components/rich-data-table';
@@ -8,6 +9,7 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { listB2bCreditRequests, reviewB2bCreditRequest, listB2bReferrals, updateB2bReferral } from '@/lib/api';
 import { toast } from 'sonner';
+import { Share2 } from 'lucide-react';
 
 export default function B2bCreditReferralsPage() {
   const router = useRouter();
@@ -46,6 +48,18 @@ export default function B2bCreditReferralsPage() {
       <div className="flex flex-col overflow-hidden lg:ml-[280px]">
         <Header title="B2B · Credit & Referrals" />
         <main className="flex-1 overflow-auto p-4 md:p-6 space-y-8">
+          <Link
+            href="/marketing/affiliates?channel=b2b"
+            className="flex items-start gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 transition-colors"
+          >
+            <Share2 className="mt-0.5 shrink-0" size={18} />
+            <div>
+              <div className="font-semibold text-sm">Affiliates & B2B attribution</div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Partner tracking links, clicks, and wholesale-portal conversions live under Marketing → Affiliates.
+              </p>
+            </div>
+          </Link>
           <section className="space-y-3">
             <h2 className="text-lg font-bold">Credit increase requests</h2>
             <RichDataTable

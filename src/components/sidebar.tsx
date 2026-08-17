@@ -193,7 +193,9 @@ export function Sidebar() {
                   <Item href="/b2b/retailers" icon={<Store size={18} />} label="Retailers" active={pathname?.startsWith('/b2b/retailers')} />
                   <Item href="/b2b/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/b2b/orders')} />
                   <Item href="/b2b/shipments" icon={<Truck size={18} />} label="Shipments" active={pathname?.startsWith('/b2b/shipments')} />
+                  <Item href="/b2b/shipping-methods" icon={<Truck size={18} />} label="Shipping Methods" active={pathname?.startsWith('/b2b/shipping-methods')} />
                   <Item href="/b2b/credit-referrals" icon={<DollarSign size={18} />} label="Credit & Referrals" active={pathname?.startsWith('/b2b/credit-referrals')} />
+                  <Item href="/marketing/affiliates?channel=b2b" icon={<Share2 size={18} />} label="Affiliates & Referrals" active={pathname?.startsWith('/marketing/affiliates')} />
                   <Item href="/b2b/pricing" icon={<DollarSign size={18} />} label="Pricing" active={pathname?.startsWith('/b2b/pricing')} />
                   <Item href="/b2b/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/b2b/settings')} />
                   <Item href="/finance/payment-dashboard" icon={<CreditCard size={18} />} label="Payment Dashboard" active={pathname?.startsWith('/finance/payment-dashboard')} />
@@ -515,7 +517,9 @@ export function Sidebar() {
                       <Item href="/b2b/retailers" icon={<Store size={18} />} label="Retailers" active={pathname?.startsWith('/b2b/retailers')} />
                       <Item href="/b2b/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/b2b/orders')} />
                       <Item href="/b2b/shipments" icon={<Truck size={18} />} label="Shipments" active={pathname?.startsWith('/b2b/shipments')} />
+                      <Item href="/b2b/shipping-methods" icon={<Truck size={18} />} label="Shipping Methods" active={pathname?.startsWith('/b2b/shipping-methods')} />
                       <Item href="/b2b/credit-referrals" icon={<DollarSign size={18} />} label="Credit & Referrals" active={pathname?.startsWith('/b2b/credit-referrals')} />
+                      <Item href="/marketing/affiliates?channel=b2b" icon={<Share2 size={18} />} label="Affiliates & Referrals" active={pathname?.startsWith('/marketing/affiliates')} />
                       <Item href="/b2b/pricing" icon={<DollarSign size={18} />} label="Pricing" active={pathname?.startsWith('/b2b/pricing')} />
                       <Item href="/b2b/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/b2b/settings')} />
                       <Item href="/finance/payment-dashboard" icon={<CreditCard size={18} />} label="Payment Dashboard" active={pathname?.startsWith('/finance/payment-dashboard')} />
