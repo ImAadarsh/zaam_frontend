@@ -1,21 +1,33 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listOrders, createOrder, updateOrder, deleteOrder, listCustomers } from '@/lib/api';
+import {
+  listOrders,
+  createOrder,
+  updateOrder,
+  deleteOrder,
+  listCustomers,
+  listOrderSyncConnections,
+  syncAllChannelOrders,
+  type OrderSyncConnection
+} from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
+import { FilterBar, type FilterField } from '@/components/filter-bar';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X, ShoppingCart, Eye } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, ShoppingCart, Eye, Store, Monitor, RefreshCw, Download } from 'lucide-react';
 import Link from 'next/link';
 
 type Order = {
   id: string;
   orderNumber: string;
   channel?: string;
+  channelOrderNumber?: string;
+  channelConnection?: { id: string; name: string; storeUrl?: string | null; channel?: string } | null;
   customerEmail?: string;
   total?: number;
   currency?: string;
@@ -25,6 +37,57 @@ type Order = {
   orderDate?: string;
   [key: string]: any;
 };
+
+const CHANNEL_LABELS: Record<string, string> = {
+  amazon: 'Amazon',
+  ebay: 'eBay',
+  tiktok: 'TikTok',
+  etsy: 'Etsy',
+  shopify: 'Shopify',
+  woocommerce: 'WooCommerce',
+  wix: 'Wix',
+  b2b_portal: 'B2B Portal',
+  pos: 'POS / EPOS',
+  phone: 'Phone',
+  email: 'Email',
+  other: 'Other'
+};
+
+function StatusPill({ value, tone }: { value?: string; tone: 'status' | 'payment' | 'fulfillment' }) {
+  if (!value) return <span className="text-muted-foreground">—</span>;
+  const palettes: Record<string, Record<string, string>> = {
+    status: {
+      completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+      processing: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+      confirmed: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+      pending: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+      on_hold: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+      cancelled: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
+      refunded: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+    },
+    payment: {
+      paid: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+      authorized: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+      partially_paid: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+      pending: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+      refunded: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+      failed: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+    },
+    fulfillment: {
+      fulfilled: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+      partially_fulfilled: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+      processing: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+      pending: 'bg-muted text-muted-foreground',
+      cancelled: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+    }
+  };
+  const cls = palettes[tone][value] ?? 'bg-muted text-muted-foreground';
+  return (
+    <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium capitalize ${cls}`}>
+      {value.replace(/_/g, ' ')}
+    </span>
+  );
+}
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -54,36 +117,164 @@ export default function OrdersPage() {
   const [editing, setEditing] = useState<Order | null>(null);
   const [confirmDel, setConfirmDel] = useState<Order | null>(null);
 
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
+  const [summary, setSummary] = useState<{ totalValue: number; count: number }>({ totalValue: 0, count: 0 });
+  const [connections, setConnections] = useState<OrderSyncConnection[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<string | null>(null);
+
+  const orgId = session?.user?.organizationId;
+
+  async function onSyncChannels() {
+    if (!orgId || syncing) return;
+    try {
+      setSyncing(true);
+      setSyncProgress('Starting…');
+      const result = await syncAllChannelOrders({
+        organizationId: orgId,
+        updateExisting: true,
+        importPayments: true,
+        createCustomers: true,
+        onProgress: (done, total, name) => setSyncProgress(`${done}/${total}: ${name}`)
+      });
+      if (result.connections === 0) {
+        toast.error('No active POS or website connections found');
+        return;
+      }
+      const t = result.totals;
+      toast.success(
+        `Synced ${result.connections} channel(s): ${t.ordersCreated} new, ${t.ordersUpdated} updated, ${t.paymentsCreated} payments`
+      );
+      if (result.failures.length) {
+        toast.error(result.failures.map((f) => `${f.name}: ${f.message}`).join(' · '));
+      }
+      await loadData();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || e?.message || 'Channel sync failed');
+    } finally {
+      setSyncing(false);
+      setSyncProgress(null);
+    }
+  }
+
+  const loadData = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      setLoading(true);
+      const res = await listOrders({ organizationId: orgId, search: search || undefined, ...filters });
+      setItems(res.data || []);
+      setSummary({
+        totalValue: res.summary?.totalValue ?? 0,
+        count: res.summary?.count ?? res.data?.length ?? 0
+      });
+    } catch {
+      toast.error('Failed to load orders');
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId, search, filters]);
+
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
     if (!session?.accessToken) {
       router.replace('/login');
       return;
     }
-    loadData();
-    loadCustomers();
-  }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
+    void loadData();
+  }, [hydrated, hasAccess, router, session?.accessToken, loadData]);
 
-  async function loadData() {
-    try {
-      setLoading(true);
-      const res = await listOrders({ organizationId: session?.user?.organizationId });
-      setItems(res.data || []);
-    } catch (e: any) {
-      toast.error('Failed to load orders');
-    } finally {
-      setLoading(false);
-    }
-  }
+  useEffect(() => {
+    if (!hydrated || !hasAccess || !orgId) return;
+    listCustomers({ organizationId: orgId })
+      .then((res) => setCustomers(res.data || []))
+      .catch(() => { /* customers are optional for the create form */ });
+    listOrderSyncConnections({ organizationId: orgId })
+      .then((res) => setConnections(res.data || []))
+      .catch(() => { /* store filter degrades gracefully */ });
+  }, [hydrated, hasAccess, orgId]);
 
-  async function loadCustomers() {
-    try {
-      const res = await listCustomers({ organizationId: session?.user?.organizationId });
-      setCustomers(res.data || []);
-    } catch (e: any) {
-      // Silently fail - customers are optional
+  const filterFields = useMemo<FilterField[]>(() => [
+    {
+      key: 'channel',
+      label: 'Channel',
+      type: 'select',
+      primary: true,
+      options: Object.entries(CHANNEL_LABELS).map(([value, label]) => ({ value, label }))
+    },
+    {
+      key: 'connectionId',
+      label: 'Store / Till',
+      type: 'select',
+      primary: true,
+      options: connections.map((c) => ({
+        value: c.id,
+        label: `${c.kind === 'pos' ? 'POS' : 'Web'} · ${c.name}`
+      }))
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      primary: true,
+      options: ['pending', 'confirmed', 'processing', 'completed', 'cancelled', 'refunded', 'on_hold']
+        .map((v) => ({ value: v, label: v.replace(/_/g, ' ') }))
+    },
+    {
+      key: 'paymentStatus',
+      label: 'Payment',
+      type: 'select',
+      primary: true,
+      options: ['pending', 'authorized', 'partially_paid', 'paid', 'refunded', 'failed']
+        .map((v) => ({ value: v, label: v.replace(/_/g, ' ') }))
+    },
+    {
+      key: 'fulfillmentStatus',
+      label: 'Fulfillment',
+      type: 'select',
+      options: ['pending', 'processing', 'partially_fulfilled', 'fulfilled', 'cancelled']
+        .map((v) => ({ value: v, label: v.replace(/_/g, ' ') }))
+    },
+    { key: 'dateFrom', label: 'Order date from', type: 'date' },
+    { key: 'dateTo', label: 'Order date to', type: 'date' },
+    { key: 'minTotal', label: 'Min total', type: 'number', placeholder: '0.00' },
+    { key: 'maxTotal', label: 'Max total', type: 'number', placeholder: '0.00' },
+    {
+      key: 'currency',
+      label: 'Currency',
+      type: 'select',
+      options: ['GBP', 'USD', 'EUR'].map((v) => ({ value: v, label: v }))
+    },
+    {
+      key: 'hasLines',
+      label: 'Line items',
+      type: 'select',
+      options: [
+        { value: 'true', label: 'Has line items' },
+        { value: 'false', label: 'Missing line items' }
+      ]
+    },
+    {
+      key: 'sortBy',
+      label: 'Sort by',
+      type: 'select',
+      options: [
+        { value: 'orderDate', label: 'Order date' },
+        { value: 'createdAt', label: 'Created' },
+        { value: 'total', label: 'Total' },
+        { value: 'orderNumber', label: 'Order number' }
+      ]
+    },
+    {
+      key: 'sortDir',
+      label: 'Sort direction',
+      type: 'select',
+      options: [
+        { value: 'DESC', label: 'Descending' },
+        { value: 'ASC', label: 'Ascending' }
+      ]
     }
-  }
+  ], [connections]);
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -157,11 +348,57 @@ export default function OrdersPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <ShoppingCart size={16} className="text-muted-foreground" />
-          <span className="font-medium">{row.original.orderNumber}</span>
+          <div className="min-w-0">
+            <span className="block font-medium">{row.original.orderNumber}</span>
+            {row.original.channelOrderNumber && (
+              <span className="block text-xs text-muted-foreground">
+                Ref {row.original.channelOrderNumber}
+              </span>
+            )}
+          </div>
         </div>
       )
     },
-    { accessorKey: 'channel', header: 'Channel' },
+    {
+      accessorKey: 'channel',
+      header: 'Channel',
+      cell: ({ row }) => {
+        const channel = row.original.channel;
+        if (!channel) return <span className="text-muted-foreground">—</span>;
+        return (
+          <span className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
+            {CHANNEL_LABELS[channel] ?? channel}
+          </span>
+        );
+      }
+    },
+    {
+      id: 'store',
+      header: 'Store / Source',
+      accessorFn: (row) => row.channelConnection?.name ?? '',
+      cell: ({ row }) => {
+        const conn = row.original.channelConnection;
+        if (!conn) return <span className="text-muted-foreground">—</span>;
+        const isPos = row.original.channel === 'pos';
+        return (
+          <div className="flex items-center gap-2">
+            {isPos ? (
+              <Store size={14} className="shrink-0 text-muted-foreground" />
+            ) : (
+              <Monitor size={14} className="shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0">
+              <span className="block font-medium">{conn.name}</span>
+              {conn.storeUrl && (
+                <span className="block truncate text-xs text-muted-foreground">
+                  {conn.storeUrl.replace(/^https?:\/\//, '')}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      }
+    },
     { accessorKey: 'customerEmail', header: 'Customer Email' },
     {
       accessorKey: 'total',
@@ -169,12 +406,28 @@ export default function OrdersPage() {
       cell: ({ row }) => {
         const total = parseFloat(String(row.original.total || '0'));
         const currency = row.original.currency || 'GBP';
-        return `${currency} ${total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        return (
+          <span className="whitespace-nowrap font-medium">
+            {currency} {total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        );
       }
     },
-    { accessorKey: 'status', header: 'Status' },
-    { accessorKey: 'paymentStatus', header: 'Payment' },
-    { accessorKey: 'fulfillmentStatus', header: 'Fulfillment' },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => <StatusPill value={row.original.status} tone="status" />
+    },
+    {
+      accessorKey: 'paymentStatus',
+      header: 'Payment',
+      cell: ({ row }) => <StatusPill value={row.original.paymentStatus} tone="payment" />
+    },
+    {
+      accessorKey: 'fulfillmentStatus',
+      header: 'Fulfillment',
+      cell: ({ row }) => <StatusPill value={row.original.fulfillmentStatus} tone="fulfillment" />
+    },
     {
       accessorKey: 'orderDate',
       header: 'Date',
@@ -271,30 +524,78 @@ export default function OrdersPage() {
       <div className="flex flex-col overflow-hidden lg:ml-[280px]">
         <Header title="Orders · Orders" />
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between mb-6">
+          <div className="w-full space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold">Orders</h1>
-                <p className="text-muted-foreground mt-1">Manage sales orders from all channels</p>
+                <p className="text-muted-foreground mt-1">
+                  Sales orders from the POS, linked websites and manual entry
+                </p>
               </div>
-              {hasAccess && (
-                <button
-                  onClick={() => setShowCreate(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Order
-                </button>
-              )}
             </div>
+
+            <FilterBar
+              fields={filterFields}
+              values={filters}
+              onChange={setFilters}
+              searchValue={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Order #, channel ref, email, phone, store…"
+              loading={loading}
+              stats={[
+                { label: 'Orders', value: String(summary.count) },
+                {
+                  label: 'Total value',
+                  value: summary.totalValue.toLocaleString('en-GB', {
+                    style: 'currency',
+                    currency: 'GBP'
+                  })
+                }
+              ]}
+              actions={
+                <>
+                  <button
+                    onClick={() => void loadData()}
+                    disabled={loading || syncing}
+                    className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                  <button
+                    onClick={() => void onSyncChannels()}
+                    disabled={syncing}
+                    title="Fetch new orders and update existing ones from POS and linked websites"
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#D4A017]/40 bg-[#D4A017]/10 px-3 py-2 text-sm font-medium text-[#8a6a0a] hover:bg-[#D4A017]/20 disabled:opacity-50"
+                  >
+                    <Download className={`h-4 w-4 ${syncing ? 'animate-pulse' : ''}`} />
+                    {syncing ? (syncProgress || 'Syncing…') : 'Sync Channels'}
+                  </button>
+                  <Link
+                    href="/orders/channel-sync"
+                    className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:bg-muted"
+                  >
+                    <Store className="h-4 w-4" />
+                    Advanced Sync
+                  </Link>
+                  <button
+                    onClick={() => setShowCreate(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded-lg hover:bg-[#B89015]"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Order
+                  </button>
+                </>
+              }
+            />
 
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-sm text-muted-foreground">Loading orders...</div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-border bg-card">
-                <RichDataTable columns={columns} data={items} searchPlaceholder="Search orders..." />
+              <div className="rounded-2xl border border-border bg-card p-2">
+                <RichDataTable columns={columns} data={items} hideSearch />
               </div>
             )}
 

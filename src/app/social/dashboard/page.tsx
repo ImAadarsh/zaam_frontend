@@ -7,7 +7,7 @@ import { StatCard } from '@/components/stat-card';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { listSocialAccounts, listSocialPosts, listCreators, listSocialMessages } from '@/lib/api';
-import { Users, Share2, MessageSquare, AtSign } from 'lucide-react';
+import { Users, Share2, MessageSquare, AtSign, Megaphone } from 'lucide-react';
 import Link from 'next/link';
 
 export default function SocialDashboard() {
@@ -113,22 +113,26 @@ export default function SocialDashboard() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
               <Link href="/social/accounts" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
                 <h3 className="font-semibold mb-2">Accounts</h3>
-                <p className="text-sm text-muted-foreground">Add and authenticate social media profiles</p>
+                <p className="text-sm text-muted-foreground">Connect Meta Pages, Instagram &amp; ads</p>
               </Link>
               <Link href="/social/posts" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
                 <h3 className="font-semibold mb-2">Posts</h3>
-                <p className="text-sm text-muted-foreground">Schedule text, image, and video posts</p>
-              </Link>
-              <Link href="/social/creators" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
-                <h3 className="font-semibold mb-2">Creators</h3>
-                <p className="text-sm text-muted-foreground">Manage influencer relationships and rates</p>
+                <p className="text-sm text-muted-foreground">Publish and track performance</p>
               </Link>
               <Link href="/social/messages" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
                 <h3 className="font-semibold mb-2">Messages</h3>
-                <p className="text-sm text-muted-foreground">Respond to social comments and direct messages</p>
+                <p className="text-sm text-muted-foreground">Inbox &amp; reply via Messenger / IG</p>
+              </Link>
+              <Link href="/social/ads" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
+                <h3 className="font-semibold mb-2 flex items-center gap-2"><Megaphone className="h-4 w-4" /> Ads</h3>
+                <p className="text-sm text-muted-foreground">Campaigns and spend insights</p>
+              </Link>
+              <Link href="/social/creators" className="p-6 bg-card rounded-lg border border-border hover:border-primary/50 transition-colors">
+                <h3 className="font-semibold mb-2">Creators</h3>
+                <p className="text-sm text-muted-foreground">Manage influencer relationships</p>
               </Link>
             </div>
           </div>

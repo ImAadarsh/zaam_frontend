@@ -130,6 +130,15 @@ function authHeaders() {
 type PaginatedListResult<T = any> = {
   data: T[];
   pagination?: { page?: number; limit?: number; total?: number; totalPages?: number };
+  /** Aggregates over the whole filtered set, independent of the current page. */
+  summary?: {
+    totalValue?: number;
+    count?: number;
+    totalInvoiced?: number;
+    totalPaid?: number;
+    totalOutstanding?: number;
+    overdueCount?: number;
+  };
 };
 type PaginatedQueryValue = string | number | boolean | undefined | null;
 type PaginatedQueryParams = Record<string, PaginatedQueryValue> & { page?: number; limit?: number };
@@ -151,18 +160,22 @@ async function fetchAllPaginatedPages<T>(
   let page = 1;
   let totalPages = 1;
   let total = 0;
+  let summary: PaginatedListResult<T>['summary'];
 
   do {
     const res = await fetchPage(page, pageSize);
     all.push(...(res.data || []));
     totalPages = res.pagination?.totalPages ?? 1;
     total = res.pagination?.total ?? all.length;
+    // Summary covers the whole filtered set, so the first page's copy is enough.
+    if (page === 1) summary = res.summary;
     page++;
   } while (page <= totalPages);
 
   return {
     data: all,
     pagination: { page: 1, limit: all.length, total, totalPages: 1 },
+    summary,
   };
 }
 
@@ -1538,6 +1551,172 @@ export async function listEposConnections(params?: { organizationId?: string }) 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Channel order sync — pull orders + payments from the POS and linked websites
+// ---------------------------------------------------------------------------
+
+export interface OrderSyncConnection {
+  id: string;
+  name: string;
+  kind: 'pos' | 'web';
+  channel: string;
+  storeUrl: string | null;
+  status: string;
+  organizationId: string | null;
+  lastTestOk: boolean | null;
+  lastTestedAt: string | null;
+}
+
+export interface OrderSyncRequest {
+  organizationId: string;
+  connectionId: string;
+  from?: string;
+  to?: string;
+  includeVoided?: boolean;
+  statuses?: string[];
+  maxOrders?: number;
+  createCustomers?: boolean;
+  importPayments?: boolean;
+  updateExisting?: boolean;
+}
+
+export interface OrderSyncPreview {
+  connection: { id: string; name: string; channel: string };
+  totalOrders: number;
+  totalLines: number;
+  totalPayments: number;
+  totalValue: number;
+  paymentsTotal: number;
+  currency: string;
+  byStatus: Record<string, number>;
+  orders: Array<{
+    externalId: string;
+    externalNumber: string | null;
+    orderNumber: string;
+    orderDate: string;
+    total: number;
+    currency: string;
+    status: string;
+    paymentStatus: string;
+    customerEmail: string | null;
+    lineCount: number;
+    paymentCount: number;
+  }>;
+}
+
+export interface OrderSyncResult {
+  connection: { id: string; name: string; channel: string };
+  fetched: number;
+  ordersCreated: number;
+  ordersUpdated: number;
+  ordersSkipped: number;
+  linesCreated: number;
+  linesUnmatched: number;
+  paymentsCreated: number;
+  paymentsSkipped: number;
+  customersCreated: number;
+  customersLinked: number;
+  addressesCreated: number;
+  errors: Array<{ order: string; message: string }>;
+  unmatchedSkus: string[];
+}
+
+export async function listOrderSyncConnections(params?: { organizationId?: string }) {
+  const q = new URLSearchParams();
+  if (params?.organizationId) q.append('organizationId', params.organizationId);
+  const query = q.toString() ? `?${q.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/orders/channel-sync/connections${query}`, {
+    headers: authHeaders()
+  });
+  return data as { data: OrderSyncConnection[] };
+}
+
+export async function previewOrderSync(payload: OrderSyncRequest) {
+  const { data } = await axios.post(`${API_BASE}/api/orders/channel-sync/preview`, payload, {
+    headers: authHeaders(),
+    timeout: 600000
+  });
+  return data as { data: OrderSyncPreview };
+}
+
+export async function runOrderSync(payload: OrderSyncRequest) {
+  const { data } = await axios.post(`${API_BASE}/api/orders/channel-sync/import`, payload, {
+    headers: authHeaders(),
+    timeout: 600000
+  });
+  return data as { data: OrderSyncResult };
+}
+
+/**
+ * Pulls new/updated orders + payments from every active POS and website
+ * connection for the org. Each channel is synced separately (API is per-connection).
+ */
+export async function syncAllChannelOrders(params: {
+  organizationId: string;
+  from?: string;
+  to?: string;
+  includeVoided?: boolean;
+  createCustomers?: boolean;
+  importPayments?: boolean;
+  updateExisting?: boolean;
+  onProgress?: (done: number, total: number, name: string) => void;
+}) {
+  const { data: connections } = await listOrderSyncConnections({
+    organizationId: params.organizationId
+  });
+  const active = (connections || []).filter((c) => c.status === 'active');
+  const results: OrderSyncResult[] = [];
+  const failures: Array<{ connectionId: string; name: string; message: string }> = [];
+
+  for (let i = 0; i < active.length; i++) {
+    const conn = active[i];
+    params.onProgress?.(i + 1, active.length, conn.name);
+    try {
+      const { data } = await runOrderSync({
+        organizationId: params.organizationId,
+        connectionId: conn.id,
+        from: params.from,
+        to: params.to,
+        includeVoided: params.includeVoided ?? false,
+        createCustomers: params.createCustomers ?? true,
+        importPayments: params.importPayments ?? true,
+        updateExisting: params.updateExisting ?? true
+      });
+      results.push(data);
+    } catch (e: any) {
+      failures.push({
+        connectionId: conn.id,
+        name: conn.name,
+        message: e?.response?.data?.error?.message || e?.message || 'Sync failed'
+      });
+    }
+  }
+
+  return {
+    connections: active.length,
+    results,
+    failures,
+    totals: results.reduce(
+      (acc, r) => ({
+        fetched: acc.fetched + r.fetched,
+        ordersCreated: acc.ordersCreated + r.ordersCreated,
+        ordersUpdated: acc.ordersUpdated + r.ordersUpdated,
+        paymentsCreated: acc.paymentsCreated + r.paymentsCreated,
+        customersCreated: acc.customersCreated + r.customersCreated,
+        errors: acc.errors + r.errors.length
+      }),
+      {
+        fetched: 0,
+        ordersCreated: 0,
+        ordersUpdated: 0,
+        paymentsCreated: 0,
+        customersCreated: 0,
+        errors: 0
+      }
+    )
+  };
+}
+
 export async function listGoodTillVatRates(params: { connectionId: string; organizationId: string }) {
   const q = new URLSearchParams({ organizationId: params.organizationId });
   const { data } = await axios.get(
@@ -2376,14 +2555,35 @@ export async function getStockTransfer(id: string) {
   return data as { data: any };
 }
 
+export interface TransferAvailability {
+  variantId: string;
+  variantSku: string;
+  variantName: string | null;
+  available: number;
+}
+
+/** Stock that can be sent from a warehouse right now, keyed by variant. */
+export async function listTransferAvailability(params: { warehouseId: string; search?: string }) {
+  const q = new URLSearchParams({ warehouseId: params.warehouseId });
+  if (params.search) q.append('search', params.search);
+  const { data } = await axios.get(
+    `${API_BASE}/api/inventory/stock-transfers/availability?${q.toString()}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: TransferAvailability[] };
+}
+
+/**
+ * Creates a transfer, which is approved and moves the stock immediately.
+ * `transferNumber` is generated server-side when omitted.
+ */
 export async function createStockTransfer(payload: {
   organizationId: string;
-  transferNumber: string;
+  transferNumber?: string;
   fromWarehouseId: string;
   toWarehouseId: string;
   transferDate: string;
   expectedArrivalDate?: string;
-  status?: 'draft' | 'submitted' | 'in_transit' | 'received' | 'cancelled';
   notes?: string;
   lines: Array<{
     variantId: string;
@@ -2396,18 +2596,12 @@ export async function createStockTransfer(payload: {
   return data as { data: any };
 }
 
+/** Amends the document only; quantities are fixed once the stock has moved. */
 export async function updateStockTransfer(id: string, payload: {
   transferNumber?: string;
   transferDate?: string;
   expectedArrivalDate?: string;
-  status?: 'draft' | 'submitted' | 'in_transit' | 'received' | 'cancelled';
   notes?: string;
-  lines?: Array<{
-    variantId: string;
-    lotNumber?: string;
-    quantitySent: number;
-    notes?: string;
-  }>;
 }) {
   const { data } = await axios.patch(`${API_BASE}/api/inventory/stock-transfers/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
@@ -2538,6 +2732,14 @@ export async function deleteCycleCount(id: string) {
 export async function listCustomers(params?: {
   organizationId?: string;
   status?: string;
+  customerType?: string;
+  tier?: string;
+  marketingOptIn?: string;
+  hasEmail?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  sortBy?: string;
+  sortDir?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -2604,6 +2806,15 @@ export async function listOrders(params?: {
   paymentStatus?: string;
   fulfillmentStatus?: string;
   channel?: string;
+  connectionId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  minTotal?: string | number;
+  maxTotal?: string | number;
+  currency?: string;
+  hasLines?: string;
+  sortBy?: string;
+  sortDir?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -2724,6 +2935,24 @@ export async function createReturn(payload: {
 }) {
   const { data } = await axios.post(`${API_BASE}/api/orders/returns`, payload, { headers: authHeaders() });
   return data as { data: any };
+}
+
+export async function refundReturn(id: string, amount?: number) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/orders/returns/${id}/refund`,
+    amount == null ? {} : { amount },
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: any;
+    refund: {
+      channel: 'woocommerce' | 'shopify';
+      externalRefundId: string;
+      amount: number;
+      currency: string;
+      fullyRefunded: boolean;
+    };
+  };
 }
 
 export async function updateReturn(id: string, payload: {
@@ -4292,13 +4521,42 @@ export async function updateGateway(id: string, payload: any) {
 }
 export async function deleteGateway(id: string) {
   const { status } = await axios.delete(`${API_BASE}/api/finance/gateways/${id}`, { headers: authHeaders() });
-  return status === 204;
+  return status === 204 || status === 200;
+}
+export async function testGatewayConnection(id: string) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/gateways/${id}/test`, {}, { headers: authHeaders() });
+  return data as { data: { ok: boolean; message: string; mode?: string; httpStatus?: number } };
+}
+export async function getPaymentDashboard(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/payments/dashboard`, {
+    params: { organizationId },
+    headers: authHeaders()
+  });
+  return data as { data: any };
 }
 
 // PAYMENTS
-export async function listPayments(organizationId: string) {
-  const { data } = await axios.get(`${API_BASE}/api/finance/payments?organizationId=${organizationId}`, { headers: authHeaders() });
-  return data as { data: any[] };
+export async function listPayments(
+  organizationId: string,
+  params?: {
+    status?: string;
+    paymentMethod?: string;
+    paymentType?: string;
+    currency?: string;
+    channel?: string;
+    connectionId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    minAmount?: string | number;
+    maxAmount?: string | number;
+    search?: string;
+    sortBy?: string;
+    sortDir?: string;
+    page?: number;
+    limit?: number;
+  }
+) {
+  return getPaginatedList('/api/finance/payments', { organizationId, ...params });
 }
 export async function getPayment(id: string) {
   const { data } = await axios.get(`${API_BASE}/api/finance/payments/${id}`, { headers: authHeaders() });
@@ -4318,13 +4576,63 @@ export async function deletePayment(id: string) {
 }
 
 // INVOICES
-export async function listInvoices(organizationId: string) {
-  const { data } = await axios.get(`${API_BASE}/api/finance/invoices?organizationId=${organizationId}`, { headers: authHeaders() });
-  return data as { data: any[] };
+export async function listInvoices(
+  organizationId: string,
+  params?: {
+    status?: string;
+    channel?: string;
+    connectionId?: string;
+    currency?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    minAmount?: string | number;
+    maxAmount?: string | number;
+    outstanding?: string;
+    search?: string;
+    sortBy?: string;
+    sortDir?: string;
+    page?: number;
+    limit?: number;
+  }
+) {
+  return getPaginatedList('/api/finance/invoices', { organizationId, ...params });
 }
+
 export async function getInvoice(id: string) {
   const { data } = await axios.get(`${API_BASE}/api/finance/invoices/${id}`, { headers: authHeaders() });
   return data as { data: any };
+}
+
+export async function listUninvoicedOrders(organizationId: string) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/finance/invoices/uninvoiced-orders?organizationId=${organizationId}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: {
+      count: number;
+      orderIds: string[];
+      byChannel: Array<{ channel: string; store: string | null; count: number; value: number }>;
+    };
+  };
+}
+
+export async function generateInvoices(payload: {
+  organizationId: string;
+  orderIds?: string[];
+  limit?: number;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/invoices/generate`, payload, {
+    headers: authHeaders(),
+    timeout: 300000
+  });
+  return data as {
+    data: {
+      created: number;
+      skipped: Array<{ orderId: string; reason: string }>;
+      invoices: Array<{ id: string; invoiceNumber: string; orderId: string | null; total: number }>;
+    };
+  };
 }
 export async function createInvoice(payload: Record<string, unknown>) {
   const { data } = await axios.post(`${API_BASE}/api/finance/invoices`, payload, { headers: authHeaders() });
@@ -4413,8 +4721,24 @@ export async function updateSegment(id: string, payload: any) {
   return data as { data: any };
 }
 export async function deleteSegment(id: string) {
-  const { status } = await axios.delete(`${API_BASE}/api/marketing/segments/${id}`, { headers: authHeaders() });
-  return status === 204;
+  const { data } = await axios.delete(`${API_BASE}/api/marketing/segments/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listSegmentMembers(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/segments/${id}/members`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function addSegmentMembers(id: string, customerIds: string[]) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/segments/${id}/members`, { customerIds }, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function removeSegmentMember(id: string, customerId: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/marketing/segments/${id}/members/${customerId}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function recalculateSegment(id: string) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/segments/${id}/recalculate`, {}, { headers: authHeaders() });
+  return data as { data: any };
 }
 
 // CAMPAIGNS
@@ -4435,8 +4759,20 @@ export async function updateCampaign(id: string, payload: any) {
   return data as { data: any };
 }
 export async function deleteCampaign(id: string) {
-  const { status } = await axios.delete(`${API_BASE}/api/marketing/campaigns/${id}`, { headers: authHeaders() });
-  return status === 204;
+  const { data } = await axios.delete(`${API_BASE}/api/marketing/campaigns/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listCampaignSends(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/campaigns/${id}/sends`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function sendCampaign(id: string, payload: any = {}) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/campaigns/${id}/send`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listCampaignSendLogs(sendId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/campaigns/sends/${sendId}/logs`, { headers: authHeaders() });
+  return data as { data: any[] };
 }
 
 // COUPONS
@@ -4457,8 +4793,17 @@ export async function updateCoupon(id: string, payload: any) {
   return data as { data: any };
 }
 export async function deleteCoupon(id: string) {
-  const { status } = await axios.delete(`${API_BASE}/api/marketing/coupons/${id}`, { headers: authHeaders() });
-  return status === 204;
+  const { data } = await axios.delete(`${API_BASE}/api/marketing/coupons/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listCouponUsage(couponId?: string) {
+  const path = couponId ? `/api/marketing/coupons/${couponId}/usage` : `/api/marketing/coupons/usage`;
+  const { data } = await axios.get(`${API_BASE}${path}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function validateMarketingCoupon(payload: { couponCode: string; subtotal: number; customerId?: string }) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/coupons/validate`, payload, { headers: authHeaders() });
+  return data as { data: any };
 }
 
 // AFFILIATES
@@ -4479,8 +4824,46 @@ export async function updateAffiliate(id: string, payload: any) {
   return data as { data: any };
 }
 export async function deleteAffiliate(id: string) {
-  const { status } = await axios.delete(`${API_BASE}/api/marketing/affiliates/${id}`, { headers: authHeaders() });
-  return status === 204;
+  const { data } = await axios.delete(`${API_BASE}/api/marketing/affiliates/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listAffiliateLinks(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/affiliates/${id}/links`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function createAffiliateLink(id: string, payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/affiliates/${id}/links`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listAffiliateClicks(params?: { affiliateId?: string }) {
+  const qs = params?.affiliateId ? `?affiliateId=${params.affiliateId}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/marketing/affiliates/clicks${qs}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function listAffiliateConversions(params?: { affiliateId?: string; channel?: string }) {
+  const q = new URLSearchParams();
+  if (params?.affiliateId) q.set('affiliateId', params.affiliateId);
+  if (params?.channel) q.set('channel', params.channel);
+  const qs = q.toString() ? `?${q.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/marketing/affiliates/conversions${qs}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function listAffiliatePayouts(params?: { affiliateId?: string }) {
+  const qs = params?.affiliateId ? `?affiliateId=${params.affiliateId}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/marketing/affiliates/payouts${qs}`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function createAffiliatePayout(affiliateId: string, payload: any) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/affiliates/${affiliateId}/payouts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateAffiliatePayout(payoutId: string, payload: { status: string }) {
+  const { data } = await axios.patch(`${API_BASE}/api/marketing/affiliates/payouts/${payoutId}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function getMarketingDashboard() {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/dashboard`, { headers: authHeaders() });
+  return data as { data: any };
 }
 
 // ============================================================================
@@ -4575,6 +4958,52 @@ export async function deleteSocialMessage(id: string) {
   return status === 204;
 }
 
+// META / FACEBOOK / INSTAGRAM
+export async function getMetaStatus() {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/status`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function getMetaConnectUrl() {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/connect`, { headers: authHeaders() });
+  return data as { data: { authUrl: string; redirectUri: string; configIdConfigured: boolean; webhookUrl: string } };
+}
+export async function publishSocialPostToMeta(id: string) {
+  const { data } = await axios.post(`${API_BASE}/api/social/posts/${id}/publish`, {}, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function editSocialPostOnMeta(id: string, content: string) {
+  const { data } = await axios.post(`${API_BASE}/api/social/posts/${id}/edit-remote`, { content }, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function deleteSocialPostOnMeta(id: string) {
+  const { data } = await axios.post(`${API_BASE}/api/social/posts/${id}/delete-remote`, {}, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function syncSocialPostInsights(id: string) {
+  const { data } = await axios.post(`${API_BASE}/api/social/posts/${id}/sync-insights`, {}, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function syncAllSocialPostInsights() {
+  const { data } = await axios.post(`${API_BASE}/api/social/posts/sync-insights`, {}, { headers: authHeaders() });
+  return data as { data: { synced: number; failed: number } };
+}
+export async function replySocialMessageViaMeta(payload: {
+  socialAccountId: string;
+  recipientId: string;
+  messageText: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/social/messages/reply`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listMetaAdAccounts() {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/ads`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function listMetaAdCampaigns(accountId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/social/meta/ads/${accountId}/campaigns`, { headers: authHeaders() });
+  return data as { data: any[] };
+}
+
 // ==========================================
 // ANALYTICS & REPORTING ENDPOINTS
 // ==========================================
@@ -4661,4 +5090,112 @@ export async function updateDataExport(id: string, payload: any) {
 export async function deleteDataExport(id: string) {
   const { data } = await axios.delete(`${API_BASE}/api/analytics/exports/${id}`, { headers: authHeaders() });
   return data;
+}
+
+// B2B SALE CHANNEL
+export async function getB2bDashboard(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/dashboard`, { params: { organizationId }, headers: authHeaders() });
+  return data as { data: any };
+}
+export async function getB2bSettings(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/settings`, { params: { organizationId }, headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateB2bSettings(payload: {
+  organizationId: string;
+  enabled?: boolean;
+  publishMode?: 'all_active' | 'mapped_only';
+  defaultPriceListId?: string | null;
+  defaultWarehouseId?: string | null;
+  assignedRepName?: string | null;
+  assignedRepPhone?: string | null;
+  assignedRepEmail?: string | null;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/settings`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listB2bProducts(params?: {
+  organizationId?: string;
+  search?: string;
+  published?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/products`, { params, headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+export async function publishB2bProducts(payload: { organizationId: string; catalogItemIds: string[] }) {
+  const { data } = await axios.post(`${API_BASE}/api/b2b/admin/products/publish`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function unpublishB2bProducts(payload: { organizationId: string; catalogItemIds: string[] }) {
+  const { data } = await axios.post(`${API_BASE}/api/b2b/admin/products/unpublish`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listB2bRetailers(params?: { organizationId?: string; search?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/retailers`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function createB2bRetailer(payload: {
+  organizationId: string;
+  customerId?: string;
+  email: string;
+  password: string;
+  companyName?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  taxId?: string;
+  customerNumber?: string;
+  tier?: 'standard' | 'silver' | 'gold' | 'platinum';
+  creditLimit?: number;
+  paymentTerms?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/b2b/admin/retailers`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateB2bRetailer(id: string, payload: {
+  status?: 'active' | 'invited' | 'disabled';
+  password?: string;
+  creditLimit?: number;
+  creditUsed?: number;
+  paymentTerms?: string | null;
+  tier?: 'standard' | 'silver' | 'gold' | 'platinum';
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/retailers/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listB2bOrders(params?: {
+  organizationId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/orders`, { params, headers: authHeaders() });
+  return data as { data: any[]; pagination?: any };
+}
+export async function listB2bShipments(params?: { organizationId?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/shipments`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function updateB2bShipment(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/shipments/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listB2bCreditRequests(params?: { organizationId?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/credit-requests`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function reviewB2bCreditRequest(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/credit-requests/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listB2bReferrals(params?: { organizationId?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/referrals`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function updateB2bReferral(id: string, payload: any) {
+  const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/referrals/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
 }

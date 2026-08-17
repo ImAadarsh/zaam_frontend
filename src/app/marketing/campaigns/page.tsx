@@ -3,13 +3,13 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listCampaigns, createCampaign, updateCampaign, deleteCampaign, listSegments } from '@/lib/api';
+import { listCampaigns, createCampaign, updateCampaign, deleteCampaign, listSegments, sendCampaign, listCampaignSends } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Send } from 'lucide-react';
 
 export default function CampaignsPage() {
   const router = useRouter();
@@ -19,10 +19,12 @@ export default function CampaignsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [segments, setSegments] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: '', type: 'email', status: 'draft', targetSegmentId: '' });
+  const [form, setForm] = useState({ name: '', type: 'email', status: 'draft', targetSegmentId: '', description: '' });
   const [editing, setEditing] = useState<any>(null);
   const [confirmDel, setConfirmDel] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [sendsFor, setSendsFor] = useState<any>(null);
+  const [sends, setSends] = useState<any[]>([]);
 
   const loadData = async () => {
     try {
@@ -62,12 +64,38 @@ export default function CampaignsPage() {
       }
       setShowCreate(false);
       setEditing(null);
-      setForm({ name: '', type: 'email', status: 'draft', targetSegmentId: '' });
+      setForm({ name: '', type: 'email', status: 'draft', targetSegmentId: '', description: '' });
       loadData();
     } catch (error: any) {
       toast.error(error.response?.data?.error?.message || 'Error saving campaign');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSend = async (campaign: any) => {
+    setSubmitting(true);
+    try {
+      const segmentId = campaign.targetAudience?.startsWith('segment:')
+        ? campaign.targetAudience.replace(/^segment:/, '')
+        : undefined;
+      const res = await sendCampaign(campaign.id, { segmentId });
+      toast.success(`Sent to ${res.data?.recipientCount || 0} recipients (${res.data?.delivered || 0} delivered)`);
+      loadData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error?.message || 'Send failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openSends = async (campaign: any) => {
+    setSendsFor(campaign);
+    try {
+      const res = await listCampaignSends(campaign.id);
+      setSends(res.data || []);
+    } catch {
+      toast.error('Failed to load sends');
     }
   };
 
@@ -89,19 +117,38 @@ export default function CampaignsPage() {
     { accessorKey: 'name', header: 'Campaign Name' },
     { accessorKey: 'type', header: 'Type' },
     { accessorKey: 'status', header: 'Status' },
+    { accessorKey: 'totalSent', header: 'Sent' },
     {
       id: 'actions',
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
           <button
+            onClick={() => handleSend(row.original)}
+            className="p-1 hover:bg-secondary rounded text-primary transition-colors"
+            title="Send now"
+            disabled={submitting}
+          >
+            <Send className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => openSends(row.original)}
+            className="px-2 text-xs hover:bg-secondary rounded text-muted-foreground"
+            title="View sends"
+          >
+            Logs
+          </button>
+          <button
             onClick={() => {
               setEditing(row.original);
               setForm({
-                name: row.original.name,
-                type: row.original.type,
-                status: row.original.status,
-                targetSegmentId: row.original.targetSegmentId || ''
+                name: row.original.name || row.original.campaignName,
+                type: row.original.type || row.original.campaignType || 'email',
+                status: row.original.status === 'running' ? 'active' : row.original.status,
+                targetSegmentId: row.original.targetAudience?.startsWith('segment:')
+                  ? row.original.targetAudience.replace(/^segment:/, '')
+                  : '',
+                description: row.original.description || ''
               });
               setShowCreate(true);
             }}
@@ -120,7 +167,7 @@ export default function CampaignsPage() {
         </div>
       )
     }
-  ], []);
+  ], [submitting]);
 
   if (!hydrated || loading) {
     return (
@@ -167,7 +214,7 @@ export default function CampaignsPage() {
             <button
               onClick={() => {
                 setEditing(null);
-                setForm({ name: '', type: 'email', status: 'draft', targetSegmentId: '' });
+                setForm({ name: '', type: 'email', status: 'draft', targetSegmentId: '', description: '' });
                 setShowCreate(true);
               }}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
@@ -179,6 +226,31 @@ export default function CampaignsPage() {
           <div className="bg-card rounded-lg border shadow-sm">
             <RichDataTable columns={columns} data={items} />
           </div>
+
+          {sendsFor && (
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-card w-full max-w-lg rounded-lg shadow-lg border border-border p-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-semibold">Sends · {sendsFor.name || sendsFor.campaignName}</h3>
+                  <button onClick={() => setSendsFor(null)}><X className="h-5 w-5" /></button>
+                </div>
+                {sends.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No sends yet.</p>
+                ) : (
+                  <ul className="text-sm space-y-2 max-h-80 overflow-auto">
+                    {sends.map((s) => (
+                      <li key={s.id} className="border-b border-border/50 pb-2">
+                        <div className="font-medium">{s.sendName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {s.status} · {s.recipientCount} recipients · {s.deliveredCount} delivered · {s.failedCount} failed
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
 
           {showCreate && (
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -210,8 +282,10 @@ export default function CampaignsPage() {
                       >
                         <option value="email">Email</option>
                         <option value="sms">SMS</option>
-                        <option value="push">Push Notification</option>
-                        <option value="in_app">In App</option>
+                        <option value="social">Social</option>
+                        <option value="affiliate">Affiliate</option>
+                        <option value="paid_ads">Paid Ads</option>
+                        <option value="other">Other</option>
                       </select>
                     </div>
                     <div className="space-y-2">
@@ -223,7 +297,8 @@ export default function CampaignsPage() {
                       >
                         <option value="draft">Draft</option>
                         <option value="scheduled">Scheduled</option>
-                        <option value="running">Running</option>
+                        <option value="active">Active</option>
+                        <option value="paused">Paused</option>
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
                       </select>

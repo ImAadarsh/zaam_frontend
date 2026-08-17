@@ -135,3 +135,40 @@
   @apply p-4 align-middle [&:has([role=checkbox])]:pr-0;
 }
 
+
+/* Printable documents (invoices, transfer receipts).
+   Everything outside the sheet is hidden so the browser prints the document
+   alone, on A4, without the app chrome. */
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  body :not(:has(.print-sheet)):not(.print-sheet):not(.print-sheet *) {
+    visibility: hidden;
+  }
+
+  .print-sheet,
+  .print-sheet * {
+    visibility: visible;
+  }
+
+  .print-sheet {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 210mm;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

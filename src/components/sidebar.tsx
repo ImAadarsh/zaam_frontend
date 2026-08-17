@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -15,6 +15,7 @@ export function Sidebar() {
   const isCatalog = root === 'catalog';
   const isInventory = root === 'inventory';
   const isOrders = root === 'orders';
+  const isB2b = root === 'b2b';
   const isFinance = root === 'finance';
   const isHR = root === 'hr';
   const isCRM = root === 'crm';
@@ -174,6 +175,30 @@ export function Sidebar() {
                   <Item href="/orders/returns" icon={<RotateCcw size={18} />} label="Returns" active={pathname?.startsWith('/orders/returns')} />
                 </>
               )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
+                <Item href="/orders/channel-sync" icon={<Download size={18} />} label="Channel Sync" active={pathname?.startsWith('/orders/channel-sync')} />
+              )}
+            </>
+          )}
+          {isB2b && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">B2B Sale Channel</div>
+              </div>
+              <Item href="/b2b/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/b2b/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']) && (
+                <>
+                  <Item href="/b2b/products" icon={<Package2 size={18} />} label="Products" active={pathname?.startsWith('/b2b/products')} />
+                  <Item href="/b2b/retailers" icon={<Store size={18} />} label="Retailers" active={pathname?.startsWith('/b2b/retailers')} />
+                  <Item href="/b2b/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/b2b/orders')} />
+                  <Item href="/b2b/shipments" icon={<Truck size={18} />} label="Shipments" active={pathname?.startsWith('/b2b/shipments')} />
+                  <Item href="/b2b/credit-referrals" icon={<DollarSign size={18} />} label="Credit & Referrals" active={pathname?.startsWith('/b2b/credit-referrals')} />
+                  <Item href="/b2b/pricing" icon={<DollarSign size={18} />} label="Pricing" active={pathname?.startsWith('/b2b/pricing')} />
+                  <Item href="/b2b/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/b2b/settings')} />
+                  <Item href="/finance/payment-dashboard" icon={<CreditCard size={18} />} label="Payment Dashboard" active={pathname?.startsWith('/finance/payment-dashboard')} />
+                </>
+              )}
             </>
           )}
           {isFinance && (
@@ -186,7 +211,8 @@ export function Sidebar() {
               {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
                 <>
                   <Item href="/finance/invoices" icon={<Receipt size={18} />} label="Invoices" active={pathname?.startsWith('/finance/invoices')} />
-                  <Item href="/finance/payments" icon={<CreditCard size={18} />} label="Payments" active={pathname?.startsWith('/finance/payments')} />
+                  <Item href="/finance/payment-dashboard" icon={<CreditCard size={18} />} label="Payment Dashboard" active={pathname?.startsWith('/finance/payment-dashboard')} />
+                  <Item href="/finance/payments" icon={<CreditCard size={18} />} label="Payments" active={pathname === '/finance/payments' || pathname?.startsWith('/finance/payments/')} />
                   <Item href="/finance/gateways" icon={<Wallet size={18} />} label="Payment Gateways" active={pathname?.startsWith('/finance/gateways')} />
                   <Item href="/finance/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/finance/chart-of-accounts')} />
                   <Item href="/finance/ledger-accounts" icon={<FileTextIcon size={18} />} label="Ledger Accounts" active={pathname?.startsWith('/finance/ledger-accounts')} />
@@ -471,6 +497,30 @@ export function Sidebar() {
                       <Item href="/orders/returns" icon={<RotateCcw size={18} />} label="Returns" active={pathname?.startsWith('/orders/returns')} />
                     </>
                   )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
+                    <Item href="/orders/channel-sync" icon={<Download size={18} />} label="Channel Sync" active={pathname?.startsWith('/orders/channel-sync')} />
+                  )}
+                </>
+              )}
+              {isB2b && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">B2B Sale Channel</div>
+                  </div>
+                  <Item href="/b2b/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/b2b/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']) && (
+                    <>
+                      <Item href="/b2b/products" icon={<Package2 size={18} />} label="Products" active={pathname?.startsWith('/b2b/products')} />
+                      <Item href="/b2b/retailers" icon={<Store size={18} />} label="Retailers" active={pathname?.startsWith('/b2b/retailers')} />
+                      <Item href="/b2b/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/b2b/orders')} />
+                      <Item href="/b2b/shipments" icon={<Truck size={18} />} label="Shipments" active={pathname?.startsWith('/b2b/shipments')} />
+                      <Item href="/b2b/credit-referrals" icon={<DollarSign size={18} />} label="Credit & Referrals" active={pathname?.startsWith('/b2b/credit-referrals')} />
+                      <Item href="/b2b/pricing" icon={<DollarSign size={18} />} label="Pricing" active={pathname?.startsWith('/b2b/pricing')} />
+                      <Item href="/b2b/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/b2b/settings')} />
+                      <Item href="/finance/payment-dashboard" icon={<CreditCard size={18} />} label="Payment Dashboard" active={pathname?.startsWith('/finance/payment-dashboard')} />
+                    </>
+                  )}
                 </>
               )}
               {isFinance && (
@@ -483,7 +533,8 @@ export function Sidebar() {
                   {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
                     <>
                       <Item href="/finance/invoices" icon={<Receipt size={18} />} label="Invoices" active={pathname?.startsWith('/finance/invoices')} />
-                      <Item href="/finance/payments" icon={<CreditCard size={18} />} label="Payments" active={pathname?.startsWith('/finance/payments')} />
+                      <Item href="/finance/payment-dashboard" icon={<CreditCard size={18} />} label="Payment Dashboard" active={pathname?.startsWith('/finance/payment-dashboard')} />
+                      <Item href="/finance/payments" icon={<CreditCard size={18} />} label="Payments" active={pathname === '/finance/payments' || pathname?.startsWith('/finance/payments/')} />
                       <Item href="/finance/gateways" icon={<Wallet size={18} />} label="Payment Gateways" active={pathname?.startsWith('/finance/gateways')} />
                       <Item href="/finance/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/finance/chart-of-accounts')} />
                       <Item href="/finance/ledger-accounts" icon={<FileTextIcon size={18} />} label="Ledger Accounts" active={pathname?.startsWith('/finance/ledger-accounts')} />

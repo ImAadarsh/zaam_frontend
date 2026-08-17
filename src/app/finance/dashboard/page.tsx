@@ -285,10 +285,10 @@ export default function FinanceDashboard() {
                 <h3 className="font-semibold mb-2 relative">Payments</h3>
                 <p className="text-sm text-muted-foreground relative">Manage incoming payments and refunds</p>
               </Link>
-              <Link href="/finance/gateways" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
+              <Link href="/finance/payment-dashboard" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <h3 className="font-semibold mb-2 relative">Payment Gateways</h3>
-                <p className="text-sm text-muted-foreground relative">Configure Stripe, PayPal, and more</p>
+                <h3 className="font-semibold mb-2 relative">Payment Dashboard</h3>
+                <p className="text-sm text-muted-foreground relative">Worldpay + multi-gateway status, config, and tests</p>
               </Link>
               <Link href="/finance/chart-of-accounts" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

@@ -3,11 +3,12 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { getOrder, listOrderLines, listOrderAddresses, listOrderNotes, createOrderLine, updateOrderLine, deleteOrderLine, createOrderAddress, updateOrderAddress, deleteOrderAddress, createOrderNote, updateOrderNote, deleteOrderNote, listVariants, listWarehouses } from '@/lib/api';
+import { getOrder, listOrderLines, listOrderAddresses, listOrderNotes, createOrderLine, updateOrderLine, deleteOrderLine, createOrderAddress, updateOrderAddress, deleteOrderAddress, createOrderNote, updateOrderNote, deleteOrderNote, listVariants, listWarehouses, listInvoices, generateInvoices } from '@/lib/api';
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
-import { ArrowLeft, Plus, Pencil, Trash2, X, Package, MapPin, FileText, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, X, Package, MapPin, FileText, ShoppingCart, Receipt, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -31,6 +32,8 @@ export default function OrderDetailPage() {
   const [editingAddress, setEditingAddress] = useState<any>(null);
   const [editingNote, setEditingNote] = useState<any>(null);
   const [confirmDel, setConfirmDel] = useState<{ type: 'line' | 'address' | 'note'; id: string } | null>(null);
+  const [invoiceId, setInvoiceId] = useState<string | null>(null);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
 
   // Forms
   const [lineForm, setLineForm] = useState({
@@ -96,11 +99,45 @@ export default function OrderDetailPage() {
       setNotes(notesRes.data || []);
       setVariants(variantsRes.data || []);
       setWarehouses(warehousesRes.data || []);
+
+      // Look up the unified invoice for this order, if one exists.
+      if (session?.user?.organizationId && orderRes.data?.orderNumber) {
+        const inv = await listInvoices(session.user.organizationId, {
+          search: orderRes.data.orderNumber,
+          limit: 20,
+          page: 1
+        }).catch(() => null);
+        const match = inv?.data?.find((i: any) => String(i.order?.id ?? i.orderId) === String(orderId));
+        setInvoiceId(match?.id ?? null);
+      }
     } catch (e: any) {
       toast.error('Failed to load order details');
       router.push('/orders/orders');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function onGenerateInvoice() {
+    if (!session?.user?.organizationId || !orderId || invoiceBusy) return;
+    try {
+      setInvoiceBusy(true);
+      const res = await generateInvoices({
+        organizationId: session.user.organizationId,
+        orderIds: [orderId]
+      });
+      if (res.data.created > 0 && res.data.invoices[0]) {
+        toast.success(`Invoice ${res.data.invoices[0].invoiceNumber} created`);
+        setInvoiceId(res.data.invoices[0].id);
+        router.push(`/finance/invoices/${res.data.invoices[0].id}`);
+      } else {
+        toast.message(res.data.skipped?.[0]?.reason || 'Order already invoiced');
+        await loadData();
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || 'Failed to generate invoice');
+    } finally {
+      setInvoiceBusy(false);
     }
   }
 
@@ -267,9 +304,9 @@ export default function OrderDetailPage() {
       <div className="flex flex-col overflow-hidden lg:ml-[280px]">
         <Header title={`Orders · ${order.orderNumber}`} />
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          <div className="max-w-7xl mx-auto space-y-6">
+          <div className="w-full space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 onClick={() => router.push('/orders/orders')}
                 className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
@@ -277,6 +314,26 @@ export default function OrderDetailPage() {
                 <ArrowLeft className="h-4 w-4" />
                 Back to Orders
               </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {invoiceId ? (
+                  <Link
+                    href={`/finance/invoices/${invoiceId}`}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#D4A017] px-4 py-2 text-sm font-medium text-white hover:bg-[#B89015]"
+                  >
+                    <Receipt className="h-4 w-4" />
+                    View Invoice
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => void onGenerateInvoice()}
+                    disabled={invoiceBusy}
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#D4A017]/40 bg-[#D4A017]/10 px-4 py-2 text-sm font-medium text-[#8a6a0a] hover:bg-[#D4A017]/20 disabled:opacity-50"
+                  >
+                    {invoiceBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
+                    Generate Invoice
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Order Info */}
@@ -288,7 +345,10 @@ export default function OrderDetailPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-1">Channel</h3>
-                  <p className="text-lg font-semibold capitalize">{order.channel}</p>
+                  <p className="text-lg font-semibold capitalize">{order.channel || '—'}</p>
+                  {order.channelConnection?.name && (
+                    <p className="text-sm text-muted-foreground">{order.channelConnection.name}</p>
+                  )}
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-1">Status</h3>

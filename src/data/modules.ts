@@ -1,6 +1,6 @@
 import {
   Shield, Boxes, Package2, ShoppingCart, Truck, Wallet, Landmark,
-  Users, Headset, Megaphone, Share2, BarChart3, Settings
+  Users, Headset, Megaphone, Share2, BarChart3, Settings, Store
 } from 'lucide-react';
 
 export const modules = [
@@ -19,6 +19,10 @@ export const modules = [
   {
     slug: 'orders', name: 'Orders & Customers', icon: ShoppingCart, color: '#0A0A0A',
     description: 'Orders, Customers, Returns'
+  },
+  {
+    slug: 'b2b', name: 'B2B Sale Channel', icon: Store, color: '#D4A017',
+    description: 'Wholesale portal, retailers, pricing, orders'
   },
   {
     slug: 'fulfillment', name: 'Fulfillment & 3PL', icon: Truck, color: '#0A0A0A',

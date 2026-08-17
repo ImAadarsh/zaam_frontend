@@ -1,15 +1,16 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { listCustomers, createCustomer, updateCustomer, deleteCustomer } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
+import { FilterBar, type FilterField } from '@/components/filter-bar';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X, User } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, User, RefreshCw } from 'lucide-react';
 
 type Customer = {
   id: string;
@@ -45,26 +46,99 @@ export default function CustomersPage() {
   const [editing, setEditing] = useState<Customer | null>(null);
   const [confirmDel, setConfirmDel] = useState<Customer | null>(null);
 
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
+  const [totalCount, setTotalCount] = useState(0);
+
+  const orgId = session?.user?.organizationId;
+
+  const loadData = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      setLoading(true);
+      const res = await listCustomers({ organizationId: orgId, search: search || undefined, ...filters });
+      setItems(res.data || []);
+      setTotalCount(res.pagination?.total ?? res.data?.length ?? 0);
+    } catch {
+      toast.error('Failed to load customers');
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId, search, filters]);
+
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
     if (!session?.accessToken) {
       router.replace('/login');
       return;
     }
-    loadData();
-  }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
+    void loadData();
+  }, [hydrated, hasAccess, router, session?.accessToken, loadData]);
 
-  async function loadData() {
-    try {
-      setLoading(true);
-      const res = await listCustomers({ organizationId: session?.user?.organizationId });
-      setItems(res.data || []);
-    } catch (e: any) {
-      toast.error('Failed to load customers');
-    } finally {
-      setLoading(false);
+  const filterFields = useMemo<FilterField[]>(() => [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      primary: true,
+      options: ['active', 'inactive', 'blocked'].map((v) => ({ value: v, label: v }))
+    },
+    {
+      key: 'customerType',
+      label: 'Type',
+      type: 'select',
+      primary: true,
+      options: ['individual', 'business', 'wholesale', 'vip'].map((v) => ({ value: v, label: v }))
+    },
+    {
+      key: 'tier',
+      label: 'Tier',
+      type: 'select',
+      primary: true,
+      options: ['standard', 'silver', 'gold', 'platinum'].map((v) => ({ value: v, label: v }))
+    },
+    {
+      key: 'hasEmail',
+      label: 'Email on file',
+      type: 'select',
+      options: [
+        { value: 'true', label: 'Has email' },
+        { value: 'false', label: 'No email' }
+      ]
+    },
+    {
+      key: 'marketingOptIn',
+      label: 'Marketing opt-in',
+      type: 'select',
+      options: [
+        { value: 'true', label: 'Opted in' },
+        { value: 'false', label: 'Not opted in' }
+      ]
+    },
+    { key: 'createdFrom', label: 'Created from', type: 'date' },
+    { key: 'createdTo', label: 'Created to', type: 'date' },
+    {
+      key: 'sortBy',
+      label: 'Sort by',
+      type: 'select',
+      options: [
+        { value: 'createdAt', label: 'Created' },
+        { value: 'lastName', label: 'Last name' },
+        { value: 'email', label: 'Email' },
+        { value: 'lifetimeValue', label: 'Lifetime value' },
+        { value: 'totalOrders', label: 'Total orders' }
+      ]
+    },
+    {
+      key: 'sortDir',
+      label: 'Sort direction',
+      type: 'select',
+      options: [
+        { value: 'DESC', label: 'Descending' },
+        { value: 'ASC', label: 'Ascending' }
+      ]
     }
-  }
+  ], []);
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -207,30 +281,55 @@ export default function CustomersPage() {
       <div className="flex flex-col overflow-hidden lg:ml-[280px]">
         <Header title="Orders · Customers" />
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between mb-6">
+          <div className="w-full space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold">Customers</h1>
-                <p className="text-muted-foreground mt-1">Manage customer information</p>
+                <p className="text-muted-foreground mt-1">
+                  Customer records, including those created automatically from channel orders
+                </p>
               </div>
-              {hasAccess && (
-                <button
-                  onClick={() => setShowCreate(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Customer
-                </button>
-              )}
             </div>
+
+            <FilterBar
+              fields={filterFields}
+              values={filters}
+              onChange={setFilters}
+              searchValue={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Name, email, phone, company, customer #…"
+              loading={loading}
+              stats={[{ label: 'Customers', value: String(totalCount) }]}
+              actions={
+                <>
+                  <button
+                    onClick={() => void loadData()}
+                    disabled={loading}
+                    className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                  {hasAccess && (
+                    <button
+                      onClick={() => setShowCreate(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded-lg hover:bg-[#B89015]"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Customer
+                    </button>
+                  )}
+                </>
+              }
+            />
 
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-sm text-muted-foreground">Loading customers...</div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-border bg-card">
-                <RichDataTable columns={columns} data={items} searchPlaceholder="Search customers..." />
+              <div className="rounded-2xl border border-border bg-card p-2">
+                <RichDataTable columns={columns} data={items} hideSearch />
               </div>
             )}
 

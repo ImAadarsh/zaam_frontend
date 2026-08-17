@@ -67,12 +67,15 @@ interface RichDataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
     searchPlaceholder?: string;
+    /** Hide the built-in search box when the page already provides one. */
+    hideSearch?: boolean;
 }
 
 export function RichDataTable<TData, TValue>({
     columns,
     data,
     searchPlaceholder = 'Search...',
+    hideSearch = false,
 }: RichDataTableProps<TData, TValue>) {
     const [sorting, setSorting] = useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -110,17 +113,21 @@ export function RichDataTable<TData, TValue>({
         <div className="space-y-4 w-full animate-in fade-in duration-500">
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-1">
-                <div className="relative w-full sm:w-72 group">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                        <Search className="h-4 w-4" />
+                {hideSearch ? (
+                    <div />
+                ) : (
+                    <div className="relative w-full sm:w-72 group">
+                        <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
+                            <Search className="h-4 w-4" />
+                        </div>
+                        <DebouncedInput
+                            value={globalFilter ?? ''}
+                            onChange={(value) => setGlobalFilter(String(value))}
+                            className="input !pl-12 bg-card/50 border-border/50 focus:bg-card transition-all"
+                            placeholder={searchPlaceholder}
+                        />
                     </div>
-                    <DebouncedInput
-                        value={globalFilter ?? ''}
-                        onChange={(value) => setGlobalFilter(String(value))}
-                        className="input !pl-12 bg-card/50 border-border/50 focus:bg-card transition-all"
-                        placeholder={searchPlaceholder}
-                    />
-                </div>
+                )}
 
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                     <div className="relative">

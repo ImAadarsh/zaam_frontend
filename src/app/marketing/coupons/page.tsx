@@ -18,7 +18,15 @@ export default function CouponsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ couponCode: '', couponName: '', discountType: 'percentage', discountValue: 0, isActive: true });
+  const [form, setForm] = useState({
+    couponCode: '',
+    couponName: '',
+    discountType: 'percentage',
+    discountValue: 0,
+    minimumPurchase: 0,
+    usageLimit: 0,
+    isActive: true
+  });
   const [editing, setEditing] = useState<any>(null);
   const [confirmDel, setConfirmDel] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -56,7 +64,7 @@ export default function CouponsPage() {
       }
       setShowCreate(false);
       setEditing(null);
-      setForm({ couponCode: '', couponName: '', discountType: 'percentage', discountValue: 0, isActive: true });
+      setForm({ couponCode: '', couponName: '', discountType: 'percentage', discountValue: 0, minimumPurchase: 0, usageLimit: 0, isActive: true });
       loadData();
     } catch (error: any) {
       toast.error(error.response?.data?.error?.message || 'Error saving coupon');
@@ -84,6 +92,7 @@ export default function CouponsPage() {
     { accessorKey: 'couponName', header: 'Name' },
     { accessorKey: 'discountType', header: 'Type' },
     { accessorKey: 'discountValue', header: 'Value' },
+    { accessorKey: 'usageCount', header: 'Used' },
     { 
       accessorKey: 'isActive', 
       header: 'Active',
@@ -105,7 +114,9 @@ export default function CouponsPage() {
                 couponCode: row.original.couponCode,
                 couponName: row.original.couponName,
                 discountType: row.original.discountType,
-                discountValue: row.original.discountValue,
+                discountValue: Number(row.original.discountValue || 0),
+                minimumPurchase: Number(row.original.minimumPurchase || 0),
+                usageLimit: Number(row.original.usageLimit || 0),
                 isActive: row.original.isActive
               });
               setShowCreate(true);
@@ -172,7 +183,7 @@ export default function CouponsPage() {
             <button
               onClick={() => {
                 setEditing(null);
-                setForm({ couponCode: '', couponName: '', discountType: 'percentage', discountValue: 0, isActive: true });
+                setForm({ couponCode: '', couponName: '', discountType: 'percentage', discountValue: 0, minimumPurchase: 0, usageLimit: 0, isActive: true });
                 setShowCreate(true);
               }}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"

@@ -3,13 +3,13 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listAffiliates, createAffiliate, updateAffiliate, deleteAffiliate } from '@/lib/api';
+import { listAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, listAffiliateConversions, listAffiliateLinks, createAffiliatePayout } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Link2, BarChart3 } from 'lucide-react';
 
 export default function AffiliatesPage() {
   const router = useRouter();
@@ -22,6 +22,10 @@ export default function AffiliatesPage() {
   const [editing, setEditing] = useState<any>(null);
   const [confirmDel, setConfirmDel] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [detail, setDetail] = useState<any>(null);
+  const [links, setLinks] = useState<any[]>([]);
+  const [conversions, setConversions] = useState<any[]>([]);
+  const [b2bOnly, setB2bOnly] = useState(false);
 
   const loadData = async () => {
     try {
@@ -79,17 +83,56 @@ export default function AffiliatesPage() {
     }
   };
 
+  const openDetail = async (aff: any, b2b = false) => {
+    setDetail(aff);
+    setB2bOnly(b2b);
+    try {
+      const [l, c] = await Promise.all([
+        listAffiliateLinks(aff.id),
+        listAffiliateConversions({ affiliateId: aff.id, channel: b2b ? 'b2b_portal' : undefined })
+      ]);
+      setLinks(l.data || []);
+      setConversions(c.data || []);
+    } catch {
+      toast.error('Failed to load affiliate detail');
+    }
+  };
+
+  const handlePayout = async () => {
+    if (!detail) return;
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 30);
+    try {
+      await createAffiliatePayout(detail.id, {
+        periodStart: start.toISOString().slice(0, 10),
+        periodEnd: end.toISOString().slice(0, 10)
+      });
+      toast.success('Payout created for last 30 days');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error?.message || 'Payout failed');
+    }
+  };
+
   const columns = useMemo<ColumnDef<any>[]>(() => [
     { accessorKey: 'affiliateCode', header: 'Code' },
     { accessorKey: 'contactName', header: 'Contact' },
     { accessorKey: 'email', header: 'Email' },
     { accessorKey: 'commissionType', header: 'Commission Type' },
+    { accessorKey: 'totalConversions', header: 'Conv' },
+    { accessorKey: 'totalRevenue', header: 'Revenue' },
     { accessorKey: 'status', header: 'Status' },
     {
       id: 'actions',
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          <button onClick={() => openDetail(row.original, false)} className="p-1 hover:bg-secondary rounded text-primary" title="Links & conversions">
+            <Link2 className="h-4 w-4" />
+          </button>
+          <button onClick={() => openDetail(row.original, true)} className="p-1 hover:bg-secondary rounded text-primary" title="B2B conversions">
+            <BarChart3 className="h-4 w-4" />
+          </button>
           <button
             onClick={() => {
               setEditing(row.original);
@@ -276,6 +319,46 @@ export default function AffiliatesPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {detail && (
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-card w-full max-w-xl rounded-lg shadow-lg border border-border p-4 space-y-4 max-h-[90vh] overflow-auto">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-semibold">{detail.contactName} · {detail.affiliateCode}</h3>
+                    <p className="text-xs text-muted-foreground">{b2bOnly ? 'B2B portal conversions' : 'Links & all conversions'}</p>
+                  </div>
+                  <button onClick={() => setDetail(null)}><X className="h-5 w-5" /></button>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Tracking links</h4>
+                  {links.length === 0 ? <p className="text-xs text-muted-foreground">No links</p> : (
+                    <ul className="text-xs space-y-1 font-mono">
+                      {links.map((l) => (
+                        <li key={l.id}>{l.trackingCode} → {l.originalUrl} ({l.clickCount} clicks)</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Conversions</h4>
+                  {conversions.length === 0 ? <p className="text-xs text-muted-foreground">No conversions yet</p> : (
+                    <ul className="text-xs space-y-1">
+                      {conversions.map((c) => (
+                        <li key={c.id}>
+                          Order {c.orderId} · £{Number(c.orderValue).toFixed(2)} · commission £{Number(c.commissionAmount).toFixed(2)}
+                          {c.channel ? ` · ${c.channel}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <button onClick={handlePayout} className="px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm">
+                  Create 30-day payout
+                </button>
               </div>
             </div>
           )}

@@ -3,13 +3,20 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listSocialAccounts, createSocialAccount, updateSocialAccount, deleteSocialAccount } from '@/lib/api';
+import {
+  listSocialAccounts,
+  createSocialAccount,
+  updateSocialAccount,
+  deleteSocialAccount,
+  getMetaConnectUrl,
+  getMetaStatus
+} from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X, Globe } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Globe, Facebook } from 'lucide-react';
 
 export default function SocialAccountsPage() {
   const router = useRouter();
@@ -22,12 +29,18 @@ export default function SocialAccountsPage() {
   const [editing, setEditing] = useState<any>(null);
   const [confirmDel, setConfirmDel] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [metaConnecting, setMetaConnecting] = useState(false);
+  const [metaStatus, setMetaStatus] = useState<any>(null);
 
   const loadData = async () => {
     try {
-      const { data } = await listSocialAccounts();
+      const [{ data }, statusRes] = await Promise.all([
+        listSocialAccounts(),
+        getMetaStatus().catch(() => ({ data: null }))
+      ]);
       setItems(data || []);
-    } catch (e: any) {
+      setMetaStatus(statusRes.data);
+    } catch {
       toast.error('Failed to load social accounts');
     } finally {
       setLoading(false);
@@ -42,6 +55,37 @@ export default function SocialAccountsPage() {
     }
     loadData();
   }, [hydrated, hasAccess, router, session?.accessToken]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const meta = params.get('meta');
+    if (!meta) return;
+    if (meta === 'connected') {
+      toast.success(
+        `Meta connected — FB: ${params.get('facebook') || 0}, IG: ${params.get('instagram') || 0}, Ads: ${params.get('ads') || 0}`
+      );
+      loadData();
+    } else if (meta === 'error') {
+      toast.error(params.get('message') || 'Meta connect failed');
+    }
+    router.replace('/social/accounts');
+  }, [router]);
+
+  const handleConnectMeta = async () => {
+    setMetaConnecting(true);
+    try {
+      const { data } = await getMetaConnectUrl();
+      if (!data?.authUrl) {
+        toast.error('Meta connect URL not available. Check API env credentials.');
+        return;
+      }
+      window.location.href = data.authUrl;
+    } catch (error: any) {
+      toast.error(error.response?.data?.error?.message || 'Failed to start Meta connect');
+      setMetaConnecting(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,8 +128,16 @@ export default function SocialAccountsPage() {
     { accessorKey: 'platform', header: 'Platform' },
     { accessorKey: 'accountName', header: 'Account Name' },
     { accessorKey: 'accountHandle', header: 'Handle' },
+    {
+      id: 'synced',
+      header: 'Meta Sync',
+      cell: ({ row }) =>
+        row.original.accountId && (row.original.platform === 'facebook' || row.original.platform === 'instagram')
+          ? 'Synced'
+          : 'Manual'
+    },
     { accessorKey: 'followerCount', header: 'Followers' },
-    { accessorKey: 'isActive', header: 'Active', cell: ({ row }) => row.original.isActive ? 'Yes' : 'No' },
+    { accessorKey: 'isActive', header: 'Active', cell: ({ row }) => (row.original.isActive ? 'Yes' : 'No') },
     {
       id: 'actions',
       header: 'Actions',
@@ -162,21 +214,36 @@ export default function SocialAccountsPage() {
       <div className="flex flex-col overflow-hidden lg:ml-[280px]">
         <Header title="Social · Accounts" />
         <main className="flex-1 overflow-auto p-4 md:p-6 pb-24">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center mb-6">
             <div>
               <h1 className="text-2xl font-bold">Accounts</h1>
-              <p className="text-muted-foreground text-sm">Manage connected social media platforms</p>
+              <p className="text-muted-foreground text-sm">
+                Connect Meta (Facebook + Instagram + Ads) or add accounts manually
+                {metaStatus?.configured === false && (
+                  <span className="block text-amber-600 mt-1">Meta env not fully configured yet — see docs/META_SOCIAL_SETUP.md</span>
+                )}
+              </p>
             </div>
-            <button
-              onClick={() => {
-                setEditing(null);
-                setForm({ platform: 'instagram', accountName: '', accountHandle: '', isVerified: false, isActive: true });
-                setShowCreate(true);
-              }}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" /> Connect Account
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleConnectMeta}
+                disabled={metaConnecting}
+                className="px-4 py-2 bg-[#1877F2] text-white rounded-md text-sm font-medium hover:bg-[#166FE5] transition-colors flex items-center gap-2 disabled:opacity-60"
+              >
+                <Facebook className="h-4 w-4" />
+                {metaConnecting ? 'Redirecting…' : 'Connect Meta'}
+              </button>
+              <button
+                onClick={() => {
+                  setEditing(null);
+                  setForm({ platform: 'instagram', accountName: '', accountHandle: '', isVerified: false, isActive: true });
+                  setShowCreate(true);
+                }}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" /> Manual Account
+              </button>
+            </div>
           </div>
 
           <div className="bg-card rounded-lg border shadow-sm">
@@ -187,7 +254,7 @@ export default function SocialAccountsPage() {
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-card w-full max-w-md rounded-lg shadow-lg border border-border flex flex-col">
                 <div className="p-4 border-b border-border flex justify-between items-center bg-muted/50 rounded-t-lg">
-                  <h3 className="font-semibold">{editing ? 'Edit Account Params' : 'Connect Account'}</h3>
+                  <h3 className="font-semibold">{editing ? 'Edit Account' : 'Manual Account'}</h3>
                   <button onClick={() => setShowCreate(false)} className="text-muted-foreground hover:text-foreground">
                     <X className="h-5 w-5" />
                   </button>
@@ -251,7 +318,7 @@ export default function SocialAccountsPage() {
                       Active Sync
                     </label>
                   </div>
-                  
+
                   <div className="pt-4 flex justify-end gap-2 border-t border-border">
                     <button
                       type="button"
