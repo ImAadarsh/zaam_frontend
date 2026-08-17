@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
@@ -11,7 +11,7 @@ import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Link2, BarChart3 } from 'lucide-react';
 
-export default function AffiliatesPage() {
+function AffiliatesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const channelFilter = searchParams.get('channel');
@@ -426,5 +426,13 @@ export default function AffiliatesPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function AffiliatesPageWrapped() {
+  return (
+    <Suspense fallback={<div className="p-8 text-muted-foreground">Loading…</div>}>
+      <AffiliatesPage />
+    </Suspense>
   );
 }
