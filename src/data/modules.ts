@@ -42,11 +42,11 @@ export const modules = [
   },
   {
     slug: 'crm', name: 'CRM & Service', icon: Headset, color: '#D4A017',
-    description: 'Accounts, Leads, Pipeline, Activities, Tickets & Tiers'
+    description: 'Accounts, Leads, Pipeline, Integrations, Tickets & Tiers'
   },
   {
     slug: 'marketing', name: 'Marketing & Affiliates', icon: Megaphone, color: '#0A0A0A',
-    description: 'Campaigns, Coupons, Affiliates'
+    description: 'Email campaigns, Segments, Coupons, Affiliates'
   },
   {
     slug: 'social', name: 'Social Media', icon: Share2, color: '#0A0A0A',

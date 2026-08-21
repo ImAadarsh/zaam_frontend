@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall, Plug, Mail } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -348,6 +348,7 @@ export function Sidebar() {
               {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
                 <>
                   <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
+                  <Item href="/crm/integrations" icon={<Plug size={18} />} label="Integrations" active={pathname?.startsWith('/crm/integrations')} />
                   <Item href="/crm/settings/pipelines" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/crm/settings')} />
                 </>
               )}
@@ -363,6 +364,7 @@ export function Sidebar() {
               {hasRole(['ADMIN', 'SUPER_ADMIN', 'MARKETING']) && (
                 <>
                   <Item href="/marketing/segments" icon={<Users size={18} />} label="Segments" active={pathname?.startsWith('/marketing/segments')} />
+                  <Item href="/marketing/email-campaigns" icon={<Mail size={18} />} label="Email Campaigns" active={pathname?.startsWith('/marketing/email-campaigns')} />
                   <Item href="/marketing/campaigns" icon={<Megaphone size={18} />} label="Campaigns" active={pathname?.startsWith('/marketing/campaigns')} />
                   <Item href="/marketing/coupons" icon={<Tag size={18} />} label="Coupons" active={pathname?.startsWith('/marketing/coupons')} />
                   <Item href="/marketing/affiliates" icon={<Share2 size={18} />} label="Affiliates" active={pathname?.startsWith('/marketing/affiliates')} />
@@ -667,6 +669,7 @@ export function Sidebar() {
                   {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
                     <>
                       <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
+                      <Item href="/crm/integrations" icon={<Plug size={18} />} label="Integrations" active={pathname?.startsWith('/crm/integrations')} />
                       <Item href="/crm/settings/pipelines" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/crm/settings')} />
                     </>
                   )}
@@ -682,6 +685,7 @@ export function Sidebar() {
                   {hasRole(['ADMIN', 'SUPER_ADMIN', 'MARKETING']) && (
                     <>
                       <Item href="/marketing/segments" icon={<Users size={18} />} label="Segments" active={pathname?.startsWith('/marketing/segments')} />
+                      <Item href="/marketing/email-campaigns" icon={<Mail size={18} />} label="Email Campaigns" active={pathname?.startsWith('/marketing/email-campaigns')} />
                       <Item href="/marketing/campaigns" icon={<Megaphone size={18} />} label="Campaigns" active={pathname?.startsWith('/marketing/campaigns')} />
                       <Item href="/marketing/coupons" icon={<Tag size={18} />} label="Coupons" active={pathname?.startsWith('/marketing/coupons')} />
                       <Item href="/marketing/affiliates" icon={<Share2 size={18} />} label="Affiliates" active={pathname?.startsWith('/marketing/affiliates')} />

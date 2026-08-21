@@ -5660,3 +5660,141 @@ export async function updateB2bReferral(id: string, payload: any) {
   const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/referrals/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
 }
+
+// ============================================================================
+// CRM INTEGRATIONS + MARKETING EMAIL CAMPAIGNS
+// ============================================================================
+
+/** Public inbound lead webhook (external systems; not staff JWT). */
+export const CRM_LEAD_INGEST_WEBHOOK_URL = `${API_BASE}/api/integrations/leads`;
+
+export async function listCrmIntegrationKeys(params?: { organizationId?: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/integration-keys${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+
+export async function createCrmIntegrationKey(payload: {
+  organizationId?: string;
+  name: string;
+  source?: 'salesforce' | 'hubspot' | 'zapier' | 'generic';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/integration-keys`, payload, {
+    headers: authHeaders(),
+  });
+  return data as { data: any };
+}
+
+export async function regenerateCrmIntegrationKey(id: string) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/crm/integration-keys/${id}/regenerate`,
+    {},
+    { headers: authHeaders() }
+  );
+  return data as { data: any; meta?: { replacedKeyId?: string } };
+}
+
+export async function deactivateCrmIntegrationKey(id: string) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/crm/integration-keys/${id}/deactivate`,
+    {},
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function syncCrmLeadToMarketing(id: string) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/crm/leads/${id}/sync-to-marketing`,
+    {},
+    { headers: authHeaders() }
+  );
+  return data as { data: { segmentId: string; customerId: string | null; added: boolean; skipped?: string } };
+}
+
+export async function listMarketingEmailCampaigns(params?: {
+  organizationId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/marketing/email-campaigns${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: any[];
+    meta?: { total?: number; page?: number; limit?: number; smtpConfigured?: boolean };
+  };
+}
+
+export async function getMarketingEmailCampaign(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/email-campaigns/${id}`, {
+    headers: authHeaders(),
+  });
+  return data as { data: any; meta?: { smtpConfigured?: boolean } };
+}
+
+export async function createMarketingEmailCampaign(payload: {
+  organizationId?: string;
+  name: string;
+  subject: string;
+  htmlBody: string;
+  source?: 'crm_leads' | 'segment' | 'manual';
+  segmentId?: string | null;
+  status?: string;
+  scheduledAt?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/email-campaigns`, payload, {
+    headers: authHeaders(),
+  });
+  return data as { data: any };
+}
+
+export async function updateMarketingEmailCampaign(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/marketing/email-campaigns/${id}`, payload, {
+    headers: authHeaders(),
+  });
+  return data as { data: any };
+}
+
+export async function deleteMarketingEmailCampaign(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/marketing/email-campaigns/${id}`, {
+    headers: authHeaders(),
+  });
+  return status === 204 || status === 200;
+}
+
+export async function listMarketingEmailCampaignSends(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/email-campaigns/${id}/sends`, {
+    headers: authHeaders(),
+  });
+  return data as { data: any[] };
+}
+
+export async function sendMarketingEmailCampaign(
+  id: string,
+  payload?: { emails?: string[]; full?: boolean },
+  params?: { full?: boolean }
+) {
+  const qs = crmQuery({
+    full: params?.full || payload?.full ? '1' : undefined,
+  });
+  const { data } = await axios.post(
+    `${API_BASE}/api/marketing/email-campaigns/${id}/send${qs}`,
+    payload || {},
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: {
+      campaign?: any;
+      queued: number;
+      sent: number;
+      failed: number;
+      capped: number;
+      smtpConfigured: boolean;
+    };
+  };
+}

@@ -7,12 +7,12 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { FilterBar, type FilterField } from '@/components/filter-bar';
 import { useSession } from '@/hooks/use-session';
 import {
-  listCrmLeads, createCrmLead, updateCrmLead, convertCrmLead, listCrmPipelines
+  listCrmLeads, createCrmLead, updateCrmLead, convertCrmLead, listCrmPipelines, syncCrmLeadToMarketing
 } from '@/lib/api';
 import { crmApiError, displayName, LEAD_SOURCES, LEAD_STATUSES } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, Pencil, ArrowRightLeft, AlertCircle, Target, Send } from 'lucide-react';
+import { Plus, Pencil, ArrowRightLeft, AlertCircle, Target, Send, Megaphone } from 'lucide-react';
 import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 
 const emptyForm = {
@@ -206,6 +206,24 @@ export default function CrmLeadsPage() {
     }
   }
 
+  async function handleSyncToMarketing(lead: any) {
+    if (!lead?.id) return;
+    if (!lead.email) {
+      toast.error('Lead needs an email to sync to Marketing');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await syncCrmLeadToMarketing(lead.id);
+      if (res.data?.added) toast.success('Synced to Marketing · CRM Leads segment');
+      else toast.success('Already in Marketing · CRM Leads segment');
+    } catch (err) {
+      toast.error(crmApiError(err, 'Sync to Marketing failed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const filterFields = useMemo<FilterField[]>(() => [
     {
       key: 'status',
@@ -255,6 +273,15 @@ export default function CrmLeadsPage() {
         const lead = info.row.original;
         return (
           <div className="flex items-center gap-1 justify-end">
+            <button
+              type="button"
+              title="Sync to Marketing"
+              disabled={saving || !lead.email}
+              onClick={() => void handleSyncToMarketing(lead)}
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-[#D4A017] disabled:opacity-40"
+            >
+              <Megaphone size={16} />
+            </button>
             {lead.status !== 'converted' && (
               <button type="button" title="Convert" onClick={() => openConvert(lead)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-[#D4A017]">
                 <ArrowRightLeft size={16} />
@@ -267,7 +294,7 @@ export default function CrmLeadsPage() {
         );
       },
     },
-  ], []);
+  ], [saving]);
 
   const selectedPipeline = pipelines.find((p) => p.id === convertForm.pipelineId);
 
