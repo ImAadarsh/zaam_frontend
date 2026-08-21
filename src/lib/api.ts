@@ -6293,3 +6293,394 @@ export async function removePmProjectMember(projectId: string, memberId: string)
   );
   return status === 204 || status === 200;
 }
+
+// ============================================================================
+// UK HR EXTENSIONS (Aziz list) — paths follow docs/HR_API.md when available
+// ============================================================================
+
+function hrQuery(params?: Record<string, string | number | boolean | undefined | null>) {
+  if (!params) return '';
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === '') return;
+    q.set(k, String(v));
+  });
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+/** Employee 360 payload (personal, job, immigration, leave, documents). */
+export async function getEmployee360(id: string) {
+  try {
+    const { data } = await axios.get(`${API_BASE}/api/hr/employees/${id}/360`, { headers: authHeaders() });
+    return data as { data: any };
+  } catch (err: any) {
+    if (err?.response?.status !== 404) throw err;
+    const { data } = await axios.get(`${API_BASE}/api/hr/employees/${id}`, { headers: authHeaders() });
+    return data as { data: any };
+  }
+}
+
+export async function getHrReportsSummary(params?: { organizationId?: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/reports/summary${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function listVisaExpiring(params?: {
+  organizationId?: string;
+  withinDays?: number;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/compliance/visa-expiring${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function listComplianceAlerts(params?: {
+  organizationId?: string;
+  type?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/compliance/alerts${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function listImmigration(params?: {
+  organizationId?: string;
+  employeeId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/immigration${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createImmigration(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/immigration`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateImmigration(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/immigration/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listRtwDocuments(params?: {
+  employeeId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/rtw-documents${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createRtwDocument(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/rtw-documents`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function uploadRtwDocument(formData: FormData) {
+  try {
+    const { data } = await axios.post(`${API_BASE}/api/hr/rtw-documents/upload`, formData, {
+      headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
+    });
+    return data as { data: any };
+  } catch (err: any) {
+    if (err?.response?.status !== 404) throw err;
+    const { data } = await axios.post(`${API_BASE}/api/hr/documents/upload`, formData, {
+      headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
+    });
+    return data as { data: any };
+  }
+}
+
+export async function presignHrDocument(payload: {
+  employeeId: string;
+  fileName: string;
+  contentType: string;
+  documentType?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/documents/presign`, payload, { headers: authHeaders() });
+  return data as { data: { uploadUrl: string; fileUrl?: string; key?: string; documentUrl?: string } };
+}
+
+export async function approveLeaveRequest(id: string, payload?: { notes?: string }) {
+  try {
+    const { data } = await axios.post(
+      `${API_BASE}/api/hr/leave-requests/${id}/approve`,
+      payload || {},
+      { headers: authHeaders() }
+    );
+    return data as { data: any };
+  } catch (err: any) {
+    if (err?.response?.status !== 404) throw err;
+    const { data } = await axios.patch(
+      `${API_BASE}/api/hr/leave-requests/${id}`,
+      { status: 'approved', ...(payload || {}) },
+      { headers: authHeaders() }
+    );
+    return data as { data: any };
+  }
+}
+
+export async function rejectLeaveRequest(id: string, payload?: { rejectionReason?: string; notes?: string }) {
+  try {
+    const { data } = await axios.post(
+      `${API_BASE}/api/hr/leave-requests/${id}/reject`,
+      payload || {},
+      { headers: authHeaders() }
+    );
+    return data as { data: any };
+  } catch (err: any) {
+    if (err?.response?.status !== 404) throw err;
+    const { data } = await axios.patch(
+      `${API_BASE}/api/hr/leave-requests/${id}`,
+      { status: 'rejected', ...(payload || {}) },
+      { headers: authHeaders() }
+    );
+    return data as { data: any };
+  }
+}
+
+export async function listLeaveBalances(params?: {
+  employeeId?: string;
+  organizationId?: string;
+  year?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/leave-balances${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function listSickEpisodes(params?: {
+  employeeId?: string;
+  organizationId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/sick-episodes${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createSickEpisode(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/sick-episodes`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateSickEpisode(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/sick-episodes/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listPensions(params?: {
+  employeeId?: string;
+  organizationId?: string;
+  enrolled?: boolean;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/pension${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function upsertPension(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/pension`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePension(id: string, payload: Record<string, any>) {
+  // Prefer upsert by employeeId when provided (API has POST|PUT /pension only)
+  if (payload.employeeId) {
+    const { data } = await axios.post(`${API_BASE}/api/hr/pension`, payload, { headers: authHeaders() });
+    return data as { data: any };
+  }
+  try {
+    const { data } = await axios.patch(`${API_BASE}/api/hr/pension/${id}`, payload, { headers: authHeaders() });
+    return data as { data: any };
+  } catch (err: any) {
+    if (err?.response?.status !== 404) throw err;
+    const { data } = await axios.put(`${API_BASE}/api/hr/pension`, { id, ...payload }, { headers: authHeaders() });
+    return data as { data: any };
+  }
+}
+
+export async function listPayslips(params?: {
+  employeeId?: string;
+  payrollRunId?: string;
+  organizationId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/payslips${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function listTaxDocuments(params?: {
+  employeeId?: string;
+  organizationId?: string;
+  documentType?: 'p45' | 'p60' | string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/tax-documents${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createTaxDocument(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/tax-documents`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listJobPostings(params?: {
+  organizationId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/job-postings${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createJobPosting(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/job-postings`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateJobPosting(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/job-postings/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listApplicants(params?: {
+  jobPostingId?: string;
+  organizationId?: string;
+  stage?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/applicants${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createApplicant(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/applicants`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateApplicant(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/applicants/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listOnboardingChecklists(params?: {
+  employeeId?: string;
+  organizationId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/onboarding${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createOnboardingChecklist(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/onboarding`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function seedOnboardingChecklist(employeeId: string) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/hr/onboarding/seed`,
+    { employeeId },
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+
+export async function updateOnboardingChecklist(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(
+    `${API_BASE}/api/hr/onboarding/${id}`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function getHrMe() {
+  const { data } = await axios.get(`${API_BASE}/api/hr/me`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateHrMe(payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/me`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listHrMeLeaveRequests(params?: { page?: number; limit?: number }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/me/leave-requests${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createHrMeLeaveRequest(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/me/leave-requests`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listHrMePayslips(params?: { page?: number; limit?: number }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/me/payslips${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function listHrMeDocuments(params?: { page?: number; limit?: number }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/me/documents${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}

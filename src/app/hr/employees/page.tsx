@@ -9,7 +9,8 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X } from 'lucide-react';
+import Link from 'next/link';
+import { Pencil, Trash2, Plus, X, Eye } from 'lucide-react';
 
 type Employee = {
   id: string;
@@ -252,7 +253,11 @@ export default function EmployeesPage() {
     { 
       accessorKey: 'name',
       header: 'Name',
-      cell: ({ row }) => `${row.original.firstName} ${row.original.lastName}`
+      cell: ({ row }) => (
+        <Link href={`/hr/employees/${row.original.id}`} className="font-medium text-[#D4A017] hover:underline">
+          {row.original.firstName} {row.original.lastName}
+        </Link>
+      )
     },
     { 
       accessorKey: 'email', 
@@ -279,6 +284,9 @@ export default function EmployeesPage() {
       id: 'actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          <Link href={`/hr/employees/${row.original.id}`} className="p-1.5 hover:bg-muted rounded text-[#D4A017]" title="Employee 360">
+            <Eye size={16} />
+          </Link>
           <button onClick={() => {
             const item = row.original;
             setEditing(item);

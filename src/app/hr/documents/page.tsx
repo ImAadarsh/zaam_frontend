@@ -1,0 +1,252 @@
+'use client';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Sidebar } from '@/components/sidebar';
+import { Header } from '@/components/header';
+import { RichDataTable } from '@/components/rich-data-table';
+import { useSession } from '@/hooks/use-session';
+import { useRoleCheck } from '@/hooks/use-role-check';
+import {
+  listEmployeeDocuments, createEmployeeDocument, deleteEmployeeDocument,
+  listEmployees, uploadRtwDocument, createRtwDocument,
+} from '@/lib/api';
+import { employeeName, formatDate, hrApiError, isApiMissing } from '@/lib/hr-utils';
+import { HrModal, HrField, HrModalActions, hrInputClass } from '@/components/hr/hr-modal';
+import { toast } from 'sonner';
+import { ColumnDef } from '@tanstack/react-table';
+import { FileText, Plus, Trash2, Upload } from 'lucide-react';
+
+const DOC_TYPES = [
+  { value: 'contract', label: 'Contract' },
+  { value: 'offer_letter', label: 'Offer letter' },
+  { value: 'id', label: 'ID' },
+  { value: 'passport', label: 'Passport' },
+  { value: 'certificate', label: 'Certificate' },
+  { value: 'performance_review', label: 'Performance review' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'other', label: 'Other / RTW' },
+] as const;
+
+export default function DocumentsPage() {
+  const router = useRouter();
+  const { session, hydrated } = useSession();
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']);
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [form, setForm] = useState({
+    employeeId: '',
+    documentType: 'contract' as typeof DOC_TYPES[number]['value'],
+    documentName: '',
+    documentUrl: '',
+    documentNumber: '',
+    issueDate: '',
+    expiryDate: '',
+    isRtw: false,
+  });
+
+  const orgId = session?.user?.organizationId;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [docs, emp] = await Promise.all([
+        listEmployeeDocuments({ limit: 200 }),
+        listEmployees({ organizationId: orgId }),
+      ]);
+      setItems(docs.data || []);
+      setEmployees(emp.data || []);
+    } catch (err) {
+      toast.error(hrApiError(err, 'Failed to load documents'));
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId]);
+
+  useEffect(() => {
+    if (!hydrated || !hasAccess) return;
+    if (!session?.accessToken) {
+      router.replace('/login');
+      return;
+    }
+    void load();
+  }, [hydrated, hasAccess, session?.accessToken, router, load]);
+
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      let url = form.documentUrl;
+      if (file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('employeeId', form.employeeId);
+        fd.append('docType', form.documentType);
+        fd.append('documentName', form.documentName || file.name);
+        if (form.expiryDate) fd.append('expiresAt', form.expiryDate);
+        try {
+          const up = await uploadRtwDocument(fd);
+          url = up.data?.documentUrl || up.data?.fileUrl || up.data?.url || url;
+          if (form.isRtw && up.data) {
+            toast.success('Document uploaded');
+            setOpen(false);
+            setFile(null);
+            void load();
+            setSaving(false);
+            return;
+          }
+        } catch (err) {
+          if (!isApiMissing(err)) throw err;
+          if (!url) {
+            toast.error('Upload endpoint unavailable — paste a document URL');
+            setSaving(false);
+            return;
+          }
+        }
+      }
+      if (!url) {
+        toast.error('Document URL required');
+        setSaving(false);
+        return;
+      }
+      if (form.isRtw) {
+        try {
+          await createRtwDocument({
+            employeeId: form.employeeId,
+            docType: form.documentType,
+            documentName: form.documentName,
+            documentUrl: url,
+            expiresAt: form.expiryDate || undefined,
+          });
+        } catch (err) {
+          if (!isApiMissing(err)) throw err;
+          await createEmployeeDocument({
+            employeeId: form.employeeId,
+            documentType: form.documentType === 'passport' || form.documentType === 'id' || form.documentType === 'contract' || form.documentType === 'offer_letter' || form.documentType === 'certificate' || form.documentType === 'performance_review' || form.documentType === 'warning' ? form.documentType : 'other',
+            documentName: form.documentName,
+            documentUrl: url,
+            documentNumber: form.documentNumber || undefined,
+            issueDate: form.issueDate || undefined,
+            expiryDate: form.expiryDate || undefined,
+          });
+        }
+      } else {
+        await createEmployeeDocument({
+          employeeId: form.employeeId,
+          documentType: form.documentType === 'passport' || form.documentType === 'id' || form.documentType === 'contract' || form.documentType === 'offer_letter' || form.documentType === 'certificate' || form.documentType === 'performance_review' || form.documentType === 'warning' ? form.documentType : 'other',
+          documentName: form.documentName,
+          documentUrl: url,
+          documentNumber: form.documentNumber || undefined,
+          issueDate: form.issueDate || undefined,
+          expiryDate: form.expiryDate || undefined,
+        });
+      }
+      toast.success('Document saved');
+      setOpen(false);
+      setFile(null);
+      void load();
+    } catch (err) {
+      toast.error(hrApiError(err, 'Save failed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onDelete(id: string) {
+    if (!confirm('Delete this document?')) return;
+    try {
+      await deleteEmployeeDocument(id);
+      toast.success('Deleted');
+      void load();
+    } catch (err) {
+      toast.error(hrApiError(err, 'Delete failed'));
+    }
+  }
+
+  const columns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      header: 'Employee',
+      cell: ({ row }) => (
+        <Link href={`/hr/employees/${row.original.employee?.id}`} className="text-[#D4A017] hover:underline">
+          {employeeName(row.original.employee)}
+        </Link>
+      ),
+    },
+    { accessorKey: 'documentName', header: 'Name' },
+    {
+      accessorKey: 'documentType',
+      header: 'Type',
+      cell: ({ row }) => <span className="capitalize">{(row.original.documentType || '').replace(/_/g, ' ')}</span>,
+    },
+    { header: 'Issue', cell: ({ row }) => formatDate(row.original.issueDate) },
+    { header: 'Expiry', cell: ({ row }) => formatDate(row.original.expiryDate) },
+    {
+      id: 'link',
+      header: '',
+      cell: ({ row }) => row.original.documentUrl ? (
+        <a href={row.original.documentUrl} target="_blank" rel="noreferrer" className="text-xs text-[#D4A017] hover:underline">Open</a>
+      ) : null,
+    },
+    {
+      id: 'del',
+      header: '',
+      cell: ({ row }) => (
+        <button type="button" onClick={() => onDelete(row.original.id)} className="p-1.5 text-red-600 hover:bg-red-500/10 rounded-lg">
+          <Trash2 size={14} />
+        </button>
+      ),
+    },
+  ], []);
+
+  return (
+    <div className="min-h-screen app-surface">
+      <Sidebar />
+      <div className="flex flex-col min-w-0 lg:ml-[280px]">
+        <Header title="HR · Documents" />
+        <main className="p-6 md:p-8 space-y-6">
+          <div className="flex justify-end">
+            <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
+              <Plus size={14} /> Add document
+            </button>
+          </div>
+          <RichDataTable columns={columns} data={items} searchPlaceholder="Search documents…" />
+        </main>
+      </div>
+
+      <HrModal open={open} onClose={() => setOpen(false)} title="Employee document" icon={FileText} wide>
+        <form onSubmit={onCreate} className="space-y-4">
+          <HrField label="Employee">
+            <select className={hrInputClass} required value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })}>
+              <option value="">Select…</option>
+              {employees.map((e) => <option key={e.id} value={e.id}>{employeeName(e)}</option>)}
+            </select>
+          </HrField>
+          <HrField label="Type">
+            <select className={hrInputClass} value={form.documentType} onChange={(e) => setForm({ ...form, documentType: e.target.value as any })}>
+              {DOC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </HrField>
+          <HrField label="Name"><input className={hrInputClass} required value={form.documentName} onChange={(e) => setForm({ ...form, documentName: e.target.value })} /></HrField>
+          <div className="grid grid-cols-2 gap-3">
+            <HrField label="Issue date"><input type="date" className={hrInputClass} value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} /></HrField>
+            <HrField label="Expiry"><input type="date" className={hrInputClass} value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} /></HrField>
+          </div>
+          <HrField label="Document number"><input className={hrInputClass} value={form.documentNumber} onChange={(e) => setForm({ ...form, documentNumber: e.target.value })} /></HrField>
+          <HrField label="Upload file"><input type="file" className="text-sm" onChange={(e) => setFile(e.target.files?.[0] || null)} /></HrField>
+          <HrField label="Document URL" hint="Required if multipart upload is unavailable">
+            <input className={hrInputClass} value={form.documentUrl} onChange={(e) => setForm({ ...form, documentUrl: e.target.value })} placeholder="https://…" />
+          </HrField>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.isRtw} onChange={(e) => setForm({ ...form, isRtw: e.target.checked })} />
+            Also treat as Right to Work document
+          </label>
+          <HrModalActions onCancel={() => setOpen(false)} submitLabel="Save" submitting={saving} submitIcon={<Upload size={14} />} />
+        </form>
+      </HrModal>
+    </div>
+  );
+}

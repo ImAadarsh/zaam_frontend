@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall, Plug, Mail, FolderKanban, Flag } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall, Plug, Mail, FolderKanban, Flag, ShieldCheck, PiggyBank, UserCheck } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -251,29 +251,31 @@ export function Sidebar() {
             <>
               <div className="mt-6 mb-2 flex items-center gap-2 px-3">
                 <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
-                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">HR, Payroll & KPI</div>
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">HR & Payroll</div>
               </div>
-              <Item href="/hr/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/hr/dashboard'} />
-              {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER']) && (
+              <Item href="/hr/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === '/hr/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']) && (
                 <>
                   <Item href="/hr/employees" icon={<Users size={18} />} label="Employees" active={pathname?.startsWith('/hr/employees')} />
-                  <Item href="/hr/employment-contracts" icon={<FileTextIcon size={18} />} label="Employment Contracts" active={pathname?.startsWith('/hr/employment-contracts')} />
-                  <Item href="/hr/time-entries" icon={<Clock size={18} />} label="Time Entries" active={pathname?.startsWith('/hr/time-entries')} />
-                  <Item href="/hr/leave-requests" icon={<Calendar size={18} />} label="Leave Requests" active={pathname?.startsWith('/hr/leave-requests')} />
-                  <Item href="/hr/shifts" icon={<Briefcase size={18} />} label="Shifts" active={pathname?.startsWith('/hr/shifts')} />
+                  <Item href="/hr/immigration" icon={<ShieldCheck size={18} />} label="Immigration & RTW" active={pathname?.startsWith('/hr/immigration')} />
+                  <Item href="/hr/leave" icon={<Calendar size={18} />} label="Leave" active={pathname?.startsWith('/hr/leave')} />
+                  <Item href="/hr/attendance" icon={<Clock size={18} />} label="Attendance" active={pathname?.startsWith('/hr/attendance') || pathname?.startsWith('/hr/time-entries')} />
                 </>
               )}
-              {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'HR_MANAGER']) && (
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'HR_MANAGER', 'HR_ADMIN']) && (
+                <Item href="/hr/payroll" icon={<DollarSign size={18} />} label="Payroll" active={pathname?.startsWith('/hr/payroll') || pathname?.startsWith('/hr/payroll-runs')} />
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']) && (
                 <>
-                  <Item href="/hr/payroll-runs" icon={<DollarSign size={18} />} label="Payroll Runs" active={pathname?.startsWith('/hr/payroll-runs')} />
+                  <Item href="/hr/pension" icon={<PiggyBank size={18} />} label="Pension" active={pathname?.startsWith('/hr/pension')} />
+                  <Item href="/hr/documents" icon={<FileTextIcon size={18} />} label="Documents" active={pathname?.startsWith('/hr/documents')} />
+                  <Item href="/hr/recruitment" icon={<Briefcase size={18} />} label="Recruitment" active={pathname?.startsWith('/hr/recruitment')} />
+                  <Item href="/hr/onboarding" icon={<ClipboardList size={18} />} label="Onboarding" active={pathname?.startsWith('/hr/onboarding')} />
                 </>
               )}
-              {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER']) && (
-                <>
-                  <Item href="/hr/tasks" icon={<CheckSquare size={18} />} label="Tasks" active={pathname?.startsWith('/hr/tasks')} />
-                  <Item href="/hr/kpi-definitions" icon={<TrendingUp size={18} />} label="KPI Definitions" active={pathname?.startsWith('/hr/kpi-definitions')} />
-                  <Item href="/hr/kpi-records" icon={<BarChart size={18} />} label="KPI Records" active={pathname?.startsWith('/hr/kpi-records')} />
-                </>
+              <Item href="/hr/self-service" icon={<UserCheck size={18} />} label="Self-service" active={pathname?.startsWith('/hr/self-service')} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN', 'FINANCE']) && (
+                <Item href="/hr/reports" icon={<BarChart3 size={18} />} label="Reports & Compliance" active={pathname?.startsWith('/hr/reports')} />
               )}
             </>
           )}
@@ -587,36 +589,38 @@ export function Sidebar() {
                   )}
                 </>
               )}
-              {isHR && (
-                <>
-                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
-                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
-                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">HR, Payroll & KPI</div>
-                  </div>
-                  <Item href="/hr/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/hr/dashboard'} />
-                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER']) && (
-                    <>
-                      <Item href="/hr/employees" icon={<Users size={18} />} label="Employees" active={pathname?.startsWith('/hr/employees')} />
-                      <Item href="/hr/employment-contracts" icon={<FileTextIcon size={18} />} label="Employment Contracts" active={pathname?.startsWith('/hr/employment-contracts')} />
-                      <Item href="/hr/time-entries" icon={<Clock size={18} />} label="Time Entries" active={pathname?.startsWith('/hr/time-entries')} />
-                      <Item href="/hr/leave-requests" icon={<Calendar size={18} />} label="Leave Requests" active={pathname?.startsWith('/hr/leave-requests')} />
-                      <Item href="/hr/shifts" icon={<Briefcase size={18} />} label="Shifts" active={pathname?.startsWith('/hr/shifts')} />
-                    </>
-                  )}
-                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'HR_MANAGER']) && (
-                    <>
-                      <Item href="/hr/payroll-runs" icon={<DollarSign size={18} />} label="Payroll Runs" active={pathname?.startsWith('/hr/payroll-runs')} />
-                    </>
-                  )}
-                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER']) && (
-                    <>
-                      <Item href="/hr/tasks" icon={<CheckSquare size={18} />} label="Tasks" active={pathname?.startsWith('/hr/tasks')} />
-                      <Item href="/hr/kpi-definitions" icon={<TrendingUp size={18} />} label="KPI Definitions" active={pathname?.startsWith('/hr/kpi-definitions')} />
-                      <Item href="/hr/kpi-records" icon={<BarChart size={18} />} label="KPI Records" active={pathname?.startsWith('/hr/kpi-records')} />
-                    </>
-                  )}
-                </>
-              )}
+                {isHR && (
+              <>
+                <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                  <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">HR & Payroll</div>
+                </div>
+                <Item href="/hr/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === '/hr/dashboard'} />
+                {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']) && (
+                  <>
+                    <Item href="/hr/employees" icon={<Users size={18} />} label="Employees" active={pathname?.startsWith('/hr/employees')} />
+                    <Item href="/hr/immigration" icon={<ShieldCheck size={18} />} label="Immigration & RTW" active={pathname?.startsWith('/hr/immigration')} />
+                    <Item href="/hr/leave" icon={<Calendar size={18} />} label="Leave" active={pathname?.startsWith('/hr/leave')} />
+                    <Item href="/hr/attendance" icon={<Clock size={18} />} label="Attendance" active={pathname?.startsWith('/hr/attendance') || pathname?.startsWith('/hr/time-entries')} />
+                  </>
+                )}
+                {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'HR_MANAGER', 'HR_ADMIN']) && (
+                  <Item href="/hr/payroll" icon={<DollarSign size={18} />} label="Payroll" active={pathname?.startsWith('/hr/payroll') || pathname?.startsWith('/hr/payroll-runs')} />
+                )}
+                {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']) && (
+                  <>
+                    <Item href="/hr/pension" icon={<PiggyBank size={18} />} label="Pension" active={pathname?.startsWith('/hr/pension')} />
+                    <Item href="/hr/documents" icon={<FileTextIcon size={18} />} label="Documents" active={pathname?.startsWith('/hr/documents')} />
+                    <Item href="/hr/recruitment" icon={<Briefcase size={18} />} label="Recruitment" active={pathname?.startsWith('/hr/recruitment')} />
+                    <Item href="/hr/onboarding" icon={<ClipboardList size={18} />} label="Onboarding" active={pathname?.startsWith('/hr/onboarding')} />
+                  </>
+                )}
+                <Item href="/hr/self-service" icon={<UserCheck size={18} />} label="Self-service" active={pathname?.startsWith('/hr/self-service')} />
+                {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN', 'FINANCE']) && (
+                  <Item href="/hr/reports" icon={<BarChart3 size={18} />} label="Reports & Compliance" active={pathname?.startsWith('/hr/reports')} />
+                )}
+              </>
+            )}
               {isAnalytics && (
                 <>
                   <div className="mt-6 mb-2 flex items-center gap-2 px-3">

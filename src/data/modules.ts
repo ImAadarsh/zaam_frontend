@@ -37,8 +37,8 @@ export const modules = [
     description: 'GL, Journals, VAT, Bank'
   },
   {
-    slug: 'hr', name: 'HR, Payroll & KPI', icon: Users, color: '#D4A017',
-    description: 'Employees, Payroll, KPIs'
+    slug: 'hr', name: 'HR & Payroll', icon: Users, color: '#D4A017',
+    description: 'Employees, immigration/RTW, leave, payroll, pension, recruitment'
   },
   {
     slug: 'crm', name: 'CRM & Service', icon: Headset, color: '#D4A017',
