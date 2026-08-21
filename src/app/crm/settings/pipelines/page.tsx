@@ -1,0 +1,316 @@
+'use client';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Sidebar } from '@/components/sidebar';
+import { Header } from '@/components/header';
+import { useSession } from '@/hooks/use-session';
+import {
+  listCrmPipelines, createCrmPipeline, updateCrmPipeline,
+  createCrmStage, updateCrmStage, deleteCrmStage
+} from '@/lib/api';
+import { crmApiError, PIPELINE_TYPES } from '@/lib/crm-utils';
+import { toast } from 'sonner';
+import {
+  Plus, X, Pencil, Trash2, AlertCircle, Settings, ArrowLeft, GripVertical
+} from 'lucide-react';
+
+export default function CrmPipelineSettingsPage() {
+  const router = useRouter();
+  const { session, hydrated } = useSession();
+  const [pipelines, setPipelines] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiMissing, setApiMissing] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showPipeline, setShowPipeline] = useState(false);
+  const [pipelineForm, setPipelineForm] = useState({ name: '', type: 'onboarding' as string, isDefault: false });
+  const [showStage, setShowStage] = useState(false);
+  const [editingStage, setEditingStage] = useState<any>(null);
+  const [stageForm, setStageForm] = useState({ name: '', probability: '0', isWon: false, isLost: false });
+  const [saving, setSaving] = useState(false);
+
+  const orgId = session?.user?.organizationId;
+  const selected = pipelines.find((p) => p.id === selectedId);
+
+  const load = useCallback(async () => {
+    if (!orgId) return;
+    setLoading(true);
+    try {
+      const res = await listCrmPipelines({ organizationId: orgId });
+      const list = res.data || [];
+      setPipelines(list);
+      setSelectedId((prev) => prev || list[0]?.id || null);
+      setApiMissing(false);
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        setApiMissing(true);
+        setPipelines([]);
+      } else {
+        toast.error(crmApiError(err, 'Failed to load pipelines'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!session?.accessToken) {
+      router.replace('/login');
+      return;
+    }
+    void load();
+  }, [hydrated, session?.accessToken, router, load]);
+
+  async function handleCreatePipeline(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await createCrmPipeline({
+        organizationId: orgId,
+        name: pipelineForm.name,
+        type: pipelineForm.type as any,
+        isDefault: pipelineForm.isDefault || pipelines.length === 0,
+      });
+      toast.success('Pipeline created — add stages below');
+      setShowPipeline(false);
+      setPipelineForm({ name: '', type: 'onboarding', isDefault: false });
+      setSelectedId(res.data.id);
+      void load();
+    } catch (err) {
+      toast.error(crmApiError(err, 'Failed to create pipeline'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setDefault(pipeline: any) {
+    try {
+      await updateCrmPipeline(pipeline.id, { isDefault: true });
+      toast.success('Default pipeline updated');
+      void load();
+    } catch (err) {
+      toast.error(crmApiError(err, 'Failed to update pipeline'));
+    }
+  }
+
+  function openStage(stage?: any) {
+    if (stage) {
+      setEditingStage(stage);
+      setStageForm({
+        name: stage.name || '',
+        probability: stage.probability != null ? String(stage.probability) : '0',
+        isWon: !!stage.isWon,
+        isLost: !!stage.isLost,
+      });
+    } else {
+      setEditingStage(null);
+      setStageForm({ name: '', probability: '0', isWon: false, isLost: false });
+    }
+    setShowStage(true);
+  }
+
+  async function handleStageSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedId) return;
+    setSaving(true);
+    const payload = {
+      name: stageForm.name,
+      probability: Number(stageForm.probability) || 0,
+      isWon: stageForm.isWon,
+      isLost: stageForm.isLost,
+    };
+    try {
+      if (editingStage) {
+        await updateCrmStage(editingStage.id, payload);
+        toast.success('Stage updated');
+      } else {
+        const stages = selected?.stages || [];
+        await createCrmStage({
+          pipelineId: selectedId,
+          ...payload,
+          position: stages.length,
+        });
+        toast.success('Stage added');
+      }
+      setShowStage(false);
+      void load();
+    } catch (err) {
+      toast.error(crmApiError(err, 'Failed to save stage'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeStage(stage: any) {
+    if (!confirm(`Delete stage "${stage.name}"?`)) return;
+    try {
+      await deleteCrmStage(stage.id);
+      toast.success('Stage deleted');
+      void load();
+    } catch (err) {
+      toast.error(crmApiError(err, 'Failed to delete stage'));
+    }
+  }
+
+  const stages = [...(selected?.stages || [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+
+  return (
+    <div className="min-h-screen app-surface">
+      <Sidebar />
+      <div className="flex flex-col min-w-0 lg:ml-[280px]">
+        <Header
+          title="Pipeline Settings"
+          actions={[{ label: 'New Pipeline', onClick: () => setShowPipeline(true), icon: <Plus size={18} /> }]}
+        />
+        <main className="p-6 md:p-8 space-y-6">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <Link href="/crm/pipeline" className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+              <ArrowLeft size={16} /> Pipeline board
+            </Link>
+          </div>
+
+          {apiMissing && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
+              <AlertCircle size={18} className="mt-0.5 shrink-0" />
+              <div>
+                <div className="font-semibold">Pipelines API not ready</div>
+                <div className="text-xs mt-0.5 opacity-80">Waiting on <code className="font-mono">/api/crm/pipelines</code>.</div>
+              </div>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="glass-panel rounded-2xl border border-border/50 p-12 text-center text-muted-foreground italic">Loading…</div>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+              <div className="glass-panel rounded-2xl border border-border/50 p-3 space-y-1">
+                <div className="px-2 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <Settings size={14} /> Pipelines
+                </div>
+                {pipelines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground px-2 py-6 text-center italic">No pipelines yet.</p>
+                ) : (
+                  pipelines.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedId(p.id)}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition ${
+                        selectedId === p.id ? 'bg-[#D4A017]/15 text-foreground font-medium' : 'hover:bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">{p.name}</span>
+                        {p.isDefault && <span className="text-[9px] uppercase font-bold text-[#D4A017]">Default</span>}
+                      </div>
+                      <div className="text-[11px] opacity-70 mt-0.5">{p.type} · {(p.stages || []).length} stages</div>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="glass-panel rounded-2xl border border-border/50 p-6">
+                {!selected ? (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <Settings className="mx-auto mb-3 opacity-40" size={32} />
+                    <p className="font-medium text-foreground">Select or create a pipeline</p>
+                    <p className="text-sm mt-1">Stages become columns on the deal board.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-xl font-semibold">{selected.name}</h2>
+                        <p className="text-sm text-muted-foreground mt-0.5 capitalize">{selected.type || 'pipeline'}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {!selected.isDefault && (
+                          <button type="button" onClick={() => setDefault(selected)} className="btn bg-muted text-sm">Set default</button>
+                        )}
+                        <button type="button" onClick={() => openStage()} className="btn btn-primary text-sm gap-1.5"><Plus size={16} /> Stage</button>
+                      </div>
+                    </div>
+
+                    <ul className="space-y-2">
+                      {stages.length === 0 && (
+                        <li className="text-sm text-muted-foreground italic py-8 text-center">No stages — add Qualification, Proposal, Won, Lost, etc.</li>
+                      )}
+                      {stages.map((stage: any) => (
+                        <li key={stage.id} className="flex items-center gap-3 rounded-xl border border-border/50 px-3 py-3 bg-muted/10">
+                          <GripVertical size={16} className="text-muted-foreground/50 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm">{stage.name}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {stage.probability != null ? `${stage.probability}%` : '—'}
+                              {stage.isWon ? ' · Won' : ''}
+                              {stage.isLost ? ' · Lost' : ''}
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => openStage(stage)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground"><Pencil size={14} /></button>
+                          <button type="button" onClick={() => removeStage(stage)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-rose-500"><Trash2 size={14} /></button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {showPipeline && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="glass-card w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
+              <h2 className="text-lg font-bold">New Pipeline</h2>
+              <button type="button" onClick={() => setShowPipeline(false)} className="p-2 hover:bg-muted rounded-full"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleCreatePipeline} className="p-5 space-y-4">
+              <input required value={pipelineForm.name} onChange={(e) => setPipelineForm({ ...pipelineForm, name: e.target.value })} className="input" placeholder="e.g. Onboarding" />
+              <select value={pipelineForm.type} onChange={(e) => setPipelineForm({ ...pipelineForm, type: e.target.value })} className="input">
+                {PIPELINE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={pipelineForm.isDefault} onChange={(e) => setPipelineForm({ ...pipelineForm, isDefault: e.target.checked })} />
+                Set as default
+              </label>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowPipeline(false)} className="btn flex-1 bg-muted">Cancel</button>
+                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Creating…' : 'Create'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showStage && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="glass-card w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
+              <h2 className="text-lg font-bold">{editingStage ? 'Edit Stage' : 'New Stage'}</h2>
+              <button type="button" onClick={() => setShowStage(false)} className="p-2 hover:bg-muted rounded-full"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleStageSave} className="p-5 space-y-4">
+              <input required value={stageForm.name} onChange={(e) => setStageForm({ ...stageForm, name: e.target.value })} className="input" placeholder="Stage name" />
+              <input type="number" min={0} max={100} value={stageForm.probability} onChange={(e) => setStageForm({ ...stageForm, probability: e.target.value })} className="input" placeholder="Probability %" />
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={stageForm.isWon} onChange={(e) => setStageForm({ ...stageForm, isWon: e.target.checked, isLost: e.target.checked ? false : stageForm.isLost })} />
+                Won stage
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={stageForm.isLost} onChange={(e) => setStageForm({ ...stageForm, isLost: e.target.checked, isWon: e.target.checked ? false : stageForm.isWon })} />
+                Lost stage
+              </label>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowStage(false)} className="btn flex-1 bg-muted">Cancel</button>
+                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Saving…' : 'Save'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

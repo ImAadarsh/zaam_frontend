@@ -42,7 +42,7 @@ export const modules = [
   },
   {
     slug: 'crm', name: 'CRM & Service', icon: Headset, color: '#D4A017',
-    description: 'Tickets, Canned Responses, Customer Tiers'
+    description: 'Accounts, Leads, Pipeline, Activities, Tickets & Tiers'
   },
   {
     slug: 'marketing', name: 'Marketing & Affiliates', icon: Megaphone, color: '#0A0A0A',

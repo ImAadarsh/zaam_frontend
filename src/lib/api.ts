@@ -4498,6 +4498,364 @@ export async function deleteCustomerTier(id: string) {
   return status === 204;
 }
 
+// ---------------------------------------------------------------------------
+// CRM SALES — see zaam-api/docs/CRM_API.md
+// Account = ERP customers (id = customerId). Stages at /api/crm/stages.
+// ---------------------------------------------------------------------------
+
+function crmQuery(params?: Record<string, string | number | boolean | undefined | null>) {
+  const q = new URLSearchParams();
+  if (!params) return '';
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === '') return;
+    q.append(k, String(v));
+  });
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+// DASHBOARD
+export async function getCrmDashboard(params?: { organizationId?: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/dashboard${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: {
+      openTickets?: number;
+      myOpenDeals?: number;
+      openDealsTotal?: number;
+      overdueActivities?: number;
+      leadsByStatus?: Record<string, number>;
+      asOf?: string;
+      [key: string]: any;
+    };
+  };
+}
+
+// ACCOUNTS (ERP customers + CRM enrichment; id === customerId)
+export async function listCrmAccounts(params?: {
+  organizationId?: string;
+  search?: string;
+  ownerUserId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/accounts${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: { total?: number; page?: number; limit?: number } };
+}
+
+export async function getCrmAccount(customerId: string, params?: { orderLimit?: number }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/accounts/${customerId}${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: {
+      customer?: any;
+      addresses?: any[];
+      recentOrders?: any[];
+      openTickets?: any[];
+      deals?: any[];
+      activities?: any[];
+      notes?: any[];
+      tags?: any[];
+      portalRetailer?: any | null;
+      [key: string]: any;
+    };
+  };
+}
+
+export async function updateCrmAccount(customerId: string, payload: { crmOwnerUserId?: string | null }) {
+  const { data } = await axios.patch(
+    `${API_BASE}/api/crm/accounts/${customerId}`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function listCrmAccountNotes(customerId: string) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/accounts/${customerId}/notes`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+
+export async function addCrmAccountNote(customerId: string, payload: {
+  note: string;
+  noteType?: string;
+  isImportant?: boolean;
+}) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/crm/accounts/${customerId}/notes`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+// LEADS
+export async function listCrmLeads(params?: {
+  organizationId?: string;
+  status?: string;
+  ownerUserId?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/leads${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function getCrmLead(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/crm/leads/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createCrmLead(payload: {
+  organizationId?: string;
+  name: string;
+  company?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  source?: string | null;
+  status?: string;
+  ownerUserId?: string | null;
+  affiliateId?: string | null;
+  notes?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/leads`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCrmLead(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/crm/leads/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function convertCrmLead(id: string, payload?: {
+  customerId?: string;
+  createDeal?: boolean;
+  dealName?: string;
+  dealAmount?: number;
+  currency?: string;
+  pipelineId?: string;
+  stageId?: string;
+  ownerUserId?: string;
+  customerType?: string;
+}) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/crm/leads/${id}/convert`,
+    payload || {},
+    { headers: authHeaders() }
+  );
+  return data as { data: { lead?: any; customer?: any; deal?: any | null } };
+}
+
+// PIPELINES & STAGES
+export async function listCrmPipelines(params?: { organizationId?: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/pipelines${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+
+export async function createCrmPipeline(payload: {
+  organizationId?: string;
+  name: string;
+  type?: 'onboarding' | 'expansion' | 'credit';
+  isDefault?: boolean;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/pipelines`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCrmPipeline(id: string, payload: {
+  name?: string;
+  type?: string;
+  isDefault?: boolean;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/crm/pipelines/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listCrmStages(params?: { pipelineId?: string; organizationId?: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/stages${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+
+export async function createCrmStage(payload: {
+  pipelineId: string;
+  name: string;
+  position?: number;
+  probability?: number;
+  isWon?: boolean;
+  isLost?: boolean;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/stages`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCrmStage(id: string, payload: {
+  name?: string;
+  position?: number;
+  probability?: number;
+  isWon?: boolean;
+  isLost?: boolean;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/crm/stages/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteCrmStage(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/crm/stages/${id}`, { headers: authHeaders() });
+  return status === 204 || status === 200;
+}
+
+/** @deprecated use createCrmStage — kept for call-site compatibility */
+export async function createCrmPipelineStage(pipelineId: string, payload: {
+  name: string;
+  position?: number;
+  probability?: number;
+  isWon?: boolean;
+  isLost?: boolean;
+}) {
+  return createCrmStage({ pipelineId, ...payload });
+}
+
+/** @deprecated use updateCrmStage */
+export async function updateCrmPipelineStage(_pipelineId: string, stageId: string, payload: {
+  name?: string;
+  position?: number;
+  probability?: number;
+  isWon?: boolean;
+  isLost?: boolean;
+}) {
+  return updateCrmStage(stageId, payload);
+}
+
+/** @deprecated use deleteCrmStage */
+export async function deleteCrmPipelineStage(_pipelineId: string, stageId: string) {
+  return deleteCrmStage(stageId);
+}
+
+// DEALS
+export async function listCrmDeals(params?: {
+  organizationId?: string;
+  pipelineId?: string;
+  stageId?: string;
+  customerId?: string;
+  ownerUserId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/deals${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function getCrmDeal(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/crm/deals/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createCrmDeal(payload: {
+  organizationId?: string;
+  pipelineId: string;
+  stageId?: string;
+  customerId?: string;
+  name: string;
+  amount?: number;
+  currency?: string;
+  expectedClose?: string;
+  ownerUserId?: string;
+  leadId?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/deals`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCrmDeal(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/crm/deals/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function moveCrmDeal(id: string, payload: {
+  stageId: string;
+  note?: string;
+  lostReason?: string;
+}) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/crm/deals/${id}/move`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+// ACTIVITIES
+export async function listCrmActivities(params?: {
+  organizationId?: string;
+  ownerUserId?: string;
+  customerId?: string;
+  leadId?: string;
+  dealId?: string;
+  ticketId?: string;
+  type?: string;
+  openOnly?: boolean | string;
+  overdue?: boolean | string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/activities${crmQuery(params as any)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createCrmActivity(payload: {
+  organizationId?: string;
+  type: 'task' | 'call' | 'meeting' | 'note';
+  subject: string;
+  body?: string;
+  dueAt?: string;
+  ownerUserId?: string;
+  customerId?: string;
+  leadId?: string | null;
+  dealId?: string | null;
+  ticketId?: string | null;
+  orderId?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/activities`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCrmActivity(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/crm/activities/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+/** Complete via PATCH { completed: true } per CRM_API.md */
+export async function completeCrmActivity(id: string) {
+  return updateCrmActivity(id, { completed: true });
+}
+
 // ============================================================================
 // FINANCE/PAYMENTS API FUNCTIONS
 // ============================================================================
@@ -4963,12 +5321,12 @@ export async function getMetaStatus() {
   const { data } = await axios.get(`${API_BASE}/api/social/meta/status`, { headers: authHeaders() });
   return data as { data: any };
 }
-export async function getMetaConnectUrl(intent?: 'ads' | 'default') {
+export async function getMetaConnectUrl(intent?: 'ads' | 'publish' | 'default') {
   const { data } = await axios.get(`${API_BASE}/api/social/meta/connect`, {
     headers: authHeaders(),
     params: intent && intent !== 'default' ? { intent } : undefined
   });
-  return data as { data: { authUrl: string; redirectUri: string; configIdConfigured: boolean; webhookUrl: string; oauthScopes?: string } };
+  return data as { data: { authUrl: string; redirectUri: string; configIdConfigured: boolean; webhookUrl: string; oauthScopes?: string; intent?: string } };
 }
 export async function getMetaCapabilities() {
   const { data } = await axios.get(`${API_BASE}/api/social/meta/capabilities`, { headers: authHeaders() });
@@ -5016,10 +5374,24 @@ export async function publishSocialNow(payload: {
   content: string;
   postType?: string;
   mediaUrls?: string[];
+  files?: File[];
   linkUrl?: string;
   hashtags?: string;
 }) {
-  const { data } = await axios.post(`${API_BASE}/api/social/posts/publish-now`, payload, { headers: authHeaders() });
+  const form = new FormData();
+  form.append('accountIds', JSON.stringify(payload.accountIds));
+  form.append('content', payload.content || '');
+  if (payload.postType) form.append('postType', payload.postType);
+  if (payload.hashtags) form.append('hashtags', payload.hashtags);
+  if (payload.linkUrl) form.append('linkUrl', payload.linkUrl);
+  if (payload.mediaUrls?.length) form.append('mediaUrls', JSON.stringify(payload.mediaUrls));
+  for (const file of payload.files || []) {
+    form.append('media', file);
+  }
+  const { data } = await axios.post(`${API_BASE}/api/social/posts/publish-now`, form, {
+    headers: authHeaders(),
+    timeout: 180000
+  });
   return data as { data: any[] };
 }
 export async function publishSocialPostToMeta(id: string) {

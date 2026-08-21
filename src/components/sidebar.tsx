@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -331,14 +331,25 @@ export function Sidebar() {
                 <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">CRM & Customer Service</div>
               </div>
               <Item href="/crm/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/crm/dashboard'} />
-              {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT']) && (
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'SALES_REP', 'CUSTOMER_SERVICE']) && (
+                <>
+                  <Item href="/crm/accounts" icon={<Building2 size={18} />} label="Accounts" active={pathname?.startsWith('/crm/accounts')} />
+                  <Item href="/crm/leads" icon={<Target size={18} />} label="Leads" active={pathname?.startsWith('/crm/leads')} />
+                  <Item href="/crm/pipeline" icon={<Columns3 size={18} />} label="Pipeline" active={pathname?.startsWith('/crm/pipeline') || pathname?.startsWith('/crm/deals')} />
+                  <Item href="/crm/activities" icon={<PhoneCall size={18} />} label="Activities" active={pathname?.startsWith('/crm/activities')} />
+                </>
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'CUSTOMER_SERVICE', 'SALES_REP']) && (
                 <>
                   <Item href="/crm/tickets" icon={<MessageSquare size={18} />} label="Tickets" active={pathname?.startsWith('/crm/tickets')} />
                   <Item href="/crm/canned-responses" icon={<FileText size={18} />} label="Canned Responses" active={pathname?.startsWith('/crm/canned-responses')} />
                 </>
               )}
               {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
-                <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
+                <>
+                  <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
+                  <Item href="/crm/settings/pipelines" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/crm/settings')} />
+                </>
               )}
             </>
           )}
@@ -639,14 +650,25 @@ export function Sidebar() {
                     <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">CRM & Customer Service</div>
                   </div>
                   <Item href="/crm/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/crm/dashboard'} />
-                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT']) && (
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'SALES_REP', 'CUSTOMER_SERVICE']) && (
+                    <>
+                      <Item href="/crm/accounts" icon={<Building2 size={18} />} label="Accounts" active={pathname?.startsWith('/crm/accounts')} />
+                      <Item href="/crm/leads" icon={<Target size={18} />} label="Leads" active={pathname?.startsWith('/crm/leads')} />
+                      <Item href="/crm/pipeline" icon={<Columns3 size={18} />} label="Pipeline" active={pathname?.startsWith('/crm/pipeline') || pathname?.startsWith('/crm/deals')} />
+                      <Item href="/crm/activities" icon={<PhoneCall size={18} />} label="Activities" active={pathname?.startsWith('/crm/activities')} />
+                    </>
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'CUSTOMER_SERVICE', 'SALES_REP']) && (
                     <>
                       <Item href="/crm/tickets" icon={<MessageSquare size={18} />} label="Tickets" active={pathname?.startsWith('/crm/tickets')} />
                       <Item href="/crm/canned-responses" icon={<FileText size={18} />} label="Canned Responses" active={pathname?.startsWith('/crm/canned-responses')} />
                     </>
                   )}
                   {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
-                    <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
+                    <>
+                      <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
+                      <Item href="/crm/settings/pipelines" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/crm/settings')} />
+                    </>
                   )}
                 </>
               )}
