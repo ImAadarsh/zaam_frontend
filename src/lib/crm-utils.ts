@@ -62,7 +62,7 @@ export const ACTIVITY_TYPES = [
 ] as const;
 
 export const PIPELINE_TYPES = [
-  { value: 'onboarding', label: 'Onboarding' },
-  { value: 'expansion', label: 'Expansion' },
-  { value: 'credit', label: 'Credit' },
+  { value: 'onboarding', label: 'Retailer Onboarding' },
+  { value: 'expansion', label: 'Account Expansion' },
+  { value: 'credit', label: 'Credit & Terms' },
 ] as const;

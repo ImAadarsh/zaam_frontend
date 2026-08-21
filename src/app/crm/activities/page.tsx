@@ -10,7 +10,8 @@ import { listCrmActivities, createCrmActivity, completeCrmActivity, updateCrmAct
 import { ACTIVITY_TYPES, crmApiError } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, X, Check, AlertCircle, PhoneCall, RotateCcw } from 'lucide-react';
+import { Plus, Check, AlertCircle, PhoneCall, RotateCcw, Send } from 'lucide-react';
+import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 
 export default function CrmActivitiesPage() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function CrmActivitiesPage() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState<Record<string, string>>({ mine: '1', openOnly: '1' });
+  const [filters, setFilters] = useState<Record<string, string>>({ mine: '0', openOnly: '1' });
   const [apiMissing, setApiMissing] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
@@ -124,8 +125,8 @@ export default function CrmActivitiesPage() {
       type: 'select',
       primary: true,
       options: [
-        { value: '1', label: 'My tasks' },
         { value: '0', label: 'All' },
+        { value: '1', label: 'My tasks' },
       ],
     },
     {
@@ -158,7 +159,7 @@ export default function CrmActivitiesPage() {
       accessorKey: 'type',
       header: 'Type',
       cell: (i) => (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border border-border bg-muted/40">
+        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-border bg-muted/40">
           {i.getValue() as string}
         </span>
       ),
@@ -178,7 +179,16 @@ export default function CrmActivitiesPage() {
     {
       id: 'status',
       header: 'Status',
-      cell: (info) => (info.row.original.completedAt ? 'completed' : 'open'),
+      cell: (info) => {
+        const done = !!info.row.original.completedAt;
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+            done ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-[#D4A017]/10 text-[#D4A017] border-[#D4A017]/25'
+          }`}>
+            {done ? 'completed' : 'open'}
+          </span>
+        );
+      },
     },
     {
       id: 'actions',
@@ -210,7 +220,7 @@ export default function CrmActivitiesPage() {
           title="Activities"
           actions={[{ label: 'New Activity', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
         />
-        <main className="p-6 md:p-8 space-y-4">
+        <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
               <AlertCircle size={18} className="mt-0.5 shrink-0" />
@@ -244,28 +254,48 @@ export default function CrmActivitiesPage() {
         </main>
       </div>
 
-      {showCreate && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-lg overflow-hidden">
-            <div className="p-6 border-b border-border flex items-center justify-between bg-muted/30">
-              <h2 className="text-xl font-bold">New Activity</h2>
-              <button type="button" onClick={() => setShowCreate(false)} className="p-2 hover:bg-muted rounded-full"><X size={20} /></button>
-            </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as any })} className="input">
+      <CrmModal open={showCreate} onClose={() => setShowCreate(false)} title="New Activity" icon={Plus}>
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Type">
+              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as any })} className={crmInputClass}>
                 {ACTIVITY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
-              <input required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} className="input" placeholder="Subject" />
-              <input type="datetime-local" value={form.dueAt} onChange={(e) => setForm({ ...form, dueAt: e.target.value })} className="input" />
-              <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} className="input min-h-[80px] resize-none" placeholder="Details" />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setShowCreate(false)} className="btn flex-1 bg-muted">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Saving…' : 'Create'}</button>
-              </div>
-            </form>
+            </CrmField>
+            <CrmField label="Due">
+              <input
+                type="datetime-local"
+                value={form.dueAt}
+                onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
+                className={crmInputClass}
+              />
+            </CrmField>
           </div>
-        </div>
-      )}
+          <CrmField label="Subject">
+            <input
+              required
+              value={form.subject}
+              onChange={(e) => setForm({ ...form, subject: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Follow up on credit docs"
+            />
+          </CrmField>
+          <CrmField label="Details">
+            <textarea
+              value={form.body}
+              onChange={(e) => setForm({ ...form, body: e.target.value })}
+              className={crmTextareaClass}
+              placeholder="Notes for the assignee…"
+            />
+          </CrmField>
+          <CrmModalActions
+            onCancel={() => setShowCreate(false)}
+            submitLabel="Create Activity"
+            submitting={saving}
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
     </div>
   );
 }

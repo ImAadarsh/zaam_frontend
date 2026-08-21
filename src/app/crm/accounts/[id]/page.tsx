@@ -10,8 +10,9 @@ import { crmApiError, displayName, formatMoney } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, MessageSquare, Columns3, PhoneCall,
-  StickyNote, ShoppingCart, Plus, X, ExternalLink
+  StickyNote, ShoppingCart, Plus, ExternalLink, Send
 } from 'lucide-react';
+import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 
 type Tab = 'overview' | 'contacts' | 'tickets' | 'deals' | 'activities' | 'notes' | 'orders';
 
@@ -260,37 +261,64 @@ export default function CrmAccount360Page() {
         </main>
       </div>
 
-      {noteOpen && (
-        <Modal title="Add note" onClose={() => setNoteOpen(false)}>
-          <form onSubmit={saveNote} className="space-y-4">
-            <textarea required value={noteText} onChange={(e) => setNoteText(e.target.value)} className="input min-h-[120px] resize-none" />
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setNoteOpen(false)} className="btn flex-1 bg-muted">Cancel</button>
-              <button type="submit" className="btn btn-primary flex-1">Save</button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      <CrmModal open={noteOpen} onClose={() => setNoteOpen(false)} title="Add note" icon={StickyNote}>
+        <form onSubmit={saveNote} className="space-y-4">
+          <CrmField label="Note">
+            <textarea
+              required
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              className={crmTextareaClass}
+              placeholder="Follow-up notes…"
+            />
+          </CrmField>
+          <CrmModalActions
+            onCancel={() => setNoteOpen(false)}
+            submitLabel="Save Note"
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
 
-      {activityOpen && (
-        <Modal title="Log activity" onClose={() => setActivityOpen(false)}>
-          <form onSubmit={saveActivity} className="space-y-4">
-            <select value={activityForm.type} onChange={(e) => setActivityForm({ ...activityForm, type: e.target.value as any })} className="input">
-              <option value="task">Task</option>
-              <option value="call">Call</option>
-              <option value="meeting">Meeting</option>
-              <option value="note">Note</option>
-            </select>
-            <input required value={activityForm.subject} onChange={(e) => setActivityForm({ ...activityForm, subject: e.target.value })} className="input" placeholder="Subject" />
-            <textarea value={activityForm.body} onChange={(e) => setActivityForm({ ...activityForm, body: e.target.value })} className="input min-h-[80px] resize-none" placeholder="Details" />
-            <input type="datetime-local" value={activityForm.dueAt} onChange={(e) => setActivityForm({ ...activityForm, dueAt: e.target.value })} className="input" />
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setActivityOpen(false)} className="btn flex-1 bg-muted">Cancel</button>
-              <button type="submit" className="btn btn-primary flex-1">Create</button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      <CrmModal open={activityOpen} onClose={() => setActivityOpen(false)} title="Log activity" icon={PhoneCall}>
+        <form onSubmit={saveActivity} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Type">
+              <select value={activityForm.type} onChange={(e) => setActivityForm({ ...activityForm, type: e.target.value as any })} className={crmInputClass}>
+                <option value="task">Task</option>
+                <option value="call">Call</option>
+                <option value="meeting">Meeting</option>
+                <option value="note">Note</option>
+              </select>
+            </CrmField>
+            <CrmField label="Due">
+              <input type="datetime-local" value={activityForm.dueAt} onChange={(e) => setActivityForm({ ...activityForm, dueAt: e.target.value })} className={crmInputClass} />
+            </CrmField>
+          </div>
+          <CrmField label="Subject">
+            <input
+              required
+              value={activityForm.subject}
+              onChange={(e) => setActivityForm({ ...activityForm, subject: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Delivery follow-up"
+            />
+          </CrmField>
+          <CrmField label="Details">
+            <textarea
+              value={activityForm.body}
+              onChange={(e) => setActivityForm({ ...activityForm, body: e.target.value })}
+              className={crmTextareaClass}
+              placeholder="Details…"
+            />
+          </CrmField>
+          <CrmModalActions
+            onCancel={() => setActivityOpen(false)}
+            submitLabel="Create Activity"
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
     </div>
   );
 }
@@ -313,19 +341,5 @@ function EntityList({ items, empty, render }: { items: any[]; empty: string; ren
     <ul className="divide-y divide-border/50">
       {items.map((item) => <li key={item.id} className="py-3">{render(item)}</li>)}
     </ul>
-  );
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="glass-card w-full max-w-md overflow-hidden">
-        <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
-          <h2 className="text-lg font-bold">{title}</h2>
-          <button type="button" onClick={onClose} className="p-2 hover:bg-muted rounded-full"><X size={18} /></button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
   );
 }

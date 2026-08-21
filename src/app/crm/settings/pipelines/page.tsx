@@ -12,8 +12,9 @@ import {
 import { crmApiError, PIPELINE_TYPES } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import {
-  Plus, X, Pencil, Trash2, AlertCircle, Settings, ArrowLeft, GripVertical
+  Plus, Pencil, Trash2, AlertCircle, Settings, ArrowLeft, GripVertical, Send
 } from 'lucide-react';
+import { CrmModal, CrmField, CrmModalActions, crmInputClass } from '@/components/crm/crm-modal';
 
 export default function CrmPipelineSettingsPage() {
   const router = useRouter();
@@ -260,57 +261,72 @@ export default function CrmPipelineSettingsPage() {
         </main>
       </div>
 
-      {showPipeline && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
-              <h2 className="text-lg font-bold">New Pipeline</h2>
-              <button type="button" onClick={() => setShowPipeline(false)} className="p-2 hover:bg-muted rounded-full"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleCreatePipeline} className="p-5 space-y-4">
-              <input required value={pipelineForm.name} onChange={(e) => setPipelineForm({ ...pipelineForm, name: e.target.value })} className="input" placeholder="e.g. Onboarding" />
-              <select value={pipelineForm.type} onChange={(e) => setPipelineForm({ ...pipelineForm, type: e.target.value })} className="input">
-                {PIPELINE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={pipelineForm.isDefault} onChange={(e) => setPipelineForm({ ...pipelineForm, isDefault: e.target.checked })} />
-                Set as default
-              </label>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setShowPipeline(false)} className="btn flex-1 bg-muted">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Creating…' : 'Create'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CrmModal open={showPipeline} onClose={() => setShowPipeline(false)} title="New Pipeline" icon={Plus}>
+        <form onSubmit={handleCreatePipeline} className="space-y-4">
+          <CrmField label="Name">
+            <input
+              required
+              value={pipelineForm.name}
+              onChange={(e) => setPipelineForm({ ...pipelineForm, name: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Retailer Onboarding"
+            />
+          </CrmField>
+          <CrmField label="Type">
+            <select value={pipelineForm.type} onChange={(e) => setPipelineForm({ ...pipelineForm, type: e.target.value })} className={crmInputClass}>
+              {PIPELINE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </CrmField>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={pipelineForm.isDefault} onChange={(e) => setPipelineForm({ ...pipelineForm, isDefault: e.target.checked })} />
+            Set as default
+          </label>
+          <CrmModalActions
+            onCancel={() => setShowPipeline(false)}
+            submitLabel="Create Pipeline"
+            submitting={saving}
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
 
-      {showStage && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
-              <h2 className="text-lg font-bold">{editingStage ? 'Edit Stage' : 'New Stage'}</h2>
-              <button type="button" onClick={() => setShowStage(false)} className="p-2 hover:bg-muted rounded-full"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleStageSave} className="p-5 space-y-4">
-              <input required value={stageForm.name} onChange={(e) => setStageForm({ ...stageForm, name: e.target.value })} className="input" placeholder="Stage name" />
-              <input type="number" min={0} max={100} value={stageForm.probability} onChange={(e) => setStageForm({ ...stageForm, probability: e.target.value })} className="input" placeholder="Probability %" />
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={stageForm.isWon} onChange={(e) => setStageForm({ ...stageForm, isWon: e.target.checked, isLost: e.target.checked ? false : stageForm.isLost })} />
-                Won stage
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={stageForm.isLost} onChange={(e) => setStageForm({ ...stageForm, isLost: e.target.checked, isWon: e.target.checked ? false : stageForm.isWon })} />
-                Lost stage
-              </label>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setShowStage(false)} className="btn flex-1 bg-muted">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Saving…' : 'Save'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CrmModal open={showStage} onClose={() => setShowStage(false)} title={editingStage ? 'Edit Stage' : 'New Stage'} icon={editingStage ? Pencil : Plus}>
+        <form onSubmit={handleStageSave} className="space-y-4">
+          <CrmField label="Stage name">
+            <input
+              required
+              value={stageForm.name}
+              onChange={(e) => setStageForm({ ...stageForm, name: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Proposal"
+            />
+          </CrmField>
+          <CrmField label="Probability %">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={stageForm.probability}
+              onChange={(e) => setStageForm({ ...stageForm, probability: e.target.value })}
+              className={crmInputClass}
+            />
+          </CrmField>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={stageForm.isWon} onChange={(e) => setStageForm({ ...stageForm, isWon: e.target.checked, isLost: e.target.checked ? false : stageForm.isLost })} />
+            Won stage
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={stageForm.isLost} onChange={(e) => setStageForm({ ...stageForm, isLost: e.target.checked, isWon: e.target.checked ? false : stageForm.isWon })} />
+            Lost stage
+          </label>
+          <CrmModalActions
+            onCancel={() => setShowStage(false)}
+            submitLabel="Save Stage"
+            submitting={saving}
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
     </div>
   );
 }

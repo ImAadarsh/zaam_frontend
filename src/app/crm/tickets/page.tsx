@@ -7,11 +7,13 @@ import { Header } from '@/components/header';
 import { listTickets, listCustomers, createTicket } from '@/lib/api';
 import { RichDataTable } from '@/components/rich-data-table';
 import { FilterBar, type FilterField } from '@/components/filter-bar';
-import { Plus, Eye, X, Send } from 'lucide-react';
+import { Plus, Eye, Send } from 'lucide-react';
 import { ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { crmApiError } from '@/lib/crm-utils';
+import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
+import { CrmCustomerSelect, customerOptionFromRecord } from '@/components/crm/crm-customer-select';
 
 export default function TicketsPage() {
   return (
@@ -30,6 +32,7 @@ function TicketsPageInner() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     customerId: '',
     subject: '',
@@ -38,6 +41,8 @@ function TicketsPageInner() {
     category: 'general' as any,
     channel: 'web_form' as any,
   });
+
+  const customerOptions = useMemo(() => customers.map(customerOptionFromRecord), [customers]);
 
   const loadData = useCallback(async () => {
     try {
@@ -81,7 +86,12 @@ function TicketsPageInner() {
     e.preventDefault();
     const s = getSession();
     if (!s?.user?.organizationId) return;
+    if (!form.customerId) {
+      toast.error('Select a customer');
+      return;
+    }
 
+    setSaving(true);
     try {
       const res = await createTicket({
         ...form,
@@ -100,6 +110,8 @@ function TicketsPageInner() {
       router.push(`/crm/tickets/${res.data.id}`);
     } catch (err) {
       toast.error(crmApiError(err, 'Failed to create ticket'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -150,16 +162,16 @@ function TicketsPageInner() {
       accessorKey: 'ticketNumber',
       header: 'Ticket #',
       cell: (info) => (
-        <Link href={`/crm/tickets/${info.row.original.id}`} className="font-bold text-zaam-400 hover:text-zaam-300 transition">
+        <Link href={`/crm/tickets/${info.row.original.id}`} className="font-bold text-[#D4A017] hover:text-[#c49415] transition">
           {info.getValue() as string}
         </Link>
       ),
     },
-    { accessorKey: 'subject', header: 'Subject' },
+    { accessorKey: 'subject', header: 'Subject', cell: (i) => <span className="font-medium">{i.getValue() as string}</span> },
     {
       id: 'customer',
       header: 'Customer',
-      accessorFn: (row) => (row.customer ? `${row.customer.firstName} ${row.customer.lastName}` : 'Guest'),
+      accessorFn: (row) => (row.customer ? `${row.customer.firstName || ''} ${row.customer.lastName || ''}`.trim() || row.customer.email : 'Guest'),
     },
     {
       accessorKey: 'priority',
@@ -167,9 +179,10 @@ function TicketsPageInner() {
       cell: (info) => {
         const val = info.getValue() as string;
         return (
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
             val === 'urgent' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-500 border-rose-500/20' :
             val === 'high' ? 'bg-orange-500/10 text-orange-600 dark:text-orange-500 border-orange-500/20' :
+            val === 'low' ? 'bg-muted text-muted-foreground border-border' :
             'bg-blue-500/10 text-blue-600 dark:text-blue-500 border-blue-500/20'
           }`}>{val}</span>
         );
@@ -181,11 +194,11 @@ function TicketsPageInner() {
       cell: (info) => {
         const val = info.getValue() as string;
         return (
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
             val === 'open' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border-emerald-500/20' :
             val === 'new' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-500 border-blue-500/20' :
             'bg-muted text-muted-foreground border-border'
-          }`}>{val}</span>
+          }`}>{val.replace(/_/g, ' ')}</span>
         );
       },
     },
@@ -217,7 +230,7 @@ function TicketsPageInner() {
           actions={[{ label: 'New Ticket', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
         />
 
-        <main className="p-6 md:p-8 space-y-4">
+        <main className="p-6 md:p-8 space-y-5">
           <FilterBar
             fields={filterFields}
             values={filters}
@@ -232,98 +245,75 @@ function TicketsPageInner() {
         </main>
       </div>
 
-      {showCreate && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="glass-card w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-6 border-b border-border flex items-center justify-between bg-muted/30">
-              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-                <Plus className="text-primary" /> Create New Ticket
-              </h2>
-              <button type="button" onClick={() => setShowCreate(false)} className="p-2 hover:bg-muted rounded-full transition text-muted-foreground hover:text-foreground">
-                <X size={20} />
-              </button>
-            </div>
+      <CrmModal open={showCreate} onClose={() => setShowCreate(false)} title="Create New Ticket" icon={Plus}>
+        <form onSubmit={handleCreate} className="space-y-4">
+          <CrmField label="Customer">
+            <CrmCustomerSelect
+              required
+              value={form.customerId}
+              onChange={(customerId) => setForm({ ...form, customerId })}
+              options={customerOptions}
+              placeholder="Select customer"
+            />
+          </CrmField>
 
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Customer</label>
-                <select
-                  required
-                  value={form.customerId}
-                  onChange={(e) => setForm({ ...form, customerId: e.target.value })}
-                  className="input bg-background border-border text-foreground"
-                >
-                  <option value="">Select Customer</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.email})</option>
-                  ))}
-                </select>
-              </div>
+          <CrmField label="Subject">
+            <input
+              required
+              value={form.subject}
+              onChange={(e) => setForm({ ...form, subject: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Order #1234 delayed"
+            />
+          </CrmField>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Subject</label>
-                <input
-                  required
-                  value={form.subject}
-                  onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                  className="input bg-background border-border text-foreground placeholder:text-muted-foreground"
-                  placeholder="e.g., Order #1234 delayed"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Priority</label>
-                  <select
-                    value={form.priority}
-                    onChange={(e) => setForm({ ...form, priority: e.target.value as any })}
-                    className="input bg-background border-border text-foreground"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Category</label>
-                  <select
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value as any })}
-                    className="input bg-background border-border text-foreground"
-                  >
-                    <option value="general">General</option>
-                    <option value="order_inquiry">Order Inquiry</option>
-                    <option value="return">Return</option>
-                    <option value="technical">Technical</option>
-                    <option value="billing">Billing</option>
-                    <option value="complaint">Complaint</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Description</label>
-                <textarea
-                  required
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="input bg-background border-border min-h-[100px] resize-none text-foreground placeholder:text-muted-foreground"
-                  placeholder="Provide detailed information..."
-                />
-              </div>
-
-              <div className="pt-4 flex items-center gap-3">
-                <button type="button" onClick={() => setShowCreate(false)} className="btn flex-1 bg-muted hover:bg-muted/80 text-foreground border-none transition">Cancel</button>
-                <button type="submit" className="btn btn-primary flex-1 gap-2">
-                  <span>Create Ticket</span>
-                  <Send size={18} />
-                </button>
-              </div>
-            </form>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Priority">
+              <select
+                value={form.priority}
+                onChange={(e) => setForm({ ...form, priority: e.target.value as any })}
+                className={crmInputClass}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </CrmField>
+            <CrmField label="Category">
+              <select
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value as any })}
+                className={crmInputClass}
+              >
+                <option value="general">General</option>
+                <option value="order_inquiry">Order Inquiry</option>
+                <option value="return">Return</option>
+                <option value="technical">Technical</option>
+                <option value="billing">Billing</option>
+                <option value="complaint">Complaint</option>
+              </select>
+            </CrmField>
           </div>
-        </div>
-      )}
+
+          <CrmField label="Description">
+            <textarea
+              required
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              className={crmTextareaClass}
+              placeholder="Provide detailed information…"
+            />
+          </CrmField>
+
+          <CrmModalActions
+            onCancel={() => setShowCreate(false)}
+            submitLabel="Create Ticket"
+            submitting={saving}
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
     </div>
   );
 }

@@ -11,7 +11,8 @@ import { listCrmAccounts, createCustomer } from '@/lib/api';
 import { crmApiError, displayName } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Building2, Plus, X, Eye, AlertCircle, ExternalLink } from 'lucide-react';
+import { Building2, Plus, Eye, AlertCircle, ExternalLink, Send } from 'lucide-react';
+import { CrmModal, CrmField, CrmModalActions, crmInputClass } from '@/components/crm/crm-modal';
 
 export default function CrmAccountsPage() {
   const router = useRouter();
@@ -71,7 +72,6 @@ export default function CrmAccountsPage() {
     if (!orgId) return;
     setSaving(true);
     try {
-      // Accounts are ERP customers — create customer then open Account 360
       const res = await createCustomer({
         organizationId: orgId,
         firstName: form.firstName || undefined,
@@ -115,6 +115,16 @@ export default function CrmAccountsPage() {
       cell: (i) => (i.getValue() as string) || '—',
     },
     {
+      id: 'owner',
+      header: 'Owner',
+      cell: (info) => {
+        const o = info.row.original.crmOwner || info.row.original.owner;
+        if (!o) return <span className="text-muted-foreground">—</span>;
+        const name = [o.firstName, o.lastName].filter(Boolean).join(' ') || o.email || '—';
+        return <span className="text-sm">{name}</span>;
+      },
+    },
+    {
       id: 'erp',
       header: 'ERP ID',
       cell: (info) => (
@@ -127,9 +137,14 @@ export default function CrmAccountsPage() {
       cell: (info) => {
         const r = info.row.original;
         return (
-          <span className="text-xs text-muted-foreground">
-            {r.openTicketsCount ?? 0} tix · {r.openDealsCount ?? 0} deals
-          </span>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border border-border bg-muted/40">
+              {r.openTicketsCount ?? 0} tix
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border border-[#D4A017]/25 bg-[#D4A017]/10 text-[#D4A017]">
+              {r.openDealsCount ?? 0} deals
+            </span>
+          </div>
         );
       },
     },
@@ -155,7 +170,7 @@ export default function CrmAccountsPage() {
             { label: 'New Account', onClick: () => setShowCreate(true), icon: <Plus size={18} /> },
           ]}
         />
-        <main className="p-6 md:p-8 space-y-4">
+        <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
               <AlertCircle size={18} className="mt-0.5 shrink-0" />
@@ -189,36 +204,62 @@ export default function CrmAccountsPage() {
         </main>
       </div>
 
-      {showCreate && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-lg overflow-hidden">
-            <div className="p-6 border-b border-border flex items-center justify-between bg-muted/30">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Plus className="text-primary" /> New ERP Customer / Account
-              </h2>
-              <button type="button" onClick={() => setShowCreate(false)} className="p-2 hover:bg-muted rounded-full">
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              <p className="text-xs text-muted-foreground">Creates an ERP customer (Account 360 id = customer id).</p>
-              <div className="grid grid-cols-2 gap-4">
-                <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} className="input" placeholder="First name" />
-                <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className="input" placeholder="Last name" />
-              </div>
-              <input value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} className="input" placeholder="Company" />
-              <div className="grid grid-cols-2 gap-4">
-                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input" placeholder="Email" />
-                <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input" placeholder="Phone" />
-              </div>
-              <div className="pt-2 flex gap-3">
-                <button type="button" onClick={() => setShowCreate(false)} className="btn flex-1 bg-muted">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Saving…' : 'Create'}</button>
-              </div>
-            </form>
+      <CrmModal open={showCreate} onClose={() => setShowCreate(false)} title="New Account" icon={Building2}>
+        <form onSubmit={handleCreate} className="space-y-4">
+          <p className="text-xs text-muted-foreground">Creates an ERP customer. Account 360 id matches the customer id.</p>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="First name">
+              <input
+                value={form.firstName}
+                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                className={crmInputClass}
+                placeholder="First name"
+              />
+            </CrmField>
+            <CrmField label="Last name">
+              <input
+                value={form.lastName}
+                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                className={crmInputClass}
+                placeholder="Last name"
+              />
+            </CrmField>
           </div>
-        </div>
-      )}
+          <CrmField label="Company">
+            <input
+              value={form.companyName}
+              onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+              className={crmInputClass}
+              placeholder="Trading name"
+            />
+          </CrmField>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Email">
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className={crmInputClass}
+                placeholder="buyer@shop.co.uk"
+              />
+            </CrmField>
+            <CrmField label="Phone">
+              <input
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className={crmInputClass}
+                placeholder="+44…"
+              />
+            </CrmField>
+          </div>
+          <CrmModalActions
+            onCancel={() => setShowCreate(false)}
+            submitLabel="Create Account"
+            submitting={saving}
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
     </div>
   );
 }

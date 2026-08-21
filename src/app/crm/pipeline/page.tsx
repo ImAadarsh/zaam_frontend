@@ -13,8 +13,10 @@ import { crmApiError, formatMoney } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import {
-  Plus, X, LayoutGrid, List, ArrowRight, AlertCircle, Columns3
+  Plus, LayoutGrid, List, ArrowRight, AlertCircle, Columns3, Send
 } from 'lucide-react';
+import { CrmModal, CrmField, CrmModalActions, crmInputClass } from '@/components/crm/crm-modal';
+import { CrmCustomerSelect, customerOptionFromRecord } from '@/components/crm/crm-customer-select';
 
 export default function CrmPipelinePage() {
   const router = useRouter();
@@ -46,6 +48,7 @@ export default function CrmPipelinePage() {
     () => [...(pipeline?.stages || [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0)),
     [pipeline]
   );
+  const accountOptions = useMemo(() => accounts.map(customerOptionFromRecord), [accounts]);
 
   const loadPipelines = useCallback(async () => {
     if (!orgId) return;
@@ -117,6 +120,10 @@ export default function CrmPipelinePage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!orgId || !pipelineId) return;
+    if (!form.customerId) {
+      toast.error('Select an account');
+      return;
+    }
     setSaving(true);
     try {
       await createCrmDeal({
@@ -124,7 +131,7 @@ export default function CrmPipelinePage() {
         name: form.name,
         pipelineId,
         stageId: form.stageId || stages[0]?.id,
-        customerId: form.customerId || undefined,
+        customerId: form.customerId,
         amount: form.amount ? Number(form.amount) : undefined,
         currency: form.currency,
         expectedClose: form.expectedClose || undefined,
@@ -167,6 +174,11 @@ export default function CrmPipelinePage() {
       id: 'stage',
       header: 'Stage',
       accessorFn: (r) => r.stage?.name || stages.find((s: any) => String(s.id) === String(r.stageId))?.name || '—',
+      cell: (i) => (
+        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border border-border bg-muted/40">
+          {i.getValue() as string}
+        </span>
+      ),
     },
     {
       accessorKey: 'amount',
@@ -201,6 +213,11 @@ export default function CrmPipelinePage() {
     },
   ], [stages]);
 
+  const openValue = useMemo(
+    () => deals.filter((d) => d.status === 'open').reduce((s, d) => s + (Number(d.amount) || 0), 0),
+    [deals]
+  );
+
   return (
     <div className="min-h-screen app-surface">
       <Sidebar />
@@ -212,47 +229,55 @@ export default function CrmPipelinePage() {
             setShowCreate(true);
           }, icon: <Plus size={18} /> }]}
         />
-        <main className="p-6 md:p-8 space-y-4">
+        <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
               <AlertCircle size={18} className="mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold">Pipeline API not ready</div>
                 <div className="text-xs mt-0.5 opacity-80">
-                  Waiting on <code className="font-mono">/api/crm/pipelines</code> and <code className="font-mono">/api/crm/deals</code>. Configure pipelines in Settings once live.
+                  Waiting on <code className="font-mono">/api/crm/pipelines</code> and <code className="font-mono">/api/crm/deals</code>.
                 </div>
               </div>
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-3 justify-between">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Pipeline</label>
-              <select
-                value={pipelineId}
-                onChange={(e) => setPipelineId(e.target.value)}
-                className="input w-auto min-w-[200px]"
-                disabled={!pipelines.length}
-              >
-                {!pipelines.length && <option value="">No pipelines</option>}
-                {pipelines.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (default)' : ''}</option>
-                ))}
-              </select>
-              <Link href="/crm/settings/pipelines" className="text-xs text-[#D4A017] hover:underline ml-1">Manage</Link>
+          <div className="flex flex-wrap items-end gap-3 justify-between">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.14em]">Pipeline</label>
+                <select
+                  value={pipelineId}
+                  onChange={(e) => setPipelineId(e.target.value)}
+                  className={`${crmInputClass} w-auto min-w-[240px] h-10`}
+                  disabled={!pipelines.length}
+                >
+                  {!pipelines.length && <option value="">No pipelines</option>}
+                  {pipelines.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (default)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <Link href="/crm/settings/pipelines" className="text-xs text-[#D4A017] hover:underline mb-2.5">Manage stages</Link>
+              {!loading && pipelineId && (
+                <div className="mb-2.5 text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{deals.length}</span> deals ·{' '}
+                  <span className="font-semibold text-foreground">{formatMoney(openValue)}</span> open
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1">
               <button
                 type="button"
                 onClick={() => setView('kanban')}
-                className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 ${view === 'kanban' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
+                className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 transition ${view === 'kanban' ? 'bg-background shadow-sm font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 <LayoutGrid size={14} /> Board
               </button>
               <button
                 type="button"
                 onClick={() => setView('list')}
-                className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 ${view === 'list' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground'}`}
+                className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1.5 transition ${view === 'list' ? 'bg-background shadow-sm font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 <List size={14} /> List
               </button>
@@ -275,32 +300,58 @@ export default function CrmPipelinePage() {
               <RichDataTable data={deals} columns={columns} searchPlaceholder="Search deals…" />
             )
           ) : (
-            <div className="flex gap-4 overflow-x-auto pb-4 min-h-[420px]">
+            <div className="flex gap-3 overflow-x-auto pb-4 min-h-[460px]">
               {stages.map((stage: any) => {
                 const columnDeals = dealsForStage(stage.id);
+                const colValue = columnDeals.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+                const isTerminal = stage.isWon || stage.isLost;
                 return (
                   <div
                     key={stage.id}
-                    className="w-72 shrink-0 flex flex-col rounded-2xl border border-border/50 bg-muted/20"
-                    onDragOver={(e) => e.preventDefault()}
+                    className={`w-[280px] shrink-0 flex flex-col rounded-2xl border bg-muted/15 ${
+                      stage.isWon ? 'border-emerald-500/25' : stage.isLost ? 'border-rose-500/20' : 'border-border/60'
+                    }`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.add('ring-2', 'ring-[#D4A017]/40');
+                    }}
+                    onDragLeave={(e) => {
+                      e.currentTarget.classList.remove('ring-2', 'ring-[#D4A017]/40');
+                    }}
                     onDrop={(e) => {
                       e.preventDefault();
+                      e.currentTarget.classList.remove('ring-2', 'ring-[#D4A017]/40');
                       const dealId = e.dataTransfer.getData('text/deal-id') || dragId;
                       if (dealId) void doMove(dealId, stage.id);
                       setDragId(null);
                     }}
                   >
-                    <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-semibold">{stage.name}</div>
-                        <div className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                          {columnDeals.length} · {formatMoney(columnDeals.reduce((s, d) => s + (Number(d.amount) || 0), 0))}
+                    <div className="px-3.5 py-3 border-b border-border/50 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold truncate flex items-center gap-2">
+                          {stage.name}
+                          {isTerminal && (
+                            <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                              stage.isWon ? 'bg-emerald-500/15 text-emerald-600' : 'bg-rose-500/15 text-rose-600'
+                            }`}>
+                              {stage.isWon ? 'Won' : 'Lost'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">
+                          {columnDeals.length} deal{columnDeals.length === 1 ? '' : 's'} · {formatMoney(colValue)}
                         </div>
                       </div>
+                      <span className="shrink-0 h-6 min-w-6 px-1.5 rounded-full bg-[#D4A017]/15 text-[#D4A017] text-[11px] font-bold flex items-center justify-center">
+                        {columnDeals.length}
+                      </span>
                     </div>
-                    <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[70vh]">
+                    <div className="p-2.5 space-y-2.5 flex-1 overflow-y-auto max-h-[70vh]">
                       {columnDeals.length === 0 && (
-                        <div className="text-xs text-muted-foreground text-center py-8 italic">Drop deals here</div>
+                        <div className="rounded-xl border border-dashed border-border/70 bg-background/40 py-10 px-3 text-center">
+                          <p className="text-xs text-muted-foreground">Empty stage</p>
+                          <p className="text-[10px] text-muted-foreground/80 mt-1">Drop a deal here</p>
+                        </div>
                       )}
                       {columnDeals.map((deal) => (
                         <div
@@ -311,12 +362,12 @@ export default function CrmPipelinePage() {
                             e.dataTransfer.setData('text/deal-id', deal.id);
                             e.dataTransfer.effectAllowed = 'move';
                           }}
-                          className="rounded-xl border border-border/60 bg-background p-3 shadow-sm cursor-grab active:cursor-grabbing hover:border-[#D4A017]/40 transition"
+                          className="group rounded-xl border border-border/70 bg-card p-3.5 shadow-sm cursor-grab active:cursor-grabbing hover:border-[#D4A017]/50 hover:shadow-md transition"
                         >
-                          <Link href={`/crm/deals/${deal.id}`} className="font-medium text-sm hover:text-[#D4A017] block">
+                          <Link href={`/crm/deals/${deal.id}`} className="font-medium text-sm hover:text-[#D4A017] block leading-snug">
                             {deal.name}
                           </Link>
-                          <div className="text-xs text-muted-foreground mt-1">{formatMoney(deal.amount, deal.currency)}</div>
+                          <div className="text-sm font-semibold text-foreground mt-2">{formatMoney(deal.amount, deal.currency)}</div>
                           {(deal.customer?.companyName || deal.customer?.email) && (
                             <div className="text-[11px] text-muted-foreground mt-1 truncate">
                               {deal.customer.companyName || deal.customer.email}
@@ -324,7 +375,7 @@ export default function CrmPipelinePage() {
                           )}
                           <button
                             type="button"
-                            className="mt-2 text-[11px] text-[#D4A017] hover:underline"
+                            className="mt-2.5 text-[11px] font-medium text-[#D4A017] hover:underline opacity-80 group-hover:opacity-100"
                             onClick={() => {
                               setMoveDeal(deal);
                               setMoveStageId(deal.stageId || stage.id);
@@ -343,71 +394,75 @@ export default function CrmPipelinePage() {
         </main>
       </div>
 
-      {showCreate && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-border flex items-center justify-between bg-muted/30 sticky top-0">
-              <h2 className="text-xl font-bold">New Deal</h2>
-              <button type="button" onClick={() => setShowCreate(false)} className="p-2 hover:bg-muted rounded-full"><X size={20} /></button>
-            </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Name</label>
-                <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Stage</label>
-                <select required value={form.stageId} onChange={(e) => setForm({ ...form, stageId: e.target.value })} className="input">
-                  {stages.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Account (customer)</label>
-                <select value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })} className="input">
-                  <option value="">Optional</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.companyName || a.email || `#${a.id}`}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Amount</label>
-                  <input type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Close date</label>
-                  <input type="date" value={form.expectedClose} onChange={(e) => setForm({ ...form, expectedClose: e.target.value })} className="input" />
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setShowCreate(false)} className="btn flex-1 bg-muted">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Saving…' : 'Create'}</button>
-              </div>
-            </form>
+      <CrmModal open={showCreate} onClose={() => setShowCreate(false)} title="New Deal" icon={Plus}>
+        <form onSubmit={handleCreate} className="space-y-4">
+          <CrmField label="Deal name">
+            <input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Khan Convenience — starter pack"
+            />
+          </CrmField>
+          <CrmField label="Stage">
+            <select required value={form.stageId} onChange={(e) => setForm({ ...form, stageId: e.target.value })} className={crmInputClass}>
+              {stages.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </CrmField>
+          <CrmField label="Account">
+            <CrmCustomerSelect
+              required
+              value={form.customerId}
+              onChange={(customerId) => setForm({ ...form, customerId })}
+              options={accountOptions}
+              placeholder="Select account"
+            />
+          </CrmField>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Amount">
+              <input
+                type="number"
+                step="0.01"
+                value={form.amount}
+                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                className={crmInputClass}
+                placeholder="0.00"
+              />
+            </CrmField>
+            <CrmField label="Close date">
+              <input
+                type="date"
+                value={form.expectedClose}
+                onChange={(e) => setForm({ ...form, expectedClose: e.target.value })}
+                className={crmInputClass}
+              />
+            </CrmField>
           </div>
-        </div>
-      )}
+          <CrmModalActions
+            onCancel={() => setShowCreate(false)}
+            submitLabel="Create Deal"
+            submitting={saving}
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
 
-      {moveDeal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
-              <h2 className="text-lg font-bold">Move {moveDeal.name}</h2>
-              <button type="button" onClick={() => setMoveDeal(null)} className="p-2 hover:bg-muted rounded-full"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleMoveSubmit} className="p-5 space-y-4">
-              <select required value={moveStageId} onChange={(e) => setMoveStageId(e.target.value)} className="input">
-                {stages.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setMoveDeal(null)} className="btn flex-1 bg-muted">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Moving…' : 'Move'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CrmModal open={!!moveDeal} onClose={() => setMoveDeal(null)} title={moveDeal ? `Move ${moveDeal.name}` : 'Move deal'} icon={ArrowRight}>
+        <form onSubmit={handleMoveSubmit} className="space-y-4">
+          <CrmField label="Target stage">
+            <select required value={moveStageId} onChange={(e) => setMoveStageId(e.target.value)} className={crmInputClass}>
+              {stages.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </CrmField>
+          <CrmModalActions
+            onCancel={() => setMoveDeal(null)}
+            submitLabel="Move Deal"
+            submitting={saving}
+            submitIcon={<ArrowRight size={16} />}
+          />
+        </form>
+      </CrmModal>
     </div>
   );
 }

@@ -12,7 +12,8 @@ import {
 import { crmApiError, displayName, LEAD_SOURCES, LEAD_STATUSES } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, X, Pencil, ArrowRightLeft, AlertCircle, Target } from 'lucide-react';
+import { Plus, Pencil, ArrowRightLeft, AlertCircle, Target, Send } from 'lucide-react';
+import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 
 const emptyForm = {
   name: '',
@@ -23,6 +24,24 @@ const emptyForm = {
   status: 'new',
   notes: '',
 };
+
+function statusBadgeClass(status: string) {
+  switch (status) {
+    case 'qualified':
+      return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+    case 'contacted':
+      return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+    case 'new':
+      return 'bg-[#D4A017]/10 text-[#D4A017] border-[#D4A017]/25';
+    case 'converted':
+      return 'bg-zaam-500/10 text-zaam-600 border-zaam-500/20';
+    case 'lost':
+    case 'unqualified':
+      return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
+    default:
+      return 'bg-muted/40 text-muted-foreground border-border';
+  }
+}
 
 export default function CrmLeadsPage() {
   const router = useRouter();
@@ -208,13 +227,22 @@ export default function CrmLeadsPage() {
     {
       accessorKey: 'status',
       header: 'Status',
-      cell: (info) => (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border border-border bg-muted/40">
-          {info.getValue() as string}
-        </span>
+      cell: (info) => {
+        const val = String(info.getValue() || '');
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${statusBadgeClass(val)}`}>
+            {val}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: 'source',
+      header: 'Source',
+      cell: (i) => (
+        <span className="text-xs text-muted-foreground capitalize">{String(i.getValue() || '—').replace(/_/g, ' ')}</span>
       ),
     },
-    { accessorKey: 'source', header: 'Source' },
     {
       accessorKey: 'createdAt',
       header: 'Created',
@@ -248,7 +276,7 @@ export default function CrmLeadsPage() {
       <Sidebar />
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header title="Leads" actions={[{ label: 'New Lead', onClick: openCreate, icon: <Plus size={18} /> }]} />
-        <main className="p-6 md:p-8 space-y-4">
+        <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
               <AlertCircle size={18} className="mt-0.5 shrink-0" />
@@ -282,86 +310,136 @@ export default function CrmLeadsPage() {
         </main>
       </div>
 
-      {(modal === 'create' || modal === 'edit') && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-border flex items-center justify-between bg-muted/30 sticky top-0">
-              <h2 className="text-xl font-bold">{modal === 'edit' ? 'Edit Lead' : 'New Lead'}</h2>
-              <button type="button" onClick={() => setModal(null)} className="p-2 hover:bg-muted rounded-full"><X size={20} /></button>
-            </div>
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Name</label>
-                <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Company</label>
-                <input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} className="input" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input" placeholder="Email" />
-                <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input" placeholder="Phone" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} className="input">
-                  {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-                <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="input">
-                  {LEAD_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input min-h-[80px] resize-none" placeholder="Notes" />
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setModal(null)} className="btn flex-1 bg-muted">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Saving…' : 'Save'}</button>
-              </div>
-            </form>
+      <CrmModal
+        open={modal === 'create' || modal === 'edit'}
+        onClose={() => setModal(null)}
+        title={modal === 'edit' ? 'Edit Lead' : 'New Lead'}
+        icon={modal === 'edit' ? Pencil : Plus}
+      >
+        <form onSubmit={handleSave} className="space-y-4">
+          <CrmField label="Name">
+            <input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Aisha Khan"
+            />
+          </CrmField>
+          <CrmField label="Company">
+            <input
+              value={form.company}
+              onChange={(e) => setForm({ ...form, company: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Khan Convenience"
+            />
+          </CrmField>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Email">
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className={crmInputClass}
+                placeholder="name@example.com"
+              />
+            </CrmField>
+            <CrmField label="Phone">
+              <input
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className={crmInputClass}
+                placeholder="+44…"
+              />
+            </CrmField>
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Source">
+              <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} className={crmInputClass}>
+                {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </CrmField>
+            <CrmField label="Status">
+              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className={crmInputClass}>
+                {LEAD_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </CrmField>
+          </div>
+          <CrmField label="Notes">
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              className={crmTextareaClass}
+              placeholder="Context, next steps…"
+            />
+          </CrmField>
+          <CrmModalActions
+            onCancel={() => setModal(null)}
+            submitLabel={modal === 'edit' ? 'Save Lead' : 'Create Lead'}
+            submitting={saving}
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
 
-      {modal === 'convert' && editing && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-card w-full max-w-lg overflow-hidden">
-            <div className="p-6 border-b border-border flex items-center justify-between bg-muted/30">
-              <h2 className="text-xl font-bold">Convert {editing.name}</h2>
-              <button type="button" onClick={() => setModal(null)} className="p-2 hover:bg-muted rounded-full"><X size={20} /></button>
-            </div>
-            <form onSubmit={handleConvert} className="p-6 space-y-4">
-              <p className="text-xs text-muted-foreground">Creates or links an ERP customer. Optionally create a deal.</p>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={convertForm.createDeal} onChange={(e) => setConvertForm({ ...convertForm, createDeal: e.target.checked })} />
-                Create deal
-              </label>
-              {convertForm.createDeal && (
-                <>
-                  <input required value={convertForm.dealName} onChange={(e) => setConvertForm({ ...convertForm, dealName: e.target.value })} className="input" placeholder="Deal name" />
-                  <select
-                    value={convertForm.pipelineId}
-                    onChange={(e) => {
-                      const p = pipelines.find((x) => x.id === e.target.value);
-                      setConvertForm({ ...convertForm, pipelineId: e.target.value, stageId: p?.stages?.[0]?.id || '' });
-                    }}
-                    className="input"
-                  >
-                    <option value="">Select pipeline</option>
-                    {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <select value={convertForm.stageId} onChange={(e) => setConvertForm({ ...convertForm, stageId: e.target.value })} className="input">
+      <CrmModal open={modal === 'convert' && !!editing} onClose={() => setModal(null)} title={editing ? `Convert ${editing.name}` : 'Convert'} icon={ArrowRightLeft}>
+        <form onSubmit={handleConvert} className="space-y-4">
+          <p className="text-xs text-muted-foreground">Creates or links an ERP customer. Optionally create a deal on a pipeline.</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={convertForm.createDeal} onChange={(e) => setConvertForm({ ...convertForm, createDeal: e.target.checked })} />
+            Create deal
+          </label>
+          {convertForm.createDeal && (
+            <>
+              <CrmField label="Deal name">
+                <input
+                  required
+                  value={convertForm.dealName}
+                  onChange={(e) => setConvertForm({ ...convertForm, dealName: e.target.value })}
+                  className={crmInputClass}
+                />
+              </CrmField>
+              <CrmField label="Pipeline">
+                <select
+                  value={convertForm.pipelineId}
+                  onChange={(e) => {
+                    const p = pipelines.find((x) => x.id === e.target.value);
+                    setConvertForm({ ...convertForm, pipelineId: e.target.value, stageId: p?.stages?.[0]?.id || '' });
+                  }}
+                  className={crmInputClass}
+                >
+                  <option value="">Select pipeline</option>
+                  {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </CrmField>
+              <div className="grid grid-cols-2 gap-4">
+                <CrmField label="Stage">
+                  <select value={convertForm.stageId} onChange={(e) => setConvertForm({ ...convertForm, stageId: e.target.value })} className={crmInputClass}>
                     <option value="">Select stage</option>
                     {(selectedPipeline?.stages || []).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
-                  <input type="number" step="0.01" value={convertForm.dealAmount} onChange={(e) => setConvertForm({ ...convertForm, dealAmount: e.target.value })} className="input" placeholder="Amount" />
-                </>
-              )}
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setModal(null)} className="btn flex-1 bg-muted">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Converting…' : 'Convert'}</button>
+                </CrmField>
+                <CrmField label="Amount">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={convertForm.dealAmount}
+                    onChange={(e) => setConvertForm({ ...convertForm, dealAmount: e.target.value })}
+                    className={crmInputClass}
+                    placeholder="0.00"
+                  />
+                </CrmField>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </>
+          )}
+          <CrmModalActions
+            onCancel={() => setModal(null)}
+            submitLabel="Convert Lead"
+            submitting={saving}
+            submitIcon={<ArrowRightLeft size={16} />}
+          />
+        </form>
+      </CrmModal>
     </div>
   );
 }
