@@ -4533,6 +4533,80 @@ export async function getCrmDashboard(params?: { organizationId?: string }) {
   };
 }
 
+export async function getCrmForecast(params?: {
+  organizationId?: string;
+  ownerUserId?: string;
+  pipelineId?: string;
+  from?: string;
+  to?: string;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/forecast${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any; meta?: any };
+}
+
+export async function getCrmSettings(params?: { organizationId?: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/settings${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function updateCrmSettings(payload: {
+  autoAssignLeads?: boolean;
+  autoFollowupOnLead?: boolean;
+  organizationId?: string;
+}) {
+  const { data } = await axios.patch(
+    `${API_BASE}/api/crm/settings`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function listCrmContacts(params?: {
+  organizationId?: string;
+  customerId?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/contacts${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createCrmContact(payload: {
+  organizationId?: string;
+  customerId: string;
+  firstName: string;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  title?: string | null;
+  isPrimary?: boolean;
+  notes?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/contacts`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateCrmContact(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/crm/contacts/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteCrmContact(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/crm/contacts/${id}`, { headers: authHeaders() });
+  return status === 204 || status === 200;
+}
+
 // ACCOUNTS (ERP customers + CRM enrichment; id === customerId)
 export async function listCrmAccounts(params?: {
   organizationId?: string;
@@ -4562,11 +4636,20 @@ export async function getCrmAccount(customerId: string, params?: { orderLimit?: 
       deals?: any[];
       activities?: any[];
       notes?: any[];
+      contacts?: any[];
       tags?: any[];
       portalRetailer?: any | null;
       [key: string]: any;
     };
   };
+}
+
+export async function getCrmAccountTimeline(customerId: string, params?: { limit?: number }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/accounts/${customerId}/timeline${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: Array<{ id: string; type: string; at: string; title: string; body?: string | null; meta?: any }>; meta?: any };
 }
 
 export async function updateCrmAccount(customerId: string, payload: { crmOwnerUserId?: string | null }) {
@@ -4604,6 +4687,7 @@ export async function listCrmLeads(params?: {
   organizationId?: string;
   status?: string;
   ownerUserId?: string;
+  priority?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -4631,9 +4715,12 @@ export async function createCrmLead(payload: {
   ownerUserId?: string | null;
   affiliateId?: string | null;
   notes?: string | null;
+  score?: number | null;
+  priority?: string;
+  disqualifiedReason?: string | null;
 }) {
   const { data } = await axios.post(`${API_BASE}/api/crm/leads`, payload, { headers: authHeaders() });
-  return data as { data: any };
+  return data as { data: any; meta?: any };
 }
 
 export async function updateCrmLead(id: string, payload: Record<string, any>) {
@@ -5797,4 +5884,412 @@ export async function sendMarketingEmailCampaign(
       smtpConfigured: boolean;
     };
   };
+}
+
+// ---------------------------------------------------------------------------
+// PROJECT MANAGEMENT — see zaam-api/docs/PROJECT_MANAGEMENT_API.md
+// Base path: /api/pm  (projects, work orders, tasks, milestones, schedule)
+// ---------------------------------------------------------------------------
+
+function pmQuery(params?: Record<string, string | number | boolean | undefined | null>) {
+  return crmQuery(params);
+}
+
+export async function getPmDashboard(params?: { organizationId?: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/dashboard${pmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: {
+      activeProjects?: number;
+      projectsByStatus?: Record<string, number>;
+      overdueTasks?: number | any[];
+      overdueTasksCount?: number;
+      upcomingMilestones?: any[];
+      openWorkOrders?: number;
+      myOpenTasks?: number;
+      asOf?: string;
+      [key: string]: any;
+    };
+  };
+}
+
+export async function listPmProjects(params?: {
+  organizationId?: string;
+  status?: string;
+  customerId?: string;
+  ownerUserId?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/projects${pmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: { total?: number; page?: number; limit?: number } };
+}
+
+export async function getPmProject(id: string, params?: { organizationId?: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/projects/${id}${pmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function createPmProject(payload: {
+  organizationId?: string;
+  name: string;
+  code?: string | null;
+  customerId?: string | null;
+  orderId?: string | null;
+  scope?: string | null;
+  objectives?: string | null;
+  status?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  budget?: number;
+  currency?: string;
+  ownerUserId?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/pm/projects`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePmProject(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/pm/projects/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function getPmProjectProgress(id: string) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/projects/${id}/progress`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function markPmProjectProductionReady(id: string, payload?: { productionReady?: boolean }) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/pm/projects/${id}/mark-production-ready`,
+    payload || { productionReady: true },
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function completePmProject(id: string) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/pm/projects/${id}/complete`,
+    {},
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function listPmDeliverables(projectId: string) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/projects/${projectId}/deliverables`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+
+export async function createPmDeliverable(
+  projectId: string,
+  payload: {
+    title: string;
+    description?: string | null;
+    status?: string;
+    dueDate?: string | null;
+  }
+) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/pm/projects/${projectId}/deliverables`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function updatePmDeliverable(
+  projectId: string,
+  deliverableId: string,
+  payload: Record<string, any>
+) {
+  const { data } = await axios.patch(
+    `${API_BASE}/api/pm/projects/${projectId}/deliverables/${deliverableId}`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function deletePmDeliverable(projectId: string, deliverableId: string) {
+  const { status } = await axios.delete(
+    `${API_BASE}/api/pm/projects/${projectId}/deliverables/${deliverableId}`,
+    { headers: authHeaders() }
+  );
+  return status === 204 || status === 200;
+}
+
+export async function listPmWorkOrders(params?: {
+  organizationId?: string;
+  projectId?: string;
+  status?: string;
+  assigneeUserId?: string;
+  stageId?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/work-orders${pmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function getPmWorkOrder(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/pm/work-orders/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createPmWorkOrder(payload: {
+  organizationId?: string;
+  projectId: string;
+  title: string;
+  description?: string | null;
+  status?: string;
+  assigneeUserId?: string | null;
+  stageId?: string | null;
+  scheduledStart?: string | null;
+  scheduledEnd?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/pm/work-orders`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePmWorkOrder(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/pm/work-orders/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listPmStages(params?: {
+  organizationId?: string;
+  projectId?: string | null;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/stages${pmQuery(params as any)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+
+export async function createPmStage(payload: {
+  organizationId?: string;
+  projectId?: string | null;
+  name: string;
+  position?: number;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/pm/stages`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePmStage(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/pm/stages/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deletePmStage(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/pm/stages/${id}`, { headers: authHeaders() });
+  return status === 204 || status === 200;
+}
+
+export async function listPmTasks(params?: {
+  organizationId?: string;
+  projectId?: string;
+  workOrderId?: string;
+  status?: string;
+  assigneeUserId?: string;
+  priority?: string;
+  overdue?: boolean | string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/tasks${pmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function getPmTask(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/pm/tasks/${id}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function createPmTask(payload: {
+  organizationId?: string;
+  projectId: string;
+  workOrderId?: string | null;
+  title: string;
+  description?: string | null;
+  assigneeUserId?: string | null;
+  status?: string;
+  priority?: string;
+  dueDate?: string | null;
+  estimateHours?: number;
+  loggedHours?: number;
+  progressPct?: number;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/pm/tasks`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePmTask(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/pm/tasks/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function completePmTask(id: string) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/pm/tasks/${id}/complete`,
+    {},
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function addPmTaskDependency(taskId: string, payload: { dependsOnTaskId: string }) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/pm/tasks/${taskId}/dependencies`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function removePmTaskDependency(taskId: string, dependsOnTaskId: string) {
+  const { status } = await axios.delete(
+    `${API_BASE}/api/pm/tasks/${taskId}/dependencies/${dependsOnTaskId}`,
+    { headers: authHeaders() }
+  );
+  return status === 204 || status === 200;
+}
+
+export async function listPmMilestones(params?: {
+  organizationId?: string;
+  projectId?: string;
+  status?: string;
+  upcoming?: boolean | string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/milestones${pmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createPmMilestone(payload: {
+  projectId: string;
+  title: string;
+  description?: string | null;
+  dueDate?: string | null;
+  status?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/pm/milestones`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePmMilestone(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/pm/milestones/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deletePmMilestone(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/pm/milestones/${id}`, { headers: authHeaders() });
+  return status === 204 || status === 200;
+}
+
+export async function listPmSchedule(params?: {
+  organizationId?: string;
+  userId?: string;
+  projectId?: string;
+  taskId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/schedule-blocks${pmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createPmScheduleBlock(payload: {
+  organizationId?: string;
+  userId: string;
+  projectId?: string | null;
+  taskId?: string | null;
+  startAt: string;
+  endAt: string;
+  notes?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/pm/schedule-blocks`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePmScheduleBlock(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/pm/schedule-blocks/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deletePmScheduleBlock(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/pm/schedule-blocks/${id}`, { headers: authHeaders() });
+  return status === 204 || status === 200;
+}
+
+export async function listPmProjectMembers(projectId: string) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/pm/projects/${projectId}/members`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+
+export async function addPmProjectMember(projectId: string, payload: {
+  userId: string;
+  role?: string;
+}) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/pm/projects/${projectId}/members`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function updatePmProjectMember(projectId: string, memberId: string, payload: { role: string }) {
+  const { data } = await axios.patch(
+    `${API_BASE}/api/pm/projects/${projectId}/members/${memberId}`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function removePmProjectMember(projectId: string, memberId: string) {
+  const { status } = await axios.delete(
+    `${API_BASE}/api/pm/projects/${projectId}/members/${memberId}`,
+    { headers: authHeaders() }
+  );
+  return status === 204 || status === 200;
 }

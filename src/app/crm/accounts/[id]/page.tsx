@@ -5,35 +5,57 @@ import Link from 'next/link';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { useSession } from '@/hooks/use-session';
-import { getCrmAccount, addCrmAccountNote, createCrmActivity } from '@/lib/api';
+import {
+  getCrmAccount, getCrmAccountTimeline, addCrmAccountNote, createCrmActivity,
+  createCrmContact, updateCrmContact, deleteCrmContact
+} from '@/lib/api';
 import { crmApiError, displayName, formatMoney } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, MessageSquare, Columns3, PhoneCall,
-  StickyNote, ShoppingCart, Plus, ExternalLink, Send
+  StickyNote, ShoppingCart, Plus, ExternalLink, Send, History, Users, Trash2, Pencil
 } from 'lucide-react';
 import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 
-type Tab = 'overview' | 'contacts' | 'tickets' | 'deals' | 'activities' | 'notes' | 'orders';
+type Tab = 'overview' | 'timeline' | 'contacts' | 'tickets' | 'deals' | 'activities' | 'notes' | 'orders';
+
+const emptyContact = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  title: '',
+  isPrimary: false,
+  notes: '',
+};
 
 export default function CrmAccount360Page() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { session, hydrated } = useSession();
   const [payload, setPayload] = useState<any>(null);
+  const [timeline, setTimeline] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('overview');
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [activityOpen, setActivityOpen] = useState(false);
   const [activityForm, setActivityForm] = useState({ type: 'task' as 'task' | 'call' | 'meeting' | 'note', subject: '', body: '', dueAt: '' });
+  const [contactOpen, setContactOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<any>(null);
+  const [contactForm, setContactForm] = useState(emptyContact);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
-      const res = await getCrmAccount(id, { orderLimit: 20 });
+      const [res, tl] = await Promise.all([
+        getCrmAccount(id, { orderLimit: 20 }),
+        getCrmAccountTimeline(id, { limit: 80 }).catch(() => ({ data: [] })),
+      ]);
       setPayload(res.data);
+      setTimeline(tl.data || []);
     } catch (err) {
       toast.error(crmApiError(err, 'Failed to load account'));
       setPayload(null);
@@ -85,6 +107,69 @@ export default function CrmAccount360Page() {
     }
   }
 
+  function openContact(c?: any) {
+    if (c) {
+      setEditingContact(c);
+      setContactForm({
+        firstName: c.firstName || '',
+        lastName: c.lastName || '',
+        email: c.email || '',
+        phone: c.phone || '',
+        title: c.title || '',
+        isPrimary: !!c.isPrimary,
+        notes: c.notes || '',
+      });
+    } else {
+      setEditingContact(null);
+      setContactForm(emptyContact);
+    }
+    setContactOpen(true);
+  }
+
+  async function saveContact(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payloadContact = {
+        firstName: contactForm.firstName,
+        lastName: contactForm.lastName || null,
+        email: contactForm.email || null,
+        phone: contactForm.phone || null,
+        title: contactForm.title || null,
+        isPrimary: contactForm.isPrimary,
+        notes: contactForm.notes || null,
+      };
+      if (editingContact) {
+        await updateCrmContact(editingContact.id, payloadContact);
+        toast.success('Contact updated');
+      } else {
+        await createCrmContact({
+          organizationId: session?.user?.organizationId,
+          customerId: id,
+          ...payloadContact,
+        });
+        toast.success('Contact created');
+      }
+      setContactOpen(false);
+      void load();
+    } catch (err) {
+      toast.error(crmApiError(err, 'Failed to save contact'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeContact(c: any) {
+    if (!confirm(`Delete contact ${c.firstName}?`)) return;
+    try {
+      await deleteCrmContact(c.id);
+      toast.success('Contact deleted');
+      void load();
+    } catch (err) {
+      toast.error(crmApiError(err, 'Failed to delete contact'));
+    }
+  }
+
   const customer = payload?.customer;
   const title = displayName(customer) || `Customer #${id}`;
   const tickets = payload?.openTickets || [];
@@ -92,11 +177,13 @@ export default function CrmAccount360Page() {
   const activities = payload?.activities || [];
   const notes = payload?.notes || [];
   const orders = payload?.recentOrders || [];
+  const contacts = payload?.contacts || [];
   const addresses = payload?.addresses || [];
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'contacts', label: 'Contacts', count: addresses.length ? 1 : undefined },
+    { id: 'timeline', label: 'Timeline', count: timeline.length },
+    { id: 'contacts', label: 'Contacts', count: contacts.length },
     { id: 'tickets', label: 'Tickets', count: tickets.length },
     { id: 'deals', label: 'Deals', count: deals.length },
     { id: 'activities', label: 'Activities', count: activities.length },
@@ -148,6 +235,9 @@ export default function CrmAccount360Page() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => openContact()} className="btn bg-muted gap-2 text-sm">
+                    <Users size={16} /> Add contact
+                  </button>
                   <button type="button" onClick={() => setActivityOpen(true)} className="btn bg-muted gap-2 text-sm">
                     <PhoneCall size={16} /> Log activity
                   </button>
@@ -193,21 +283,91 @@ export default function CrmAccount360Page() {
                         ))}
                       </div>
                     )}
+                    {timeline.length > 0 && (
+                      <div className="md:col-span-3 border-t border-border/50 pt-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-semibold flex items-center gap-2"><History size={16} /> Recent interactions</h3>
+                          <button type="button" className="text-xs text-[#D4A017] hover:underline" onClick={() => setTab('timeline')}>Full timeline</button>
+                        </div>
+                        <ul className="space-y-2">
+                          {timeline.slice(0, 5).map((item) => (
+                            <li key={item.id} className="text-sm flex gap-3">
+                              <span className="text-[10px] uppercase font-bold text-muted-foreground w-24 shrink-0 pt-0.5">{item.type.replace('_', ' ')}</span>
+                              <div className="min-w-0">
+                                <div className="font-medium truncate">{item.title}</div>
+                                <div className="text-xs text-muted-foreground">{item.at ? new Date(item.at).toLocaleString() : ''}</div>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {tab === 'contacts' && (
-                  <div className="space-y-3 text-sm">
-                    <div>
-                      <div className="font-medium">{displayName(customer)}</div>
-                      <div className="text-xs text-muted-foreground">{[customer.email, customer.phone].filter(Boolean).join(' · ')}</div>
-                      <div className="text-xs text-muted-foreground mt-1">Primary contact (from customer fields)</div>
-                    </div>
-                    {addresses.map((a: any) => (
-                      <div key={a.id} className="text-xs text-muted-foreground border-t border-border/50 pt-3">
-                        {[a.addressLine1, a.city, a.postalCode, a.countryCode].filter(Boolean).join(', ')}
-                      </div>
+                {tab === 'timeline' && (
+                  <ul className="relative space-y-0">
+                    {!timeline.length && <p className="text-sm text-muted-foreground italic text-center py-8">No interaction history yet.</p>}
+                    {timeline.map((item, idx) => (
+                      <li key={item.id} className="relative pl-6 pb-5 last:pb-0">
+                        {idx < timeline.length - 1 && (
+                          <span className="absolute left-[7px] top-3 bottom-0 w-px bg-border/60" />
+                        )}
+                        <span className="absolute left-0 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-[#D4A017] bg-background" />
+                        <div className="text-[10px] uppercase font-bold tracking-wide text-muted-foreground mb-0.5">
+                          {String(item.type).replace(/_/g, ' ')} · {item.at ? new Date(item.at).toLocaleString() : ''}
+                        </div>
+                        <div className="font-medium text-sm">{item.title}</div>
+                        {item.body && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap line-clamp-4">{item.body}</p>}
+                      </li>
                     ))}
+                  </ul>
+                )}
+
+                {tab === 'contacts' && (
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => openContact()} className="btn btn-primary gap-2 text-sm">
+                        <Plus size={16} /> Contact
+                      </button>
+                    </div>
+                    {!contacts.length && (
+                      <p className="text-sm text-muted-foreground italic text-center py-8">
+                        No contacts yet. Add buyers and people on this account.
+                      </p>
+                    )}
+                    <ul className="divide-y divide-border/50">
+                      {contacts.map((c: any) => (
+                        <li key={c.id} className="py-3 flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="font-medium">
+                              {[c.firstName, c.lastName].filter(Boolean).join(' ')}
+                              {c.isPrimary && (
+                                <span className="ml-2 text-[10px] uppercase font-bold text-[#D4A017]">Primary</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {[c.title, c.email, c.phone].filter(Boolean).join(' · ') || '—'}
+                            </div>
+                            {c.notes && <div className="text-xs text-muted-foreground mt-1">{c.notes}</div>}
+                          </div>
+                          <div className="flex gap-1">
+                            <button type="button" className="p-2 rounded-lg hover:bg-muted" onClick={() => openContact(c)}><Pencil size={14} /></button>
+                            <button type="button" className="p-2 rounded-lg hover:bg-muted text-rose-500" onClick={() => void removeContact(c)}><Trash2 size={14} /></button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    {addresses.length > 0 && (
+                      <div className="border-t border-border/50 pt-4 mt-2">
+                        <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">Addresses</div>
+                        {addresses.map((a: any) => (
+                          <div key={a.id} className="text-xs text-muted-foreground">
+                            {[a.addressLine1, a.city, a.postalCode, a.countryCode].filter(Boolean).join(', ')}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -315,6 +475,43 @@ export default function CrmAccount360Page() {
           <CrmModalActions
             onCancel={() => setActivityOpen(false)}
             submitLabel="Create Activity"
+            submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
+
+      <CrmModal open={contactOpen} onClose={() => setContactOpen(false)} title={editingContact ? 'Edit contact' : 'New contact'} icon={Users}>
+        <form onSubmit={saveContact} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="First name">
+              <input required value={contactForm.firstName} onChange={(e) => setContactForm({ ...contactForm, firstName: e.target.value })} className={crmInputClass} />
+            </CrmField>
+            <CrmField label="Last name">
+              <input value={contactForm.lastName} onChange={(e) => setContactForm({ ...contactForm, lastName: e.target.value })} className={crmInputClass} />
+            </CrmField>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Email">
+              <input type="email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })} className={crmInputClass} />
+            </CrmField>
+            <CrmField label="Phone">
+              <input value={contactForm.phone} onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })} className={crmInputClass} />
+            </CrmField>
+          </div>
+          <CrmField label="Title">
+            <input value={contactForm.title} onChange={(e) => setContactForm({ ...contactForm, title: e.target.value })} className={crmInputClass} placeholder="Buyer, Ops…" />
+          </CrmField>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={contactForm.isPrimary} onChange={(e) => setContactForm({ ...contactForm, isPrimary: e.target.checked })} />
+            Primary contact
+          </label>
+          <CrmField label="Notes">
+            <textarea value={contactForm.notes} onChange={(e) => setContactForm({ ...contactForm, notes: e.target.value })} className={crmTextareaClass} />
+          </CrmField>
+          <CrmModalActions
+            onCancel={() => setContactOpen(false)}
+            submitLabel={editingContact ? 'Save' : 'Create'}
+            submitting={saving}
             submitIcon={<Send size={16} />}
           />
         </form>

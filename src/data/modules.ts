@@ -1,6 +1,6 @@
 import {
   Shield, Boxes, Package2, ShoppingCart, Truck, Wallet, Landmark,
-  Users, Headset, Megaphone, Share2, BarChart3, Settings, Store
+  Users, Headset, Megaphone, Share2, BarChart3, Settings, Store, FolderKanban
 } from 'lucide-react';
 
 export const modules = [
@@ -43,6 +43,10 @@ export const modules = [
   {
     slug: 'crm', name: 'CRM & Service', icon: Headset, color: '#D4A017',
     description: 'Accounts, Leads, Pipeline, Integrations, Tickets & Tiers'
+  },
+  {
+    slug: 'projects', name: 'Project Management', icon: FolderKanban, color: '#D4A017',
+    description: 'Jobs, work orders, tasks, milestones, staff schedule & progress'
   },
   {
     slug: 'marketing', name: 'Marketing & Affiliates', icon: Megaphone, color: '#0A0A0A',

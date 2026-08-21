@@ -9,7 +9,7 @@ import { useSession } from '@/hooks/use-session';
 import {
   listCrmLeads, createCrmLead, updateCrmLead, convertCrmLead, listCrmPipelines, syncCrmLeadToMarketing
 } from '@/lib/api';
-import { crmApiError, displayName, LEAD_SOURCES, LEAD_STATUSES } from '@/lib/crm-utils';
+import { crmApiError, displayName, LEAD_SOURCES, LEAD_STATUSES, LEAD_PRIORITIES } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { Plus, Pencil, ArrowRightLeft, AlertCircle, Target, Send, Megaphone } from 'lucide-react';
@@ -22,6 +22,9 @@ const emptyForm = {
   phone: '',
   source: 'website',
   status: 'new',
+  priority: 'medium',
+  score: '',
+  disqualifiedReason: '',
   notes: '',
 };
 
@@ -40,6 +43,19 @@ function statusBadgeClass(status: string) {
       return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
     default:
       return 'bg-muted/40 text-muted-foreground border-border';
+  }
+}
+
+function priorityBadgeClass(priority: string) {
+  switch (priority) {
+    case 'urgent':
+      return 'bg-rose-500/15 text-rose-600 border-rose-500/25';
+    case 'high':
+      return 'bg-orange-500/10 text-orange-600 border-orange-500/20';
+    case 'low':
+      return 'bg-muted/40 text-muted-foreground border-border';
+    default:
+      return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
   }
 }
 
@@ -75,6 +91,7 @@ export default function CrmLeadsPage() {
         organizationId: orgId,
         search: search || undefined,
         status: filters.status || undefined,
+        priority: filters.priority || undefined,
       });
       setItems(res.data || []);
       setApiMissing(false);
@@ -132,6 +149,9 @@ export default function CrmLeadsPage() {
       phone: lead.phone || '',
       source: lead.source || 'website',
       status: lead.status || 'new',
+      priority: lead.priority || 'medium',
+      score: lead.score != null ? String(lead.score) : '',
+      disqualifiedReason: lead.disqualifiedReason || '',
       notes: lead.notes || '',
     });
     setModal('edit');
@@ -160,14 +180,17 @@ export default function CrmLeadsPage() {
       phone: form.phone || null,
       source: form.source,
       status: form.status,
+      priority: form.priority,
+      score: form.score !== '' ? Number(form.score) : null,
+      disqualifiedReason: form.status === 'unqualified' ? (form.disqualifiedReason || null) : null,
       notes: form.notes || null,
-      ownerUserId: session?.user?.id,
     };
     try {
       if (modal === 'edit' && editing) {
         await updateCrmLead(editing.id, payload);
         toast.success('Lead updated');
       } else {
+        // Omit owner so API can auto-assign (round-robin) when enabled
         await createCrmLead({ organizationId: orgId, ...payload });
         toast.success('Lead created');
       }
@@ -232,6 +255,13 @@ export default function CrmLeadsPage() {
       primary: true,
       options: LEAD_STATUSES.map((s) => ({ value: s.value, label: s.label })),
     },
+    {
+      key: 'priority',
+      label: 'Priority',
+      type: 'select',
+      primary: true,
+      options: LEAD_PRIORITIES.map((s) => ({ value: s.value, label: s.label })),
+    },
   ], []);
 
   const columns = useMemo<ColumnDef<any>[]>(() => [
@@ -253,6 +283,23 @@ export default function CrmLeadsPage() {
           </span>
         );
       },
+    },
+    {
+      accessorKey: 'priority',
+      header: 'Priority',
+      cell: (info) => {
+        const val = String(info.getValue() || 'medium');
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${priorityBadgeClass(val)}`}>
+            {val}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: 'score',
+      header: 'Score',
+      cell: (i) => (i.getValue() != null ? String(i.getValue()) : '—'),
     },
     {
       accessorKey: 'source',
@@ -392,6 +439,34 @@ export default function CrmLeadsPage() {
               </select>
             </CrmField>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Priority">
+              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className={crmInputClass}>
+                {LEAD_PRIORITIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </CrmField>
+            <CrmField label="Score (0–100)">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={form.score}
+                onChange={(e) => setForm({ ...form, score: e.target.value })}
+                className={crmInputClass}
+                placeholder="e.g. 75"
+              />
+            </CrmField>
+          </div>
+          {form.status === 'unqualified' && (
+            <CrmField label="Disqualify reason">
+              <input
+                value={form.disqualifiedReason}
+                onChange={(e) => setForm({ ...form, disqualifiedReason: e.target.value })}
+                className={crmInputClass}
+                placeholder="Why was this lead disqualified?"
+              />
+            </CrmField>
+          )}
           <CrmField label="Notes">
             <textarea
               value={form.notes}

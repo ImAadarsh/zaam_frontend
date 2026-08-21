@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall, Plug, Mail } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall, Plug, Mail, FolderKanban, Flag } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -19,6 +19,7 @@ export function Sidebar() {
   const isFinance = root === 'finance';
   const isHR = root === 'hr';
   const isCRM = root === 'crm';
+  const isProjects = root === 'projects';
   const isAccounting = root === 'accounting';
   const isMarketing = pathname?.startsWith('/marketing');
   const isSocial = pathname?.startsWith('/social');
@@ -336,6 +337,7 @@ export function Sidebar() {
                   <Item href="/crm/accounts" icon={<Building2 size={18} />} label="Accounts" active={pathname?.startsWith('/crm/accounts')} />
                   <Item href="/crm/leads" icon={<Target size={18} />} label="Leads" active={pathname?.startsWith('/crm/leads')} />
                   <Item href="/crm/pipeline" icon={<Columns3 size={18} />} label="Pipeline" active={pathname?.startsWith('/crm/pipeline') || pathname?.startsWith('/crm/deals')} />
+                  <Item href="/crm/forecast" icon={<TrendingUp size={18} />} label="Forecast" active={pathname?.startsWith('/crm/forecast')} />
                   <Item href="/crm/activities" icon={<PhoneCall size={18} />} label="Activities" active={pathname?.startsWith('/crm/activities')} />
                 </>
               )}
@@ -350,6 +352,24 @@ export function Sidebar() {
                   <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
                   <Item href="/crm/integrations" icon={<Plug size={18} />} label="Integrations" active={pathname?.startsWith('/crm/integrations')} />
                   <Item href="/crm/settings/pipelines" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/crm/settings')} />
+                </>
+              )}
+            </>
+          )}
+          {isProjects && (
+            <>
+              <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Project Management</div>
+              </div>
+              <Item href="/projects/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === '/projects/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'PROJECT_MANAGER']) && (
+                <>
+                  <Item href="/projects/projects" icon={<FolderKanban size={18} />} label="Projects" active={pathname?.startsWith('/projects/projects')} />
+                  <Item href="/projects/work-orders" icon={<ClipboardList size={18} />} label="Work Orders" active={pathname?.startsWith('/projects/work-orders')} />
+                  <Item href="/projects/tasks" icon={<CheckSquare size={18} />} label="Tasks" active={pathname?.startsWith('/projects/tasks')} />
+                  <Item href="/projects/schedule" icon={<Calendar size={18} />} label="Schedule" active={pathname?.startsWith('/projects/schedule')} />
+                  <Item href="/projects/milestones" icon={<Flag size={18} />} label="Milestones" active={pathname?.startsWith('/projects/milestones')} />
                 </>
               )}
             </>
@@ -657,6 +677,7 @@ export function Sidebar() {
                       <Item href="/crm/accounts" icon={<Building2 size={18} />} label="Accounts" active={pathname?.startsWith('/crm/accounts')} />
                       <Item href="/crm/leads" icon={<Target size={18} />} label="Leads" active={pathname?.startsWith('/crm/leads')} />
                       <Item href="/crm/pipeline" icon={<Columns3 size={18} />} label="Pipeline" active={pathname?.startsWith('/crm/pipeline') || pathname?.startsWith('/crm/deals')} />
+                      <Item href="/crm/forecast" icon={<TrendingUp size={18} />} label="Forecast" active={pathname?.startsWith('/crm/forecast')} />
                       <Item href="/crm/activities" icon={<PhoneCall size={18} />} label="Activities" active={pathname?.startsWith('/crm/activities')} />
                     </>
                   )}
@@ -671,6 +692,24 @@ export function Sidebar() {
                       <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
                       <Item href="/crm/integrations" icon={<Plug size={18} />} label="Integrations" active={pathname?.startsWith('/crm/integrations')} />
                       <Item href="/crm/settings/pipelines" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/crm/settings')} />
+                    </>
+                  )}
+                </>
+              )}
+              {isProjects && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Project Management</div>
+                  </div>
+                  <Item href="/projects/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === '/projects/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'PROJECT_MANAGER']) && (
+                    <>
+                      <Item href="/projects/projects" icon={<FolderKanban size={18} />} label="Projects" active={pathname?.startsWith('/projects/projects')} />
+                      <Item href="/projects/work-orders" icon={<ClipboardList size={18} />} label="Work Orders" active={pathname?.startsWith('/projects/work-orders')} />
+                      <Item href="/projects/tasks" icon={<CheckSquare size={18} />} label="Tasks" active={pathname?.startsWith('/projects/tasks')} />
+                      <Item href="/projects/schedule" icon={<Calendar size={18} />} label="Schedule" active={pathname?.startsWith('/projects/schedule')} />
+                      <Item href="/projects/milestones" icon={<Flag size={18} />} label="Milestones" active={pathname?.startsWith('/projects/milestones')} />
                     </>
                   )}
                 </>

@@ -7,15 +7,16 @@ import { Header } from '@/components/header';
 import { StatCard } from '@/components/stat-card';
 import {
   MessageSquare, Clock, CheckCircle, Plus, Building2, Target,
-  Columns3, PhoneCall, TrendingUp, AlertCircle, ListChecks
+  Columns3, PhoneCall, TrendingUp, AlertCircle
 } from 'lucide-react';
-import { getCrmDashboard, listTickets } from '@/lib/api';
-import { crmApiError } from '@/lib/crm-utils';
+import { getCrmDashboard, getCrmForecast, listTickets } from '@/lib/api';
+import { crmApiError, formatMoney } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 
 export default function CRMDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<any>(null);
+  const [forecast, setForecast] = useState<any>(null);
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiReady, setApiReady] = useState(true);
@@ -42,6 +43,10 @@ export default function CRMDashboard() {
             throw err;
           }
         }
+        try {
+          const fc = await getCrmForecast(orgId ? { organizationId: orgId } : undefined);
+          setForecast(fc.data);
+        } catch { /* optional */ }
         try {
           const { data } = await listTickets();
           setTickets((data || []).slice(0, 6));
@@ -85,15 +90,21 @@ export default function CRMDashboard() {
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard title="Open Tickets" value={loading ? '…' : String(openTickets)} hint="Needs attention" icon={<Clock size={20} />} />
             <StatCard title="My Open Deals" value={loading ? '…' : String(stats?.myOpenDeals ?? '—')} hint={`${stats?.openDealsTotal ?? '—'} open total`} icon={<TrendingUp size={20} />} />
-            <StatCard title="Overdue Activities" value={loading ? '…' : String(stats?.overdueActivities ?? '—')} hint="Past due" icon={<ListChecks size={20} />} />
+            <StatCard
+              title="Weighted forecast"
+              value={loading ? '…' : formatMoney(forecast?.weightedForecast, forecast?.currency || 'GBP')}
+              hint={forecast ? `${forecast.dealCount ?? 0} open · pipeline ${formatMoney(forecast.totalPipeline, forecast.currency || 'GBP')}` : 'Open deals × probability'}
+              icon={<TrendingUp size={20} />}
+            />
             <StatCard title="Leads" value={loading ? '…' : String(leadsTotal ?? '—')} hint={stats?.leadsByStatus ? `${stats.leadsByStatus.new ?? 0} new` : 'By status'} icon={<Target size={20} />} />
           </div>
 
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-7">
             {[
               { href: '/crm/accounts', label: 'Accounts', icon: Building2, hint: 'Account 360' },
               { href: '/crm/leads', label: 'Leads', icon: Target, hint: 'Capture & convert' },
               { href: '/crm/pipeline', label: 'Pipeline', icon: Columns3, hint: 'Deals board' },
+              { href: '/crm/forecast', label: 'Forecast', icon: TrendingUp, hint: 'Weighted pipeline' },
               { href: '/crm/activities', label: 'Activities', icon: PhoneCall, hint: 'Tasks & calls' },
               { href: '/crm/tickets', label: 'Tickets', icon: MessageSquare, hint: 'Support queue' },
               { href: '/crm/settings/pipelines', label: 'Settings', icon: CheckCircle, hint: 'Stages config' },

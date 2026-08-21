@@ -7,7 +7,8 @@ import { Header } from '@/components/header';
 import { useSession } from '@/hooks/use-session';
 import {
   listCrmPipelines, createCrmPipeline, updateCrmPipeline,
-  createCrmStage, updateCrmStage, deleteCrmStage
+  createCrmStage, updateCrmStage, deleteCrmStage,
+  getCrmSettings, updateCrmSettings
 } from '@/lib/api';
 import { crmApiError, PIPELINE_TYPES } from '@/lib/crm-utils';
 import { toast } from 'sonner';
@@ -29,6 +30,8 @@ export default function CrmPipelineSettingsPage() {
   const [editingStage, setEditingStage] = useState<any>(null);
   const [stageForm, setStageForm] = useState({ name: '', probability: '0', isWon: false, isLost: false });
   const [saving, setSaving] = useState(false);
+  const [crmSettings, setCrmSettings] = useState<any>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const orgId = session?.user?.organizationId;
   const selected = pipelines.find((p) => p.id === selectedId);
@@ -37,10 +40,14 @@ export default function CrmPipelineSettingsPage() {
     if (!orgId) return;
     setLoading(true);
     try {
-      const res = await listCrmPipelines({ organizationId: orgId });
+      const [res, settingsRes] = await Promise.all([
+        listCrmPipelines({ organizationId: orgId }),
+        getCrmSettings({ organizationId: orgId }).catch(() => ({ data: null })),
+      ]);
       const list = res.data || [];
       setPipelines(list);
       setSelectedId((prev) => prev || list[0]?.id || null);
+      setCrmSettings(settingsRes.data);
       setApiMissing(false);
     } catch (err: any) {
       if (err?.response?.status === 404) {
@@ -154,6 +161,19 @@ export default function CrmPipelineSettingsPage() {
     }
   }
 
+  async function toggleSetting(key: 'autoAssignLeads' | 'autoFollowupOnLead', value: boolean) {
+    setSettingsSaving(true);
+    try {
+      const res = await updateCrmSettings({ [key]: value, organizationId: orgId });
+      setCrmSettings((prev: any) => ({ ...prev, ...res.data }));
+      toast.success('Settings saved');
+    } catch (err) {
+      toast.error(crmApiError(err, 'Failed to update settings'));
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
   const stages = [...(selected?.stages || [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
 
   return (
@@ -161,7 +181,7 @@ export default function CrmPipelineSettingsPage() {
       <Sidebar />
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header
-          title="Pipeline Settings"
+          title="CRM Settings"
           actions={[{ label: 'New Pipeline', onClick: () => setShowPipeline(true), icon: <Plus size={18} /> }]}
         />
         <main className="p-6 md:p-8 space-y-6">
@@ -170,6 +190,35 @@ export default function CrmPipelineSettingsPage() {
               <ArrowLeft size={16} /> Pipeline board
             </Link>
           </div>
+
+          {crmSettings && (
+            <div className="glass-panel rounded-2xl border border-border/50 p-5 space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold">Lead automation</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Round-robin among {crmSettings.salesRepCount ?? 0} SALES_REP user(s). Follow-up tasks are due +1 day.
+                </p>
+              </div>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Auto-assign new leads (round-robin)</span>
+                <input
+                  type="checkbox"
+                  disabled={settingsSaving}
+                  checked={!!crmSettings.autoAssignLeads}
+                  onChange={(e) => void toggleSetting('autoAssignLeads', e.target.checked)}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Auto follow-up task on lead create/assign</span>
+                <input
+                  type="checkbox"
+                  disabled={settingsSaving}
+                  checked={!!crmSettings.autoFollowupOnLead}
+                  onChange={(e) => void toggleSetting('autoFollowupOnLead', e.target.checked)}
+                />
+              </label>
+            </div>
+          )}
 
           {apiMissing && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">

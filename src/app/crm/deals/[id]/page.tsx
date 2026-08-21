@@ -20,7 +20,7 @@ export default function CrmDealDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [stageId, setStageId] = useState('');
-  const [form, setForm] = useState({ name: '', amount: '', expectedClose: '', status: 'open' });
+  const [form, setForm] = useState({ name: '', amount: '', expectedClose: '', status: 'open', probabilityOverride: '' });
   const [activityOpen, setActivityOpen] = useState(false);
   const [activityForm, setActivityForm] = useState({ type: 'task' as 'task' | 'call' | 'meeting' | 'note', subject: '', dueAt: '' });
   const [saving, setSaving] = useState(false);
@@ -36,6 +36,7 @@ export default function CrmDealDetailPage() {
         amount: res.data.amount != null ? String(res.data.amount) : '',
         expectedClose: res.data.expectedClose ? String(res.data.expectedClose).slice(0, 10) : '',
         status: res.data.status || 'open',
+        probabilityOverride: res.data.probabilityOverride != null ? String(res.data.probabilityOverride) : '',
       });
       setStageId(res.data.stageId || res.data.stage?.id || '');
       if (res.data.pipelineId) {
@@ -71,6 +72,7 @@ export default function CrmDealDetailPage() {
         amount: form.amount ? Number(form.amount) : null,
         expectedClose: form.expectedClose || null,
         status: form.status,
+        probabilityOverride: form.probabilityOverride !== '' ? Number(form.probabilityOverride) : null,
       });
       toast.success('Deal updated');
       setEditOpen(false);
@@ -169,7 +171,12 @@ export default function CrmDealDetailPage() {
                 </div>
                 <div>
                   <dt className="text-muted-foreground text-xs uppercase tracking-widest">Probability</dt>
-                  <dd className="mt-1 font-medium">{deal.probability != null ? `${deal.probability}%` : deal.stage?.probability != null ? `${deal.stage.probability}%` : '—'}</dd>
+                  <dd className="mt-1 font-medium">
+                    {deal.probability != null ? `${deal.probability}%` : deal.stage?.probability != null ? `${deal.stage.probability}%` : '—'}
+                    {deal.probabilitySource && (
+                      <span className="text-xs text-muted-foreground font-normal ml-1">({deal.probabilitySource})</span>
+                    )}
+                  </dd>
                 </div>
               </dl>
 
@@ -194,6 +201,16 @@ export default function CrmDealDetailPage() {
             <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" placeholder="Name" />
             <input type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input" placeholder="Amount" />
             <input type="date" value={form.expectedClose} onChange={(e) => setForm({ ...form, expectedClose: e.target.value })} className="input" />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={form.probabilityOverride}
+              onChange={(e) => setForm({ ...form, probabilityOverride: e.target.value })}
+              className="input"
+              placeholder={`Probability override (stage: ${deal?.stage?.probability ?? '—'}%)`}
+            />
+            <p className="text-[11px] text-muted-foreground -mt-2">Leave blank to use stage probability.</p>
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="input">
               <option value="open">Open</option>
               <option value="won">Won</option>

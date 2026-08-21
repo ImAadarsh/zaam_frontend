@@ -54,6 +54,13 @@ export const LEAD_SOURCES = [
   { value: 'other', label: 'Other' },
 ] as const;
 
+export const LEAD_PRIORITIES = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'urgent', label: 'Urgent' },
+] as const;
+
 export const ACTIVITY_TYPES = [
   { value: 'task', label: 'Task' },
   { value: 'call', label: 'Call' },
