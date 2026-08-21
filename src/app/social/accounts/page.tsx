@@ -55,7 +55,7 @@ export default function SocialAccountsPage() {
     router.replace('/social/accounts');
   }, [router]);
 
-  const connect = async (intent?: 'ads') => {
+  const connect = async (intent?: 'ads' | 'publish') => {
     setConnecting(true);
     try {
       const { data } = await getMetaConnectUrl(intent);
@@ -128,7 +128,11 @@ export default function SocialAccountsPage() {
           <div>
             <h1 className="text-2xl font-bold">Connections</h1>
             <p className="text-sm text-muted-foreground">
-              Meta Graph {status?.graphVersion} · scopes {status?.oauthScopes || '—'}
+              Meta Graph {status?.graphVersion} · default scopes {status?.oauthScopes || '—'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Default Connect does not ask for Pages/IG publish. Use Enable publishing for{' '}
+              <code>pages_manage_posts</code> and <code>instagram_content_publish</code>.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -137,6 +141,9 @@ export default function SocialAccountsPage() {
             </button>
             <button onClick={() => connect()} disabled={connecting} className="inline-flex items-center gap-2 rounded-md bg-[#1877F2] px-3 py-2 text-sm text-white">
               <Facebook className="h-4 w-4" /> {connecting ? 'Redirecting…' : 'Connect / Reconnect Meta'}
+            </button>
+            <button onClick={() => connect('publish')} disabled={connecting} className="inline-flex items-center gap-2 rounded-md bg-[#1877F2] px-3 py-2 text-sm text-white">
+              Enable publishing
             </button>
             <button onClick={() => connect('ads')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
               Connect ads_read
@@ -155,6 +162,17 @@ export default function SocialAccountsPage() {
             </span>
           ))}
         </div>
+
+        {!caps?.missingForPublish?.length ? null : (
+          <PermissionLock
+            title="Publishing is locked"
+            message="Default Connect cannot ask for Pages/IG publish. Click Enable publishing — that uses classic Facebook Login (not Login for Business) and requests pages_manage_posts plus instagram_content_publish."
+            missingPermission={caps?.missingForPublish?.[0]}
+            product="Pages API + Instagram"
+            onReconnect={() => connect('publish')}
+            reconnectLabel="Enable publishing"
+          />
+        )}
 
         {!caps?.missingForAds?.length ? null : (
           <PermissionLock

@@ -125,9 +125,10 @@ export default function SocialMessagesPage() {
             missingPermission={igLocked.missingPermission}
             product="Instagram API"
             onReconnect={async () => {
-              const { data } = await getMetaConnectUrl();
+              const { data } = await getMetaConnectUrl('publish');
               if (data?.authUrl) window.location.href = data.authUrl;
             }}
+            reconnectLabel="Enable publishing"
           />
         )}
 

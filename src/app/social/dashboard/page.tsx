@@ -13,6 +13,7 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import {
   getMetaCapabilities,
+  getMetaConnectUrl,
   getMetaInsights,
   listMetaInbox
 } from '@/lib/api';
@@ -74,6 +75,16 @@ export default function SocialDashboard() {
   const ads = accounts.filter((a: any) => a.kind === 'ads');
   const adsLocked = (caps?.missingForAds || []).length > 0;
   const publishLocked = (caps?.missingForPublish || []).length > 0;
+
+  const connectPublish = async () => {
+    try {
+      const { data } = await getMetaConnectUrl('publish');
+      if (data?.authUrl) window.location.href = data.authUrl;
+      else toast.error('Connect URL missing');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error?.message || 'Failed to start publishing connect');
+    }
+  };
 
   const capChips = useMemo(
     () =>
@@ -147,9 +158,11 @@ export default function SocialDashboard() {
         {publishLocked && (
           <PermissionLock
             title="Publishing is locked"
-            message="This Page token can read posts but Graph refused publish. Facebook needs pages_manage_posts; Instagram needs instagram_content_publish. Add Pages API + Instagram on the Meta app, then App Review (or keep Development mode for admins)."
+            message="Default Connect cannot ask for Pages/IG publish. Click Enable publishing — classic Facebook Login requests pages_manage_posts and instagram_content_publish (and related Instagram Graph perms). Do not use a Login for Business configuration for these names."
             missingPermission={caps?.missingForPublish?.[0]}
             product="Pages API + Instagram"
+            onReconnect={connectPublish}
+            reconnectLabel="Enable publishing"
           />
         )}
 

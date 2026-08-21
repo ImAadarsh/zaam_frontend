@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { SocialPage } from '@/components/social/social-page';
@@ -20,6 +20,8 @@ function isOrganic(a: any) {
   );
 }
 
+type PickedFile = { file: File; preview: string };
+
 export default function SocialComposePage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
@@ -28,12 +30,13 @@ export default function SocialComposePage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [content, setContent] = useState('');
-  const [mediaUrlsText, setMediaUrlsText] = useState('');
-  const [postType, setPostType] = useState('text');
+  const [picked, setPicked] = useState<PickedFile[]>([]);
+  const [postType, setPostType] = useState('image');
   const [linkUrl, setLinkUrl] = useState('');
   const [hashtags, setHashtags] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<any[] | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const organic = useMemo(() => accounts.filter(isOrganic), [accounts]);
 
@@ -55,8 +58,49 @@ export default function SocialComposePage() {
       .finally(() => setLoading(false));
   }, [hydrated, hasAccess, router, session?.accessToken]);
 
+  useEffect(() => {
+    return () => {
+      picked.forEach((p) => URL.revokeObjectURL(p.preview));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggle = (id: string) => {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  };
+
+  const addFiles = (list: FileList | null) => {
+    if (!list?.length) return;
+    const next: PickedFile[] = [];
+    for (const file of Array.from(list)) {
+      if (!/^(image|video)\//.test(file.type) && !/\.(jpe?g|png|gif|webp|mp4|mov)$/i.test(file.name)) {
+        toast.error(`${file.name} is not a supported image or video`);
+        continue;
+      }
+      next.push({ file, preview: URL.createObjectURL(file) });
+    }
+    setPicked((prev) => {
+      const merged = [...prev, ...next].slice(0, 10);
+      const hasVideo = merged.some((p) => p.file.type.startsWith('video/') || /\.(mp4|mov)$/i.test(p.file.name));
+      if (merged.length > 1) setPostType('carousel');
+      else if (hasVideo) setPostType('video');
+      else if (merged.length === 1) setPostType('image');
+      return merged;
+    });
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  const removeFile = (index: number) => {
+    setPicked((prev) => {
+      const copy = [...prev];
+      const [removed] = copy.splice(index, 1);
+      if (removed) URL.revokeObjectURL(removed.preview);
+      if (copy.length === 0) setPostType('text');
+      else if (copy.length > 1) setPostType('carousel');
+      else if (copy[0].file.type.startsWith('video/')) setPostType('video');
+      else setPostType('image');
+      return copy;
+    });
   };
 
   const publish = async () => {
@@ -64,14 +108,18 @@ export default function SocialComposePage() {
       toast.error('Select at least one destination');
       return;
     }
-    if (!content.trim()) {
-      toast.error('Caption is required');
+    if (!content.trim() && picked.length === 0) {
+      toast.error('Add a caption or attach an image/video');
       return;
     }
-    const mediaUrls = mediaUrlsText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
     const igSelected = organic.filter((a) => selected.includes(String(a.id)) && a.platform === 'instagram');
-    if (igSelected.length && mediaUrls.length === 0) {
-      toast.error('Instagram requires a public image/video URL');
+    if (igSelected.length && picked.length === 0) {
+      toast.error('Instagram requires an image or video');
+      return;
+    }
+    const link = linkUrl.trim();
+    if (link && !/^https:\/\//i.test(link)) {
+      toast.error('Facebook link must be a full https:// URL, or leave it blank');
       return;
     }
     setSubmitting(true);
@@ -81,8 +129,8 @@ export default function SocialComposePage() {
         accountIds: selected,
         content,
         postType,
-        mediaUrls: mediaUrls.length ? mediaUrls : undefined,
-        linkUrl: linkUrl || undefined,
+        files: picked.map((p) => p.file),
+        linkUrl: link || undefined,
         hashtags: hashtags || undefined
       });
       setResults(data || []);
@@ -109,7 +157,7 @@ export default function SocialComposePage() {
         <div>
           <h1 className="text-2xl font-bold">Composer</h1>
           <p className="text-sm text-muted-foreground">
-            Publish now to connected Pages and Instagram. Graph errors are shown as-is — a failed post is never marked published.
+            Upload an image or video, then publish to connected Pages and Instagram. Files are stored on S3 and sent to Meta as a public HTTPS URL. Graph errors are shown as-is.
           </p>
         </div>
 
@@ -135,40 +183,72 @@ export default function SocialComposePage() {
         </div>
 
         <div className="rounded-2xl border bg-card p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-sm">
-              <span className="block mb-1 text-muted-foreground">Type</span>
-              <select value={postType} onChange={(e) => setPostType(e.target.value)} className="h-10 w-full rounded-md border px-3 bg-background">
-                <option value="text">Text</option>
-                <option value="image">Image</option>
-                <option value="video">Video</option>
-                <option value="carousel">Carousel</option>
-                <option value="reel">Reel / Short</option>
-              </select>
-            </label>
-            <label className="text-sm">
-              <span className="block mb-1 text-muted-foreground">Link (Facebook)</span>
-              <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="h-10 w-full rounded-md border px-3 bg-background" />
-            </label>
-          </div>
           <label className="text-sm block">
-            <span className="block mb-1 text-muted-foreground">Caption</span>
-            <textarea value={content} onChange={(e) => setContent(e.target.value)} className="min-h-32 w-full rounded-md border p-3 bg-background" />
+            <span className="block mb-1 text-muted-foreground">Image or video</span>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime,.jpg,.jpeg,.png,.gif,.webp,.mp4,.mov"
+              multiple
+              onChange={(e) => addFiles(e.target.files)}
+              className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
+            />
+            <span className="mt-1 block text-xs text-muted-foreground">
+              JPEG, PNG, GIF, WebP, MP4, or MOV. Up to 10 files (carousel). Instagram cannot publish text-only.
+            </span>
           </label>
+
+          {picked.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {picked.map((p, i) => (
+                <div key={p.preview} className="relative overflow-hidden rounded-lg border bg-muted">
+                  {p.file.type.startsWith('video/') ? (
+                    <video src={p.preview} className="h-36 w-full object-cover" controls muted />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.preview} alt={p.file.name} className="h-36 w-full object-cover" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    className="absolute right-1 top-1 rounded bg-black/70 px-2 py-0.5 text-xs text-white"
+                  >
+                    Remove
+                  </button>
+                  <div className="truncate px-2 py-1 text-[11px] text-muted-foreground">{p.file.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <label className="text-sm block">
-            <span className="block mb-1 text-muted-foreground">Public media URLs (required for Instagram)</span>
-            <textarea value={mediaUrlsText} onChange={(e) => setMediaUrlsText(e.target.value)} className="min-h-20 w-full rounded-md border p-3 bg-background text-sm" placeholder="https://…jpg" />
+            <span className="block mb-1 text-muted-foreground">Caption (optional)</span>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="min-h-32 w-full rounded-md border p-3 bg-background"
+              placeholder="Write a caption…"
+            />
           </label>
           <label className="text-sm block">
             <span className="block mb-1 text-muted-foreground">Hashtags</span>
             <input value={hashtags} onChange={(e) => setHashtags(e.target.value)} className="h-10 w-full rounded-md border px-3 bg-background" />
+          </label>
+          <label className="text-sm block">
+            <span className="block mb-1 text-muted-foreground">Optional Facebook link (https:// only)</span>
+            <input
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              className="h-10 w-full rounded-md border px-3 bg-background"
+              placeholder="Leave blank unless attaching a webpage"
+            />
           </label>
           <button
             onClick={publish}
             disabled={submitting}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
           >
-            {submitting ? 'Publishing…' : 'Publish now'}
+            {submitting ? 'Uploading & publishing…' : 'Publish now'}
           </button>
         </div>
 
@@ -192,9 +272,10 @@ export default function SocialComposePage() {
                   missingPermission={r.missingPermission}
                   product={r.missingPermission === 'instagram_content_publish' ? 'Instagram API' : 'Pages API'}
                   onReconnect={async () => {
-                    const { data } = await getMetaConnectUrl();
+                    const { data } = await getMetaConnectUrl('publish');
                     if (data?.authUrl) window.location.href = data.authUrl;
                   }}
+                  reconnectLabel="Enable publishing"
                 />
               )
             )}

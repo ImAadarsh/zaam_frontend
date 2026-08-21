@@ -94,9 +94,10 @@ export default function SocialInsightsPage() {
             missingPermission={data.locked.missingPermission}
             product={data.account?.platform === 'instagram' ? 'Instagram API' : 'Pages API'}
             onReconnect={async () => {
-              const { data } = await getMetaConnectUrl();
+              const { data } = await getMetaConnectUrl('publish');
               if (data?.authUrl) window.location.href = data.authUrl;
             }}
+            reconnectLabel="Enable publishing"
           />
         )}
 
