@@ -5710,6 +5710,58 @@ export async function updateB2bShipment(id: string, payload: any) {
   const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/shipments/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
 }
+
+/** DHL Express MyDHL — create / label / track / cancel */
+export async function getDhlStatus() {
+  const { data } = await axios.get(`${API_BASE}/api/fulfillment/dhl/status`, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listDhlShipments(params?: { organizationId?: string; orderId?: string; limit?: number }) {
+  const { data } = await axios.get(`${API_BASE}/api/fulfillment/dhl/shipments`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function createDhlShipment(payload: {
+  orderId: string;
+  organizationId?: string;
+  productCode?: string;
+  weightKg?: number;
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+  pieces?: number;
+  description?: string;
+  pickupRequested?: boolean;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/fulfillment/dhl/shipments`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function getDhlShipmentLabel(shipmentId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/fulfillment/dhl/shipments/${shipmentId}/label`, {
+    headers: authHeaders()
+  });
+  return data as { data: any };
+}
+export async function trackDhlShipment(params: { shipmentId?: string; trackingNumber?: string }) {
+  if (params.shipmentId) {
+    const { data } = await axios.get(`${API_BASE}/api/fulfillment/dhl/shipments/${params.shipmentId}/track`, {
+      headers: authHeaders()
+    });
+    return data as { data: any };
+  }
+  const { data } = await axios.post(
+    `${API_BASE}/api/fulfillment/dhl/track`,
+    { trackingNumber: params.trackingNumber },
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+export async function cancelDhlShipment(shipmentId: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/fulfillment/dhl/shipments/${shipmentId}`, {
+    headers: authHeaders()
+  });
+  return data as { data: any };
+}
+
 export async function listB2bShippingMethods(params?: { organizationId?: string }) {
   const { data } = await axios.get(`${API_BASE}/api/b2b/admin/shipping-methods`, { params, headers: authHeaders() });
   return data as { data: any[] };

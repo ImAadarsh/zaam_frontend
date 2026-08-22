@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { getOrder, listOrderLines, listOrderAddresses, listOrderNotes, createOrderLine, updateOrderLine, deleteOrderLine, createOrderAddress, updateOrderAddress, deleteOrderAddress, createOrderNote, updateOrderNote, deleteOrderNote, listVariants, listWarehouses, listInvoices, generateInvoices } from '@/lib/api';
+import { getOrder, listOrderLines, listOrderAddresses, listOrderNotes, createOrderLine, updateOrderLine, deleteOrderLine, createOrderAddress, updateOrderAddress, deleteOrderAddress, createOrderNote, updateOrderNote, deleteOrderNote, listVariants, listWarehouses, listInvoices, generateInvoices, listDhlShipments, createDhlShipment, getDhlShipmentLabel, trackDhlShipment, cancelDhlShipment } from '@/lib/api';
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
-import { ArrowLeft, Plus, Pencil, Trash2, X, Package, MapPin, FileText, ShoppingCart, Receipt, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, X, Package, MapPin, FileText, ShoppingCart, Receipt, Loader2, Truck } from 'lucide-react';
 import Link from 'next/link';
 
 export default function OrderDetailPage() {
@@ -34,6 +34,18 @@ export default function OrderDetailPage() {
   const [confirmDel, setConfirmDel] = useState<{ type: 'line' | 'address' | 'note'; id: string } | null>(null);
   const [invoiceId, setInvoiceId] = useState<string | null>(null);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [dhlShipments, setDhlShipments] = useState<any[]>([]);
+  const [dhlBusy, setDhlBusy] = useState(false);
+  const [showDhlModal, setShowDhlModal] = useState(false);
+  const [dhlForm, setDhlForm] = useState({
+    weightKg: 1,
+    pieces: 1,
+    lengthCm: 30,
+    widthCm: 20,
+    heightCm: 15,
+    productCode: 'N',
+    description: ''
+  });
 
   // Forms
   const [lineForm, setLineForm] = useState({
@@ -85,13 +97,14 @@ export default function OrderDetailPage() {
   async function loadData() {
     try {
       setLoading(true);
-      const [orderRes, linesRes, addressesRes, notesRes, variantsRes, warehousesRes] = await Promise.all([
+      const [orderRes, linesRes, addressesRes, notesRes, variantsRes, warehousesRes, dhlRes] = await Promise.all([
         getOrder(orderId),
         listOrderLines({ orderId }),
         listOrderAddresses({ orderId }),
         listOrderNotes({ orderId }),
         listVariants(),
-        listWarehouses()
+        listWarehouses(),
+        listDhlShipments({ orderId }).catch(() => ({ data: [] }))
       ]);
       setOrder(orderRes.data);
       setLines(linesRes.data || []);
@@ -99,6 +112,7 @@ export default function OrderDetailPage() {
       setNotes(notesRes.data || []);
       setVariants(variantsRes.data || []);
       setWarehouses(warehousesRes.data || []);
+      setDhlShipments(dhlRes.data || []);
 
       // Look up the unified invoice for this order, if one exists.
       if (session?.user?.organizationId && orderRes.data?.orderNumber) {
@@ -261,6 +275,33 @@ export default function OrderDetailPage() {
     }
   }
 
+  async function onShipWithDhl(e: React.FormEvent) {
+    e.preventDefault();
+    if (!orderId) return;
+    setDhlBusy(true);
+    try {
+      const res = await createDhlShipment({
+        orderId,
+        organizationId: order?.organization?.id || session?.user?.organizationId,
+        weightKg: Number(dhlForm.weightKg) || 1,
+        pieces: Number(dhlForm.pieces) || 1,
+        lengthCm: Number(dhlForm.lengthCm) || undefined,
+        widthCm: Number(dhlForm.widthCm) || undefined,
+        heightCm: Number(dhlForm.heightCm) || undefined,
+        productCode: dhlForm.productCode || 'N',
+        description: dhlForm.description || undefined
+      });
+      toast.success(`DHL shipment created · ${res.data?.trackingNumber || 'OK'}`);
+      setShowDhlModal(false);
+      if (res.data?.labelUrl) window.open(res.data.labelUrl, '_blank');
+      loadData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error?.message || 'DHL ship failed');
+    } finally {
+      setDhlBusy(false);
+    }
+  }
+
   if (!hydrated || loading) {
     return (
       <div className="min-h-screen app-surface">
@@ -315,6 +356,16 @@ export default function OrderDetailPage() {
                 Back to Orders
               </button>
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    setDhlForm((f) => ({ ...f, description: `Order ${order.orderNumber}` }));
+                    setShowDhlModal(true);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
+                >
+                  <Truck className="h-4 w-4" />
+                  Ship with DHL
+                </button>
                 {invoiceId ? (
                   <Link
                     href={`/finance/invoices/${invoiceId}`}
@@ -335,6 +386,76 @@ export default function OrderDetailPage() {
                 )}
               </div>
             </div>
+
+            {/* DHL shipments */}
+            {dhlShipments.length > 0 && (
+              <div className="bg-card rounded-lg border border-border p-6 space-y-3">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <Truck className="h-5 w-5" />
+                  DHL shipping
+                </h2>
+                {dhlShipments.map((s) => (
+                  <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 border rounded-lg p-3 text-sm">
+                    <div>
+                      <div className="font-medium">{s.trackingNumber || 'No tracking yet'}</div>
+                      <div className="text-muted-foreground">
+                        {s.status}
+                        {s.carrierStatus ? ` · ${s.carrierStatus}` : ''}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="px-2 py-1 border rounded"
+                        onClick={async () => {
+                          try {
+                            const res = await getDhlShipmentLabel(s.id);
+                            if (res.data?.labelUrl) window.open(res.data.labelUrl, '_blank');
+                            else toast.error('No label URL');
+                            loadData();
+                          } catch (e: any) {
+                            toast.error(e?.response?.data?.error?.message || 'Label failed');
+                          }
+                        }}
+                      >
+                        Print label
+                      </button>
+                      <button
+                        className="px-2 py-1 border rounded"
+                        onClick={async () => {
+                          try {
+                            const res = await trackDhlShipment({ shipmentId: s.id });
+                            toast.success(res.data?.carrierStatus || 'Tracked');
+                            if (res.data?.trackingUrl) window.open(res.data.trackingUrl, '_blank');
+                            loadData();
+                          } catch (e: any) {
+                            toast.error(e?.response?.data?.error?.message || 'Track failed');
+                          }
+                        }}
+                      >
+                        Track
+                      </button>
+                      {s.status !== 'cancelled' && (
+                        <button
+                          className="px-2 py-1 border rounded text-red-700"
+                          onClick={async () => {
+                            if (!confirm('Cancel this DHL shipment?')) return;
+                            try {
+                              await cancelDhlShipment(s.id);
+                              toast.success('Cancelled');
+                              loadData();
+                            } catch (e: any) {
+                              toast.error(e?.response?.data?.error?.message || 'Cancel failed');
+                            }
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Order Info */}
             <div className="bg-card rounded-lg border border-border p-6">
@@ -936,6 +1057,110 @@ export default function OrderDetailPage() {
                   {editingNote ? 'Update' : 'Create'}
                 </button>
                 <button type="button" onClick={() => { setShowNoteModal(false); setEditingNote(null); }} className="px-4 py-2 bg-muted rounded hover:bg-muted/80">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showDhlModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-card shadow-2xl border border-border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Truck className="h-5 w-5" /> Ship with DHL
+              </h3>
+              <button type="button" onClick={() => setShowDhlModal(false)}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={onShipWithDhl} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Weight (kg) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    className="input"
+                    value={dhlForm.weightKg}
+                    onChange={(e) => setDhlForm((f) => ({ ...f, weightKg: Number(e.target.value) }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Pieces</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="input"
+                    value={dhlForm.pieces}
+                    onChange={(e) => setDhlForm((f) => ({ ...f, pieces: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">L (cm)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={dhlForm.lengthCm}
+                    onChange={(e) => setDhlForm((f) => ({ ...f, lengthCm: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">W (cm)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={dhlForm.widthCm}
+                    onChange={(e) => setDhlForm((f) => ({ ...f, widthCm: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">H (cm)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={dhlForm.heightCm}
+                    onChange={(e) => setDhlForm((f) => ({ ...f, heightCm: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Product code</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={dhlForm.productCode}
+                    onChange={(e) => setDhlForm((f) => ({ ...f, productCode: e.target.value }))}
+                    placeholder="N = Domestic Express"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Contents description</label>
+                <input
+                  type="text"
+                  className="input"
+                  maxLength={70}
+                  value={dhlForm.description}
+                  onChange={(e) => setDhlForm((f) => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Uses order shipping address and DHL_SHIPPER_* from API env. Real DHL errors are shown if create fails.
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={dhlBusy}
+                  className="px-4 py-2 bg-black text-white rounded disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  {dhlBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                  Create shipment
+                </button>
+                <button type="button" onClick={() => setShowDhlModal(false)} className="px-4 py-2 bg-muted rounded">
                   Cancel
                 </button>
               </div>
