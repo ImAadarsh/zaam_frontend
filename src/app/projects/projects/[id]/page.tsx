@@ -385,12 +385,21 @@ export default function ProjectDetailPage() {
                   <section className="md:col-span-2 glass-panel rounded-2xl border border-border/50 p-5 space-y-3">
                     <div className="flex items-center justify-between">
                       <h3 className="font-semibold flex items-center gap-2"><Package size={16} /> Deliverables</h3>
-                      <button type="button" onClick={() => { setForm({ status: 'pending' }); setModal('deliverable'); }} className="text-sm text-[#D4A017] inline-flex items-center gap-1 hover:underline">
-                        <Plus size={14} /> Add
+                      <button type="button" onClick={() => { setForm({ status: 'pending' }); setModal('deliverable'); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium bg-[#D4A017] text-white hover:bg-[#c49415]">
+                        <Plus size={14} /> Add Deliverable
                       </button>
                     </div>
                     {deliverables.length === 0 ? (
-                      <p className="text-sm text-muted-foreground italic">No deliverables yet.</p>
+                      <div className="text-center py-6 text-muted-foreground">
+                        <p className="text-sm italic">No deliverables yet.</p>
+                        <button
+                          type="button"
+                          onClick={() => { setForm({ status: 'pending' }); setModal('deliverable'); }}
+                          className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#D4A017] text-white text-sm font-medium hover:bg-[#c49415]"
+                        >
+                          <Plus size={16} /> Add Deliverable
+                        </button>
+                      </div>
                     ) : (
                       <ul className="divide-y divide-border/50">
                         {deliverables.map((d) => (
@@ -480,6 +489,7 @@ export default function ProjectDetailPage() {
               {tab === 'tasks' && (
                 <EntityList
                   title="Tasks"
+                  addLabel="Add Task"
                   empty="No tasks on this project yet."
                   onAdd={() => { setForm({ status: 'todo', priority: 'medium' }); setModal('task'); }}
                   rows={tasks.map((t) => ({
@@ -511,6 +521,7 @@ export default function ProjectDetailPage() {
               {tab === 'work_orders' && (
                 <EntityList
                   title="Work orders"
+                  addLabel="Add Work Order"
                   empty="No work orders yet."
                   onAdd={() => { setForm({ status: 'draft' }); setModal('wo'); }}
                   rows={workOrders.map((w) => ({
@@ -525,6 +536,7 @@ export default function ProjectDetailPage() {
               {tab === 'milestones' && (
                 <EntityList
                   title="Milestones"
+                  addLabel="Add Milestone"
                   empty="No milestones yet."
                   onAdd={() => { setForm({ status: 'pending' }); setModal('milestone'); }}
                   rows={milestones.map((m) => ({
@@ -556,6 +568,7 @@ export default function ProjectDetailPage() {
               {tab === 'schedule' && (
                 <EntityList
                   title="Schedule blocks"
+                  addLabel="Add Schedule Block"
                   empty="No staff schedule blocks for this project."
                   onAdd={() => { setForm({}); setModal('schedule'); }}
                   rows={schedule.map((b) => ({
@@ -570,6 +583,7 @@ export default function ProjectDetailPage() {
               {tab === 'members' && (
                 <EntityList
                   title="Members"
+                  addLabel="Add Member"
                   empty="No members assigned yet."
                   onAdd={() => { setForm({ role: 'member' }); setModal('member'); }}
                   rows={members.map((m) => ({
@@ -772,7 +786,7 @@ export default function ProjectDetailPage() {
               <PmField label="Position"><input type="number" className={pmInputClass} value={form.position || ''} onChange={(e) => setForm({ ...form, position: e.target.value })} /></PmField>
             </>
           )}
-          <PmModalActions onCancel={() => setModal(null)} submitLabel="Save" submitting={saving} />
+          <PmModalActions onCancel={() => setModal(null)} submitLabel={modal === 'member' || modal === 'schedule' || modal === 'deliverable' || modal === 'stage' ? 'Add' : 'Create'} submitting={saving} />
         </form>
       </PmModal>
     </div>
@@ -781,13 +795,13 @@ export default function ProjectDetailPage() {
 
 function modalTitle(modal: string | null) {
   switch (modal) {
-    case 'deliverable': return 'Add deliverable';
-    case 'task': return 'New task';
-    case 'wo': return 'New work order';
-    case 'milestone': return 'New milestone';
-    case 'schedule': return 'Schedule block';
-    case 'member': return 'Add member';
-    case 'stage': return 'Add stage';
+    case 'deliverable': return 'Add Deliverable';
+    case 'task': return 'Add Task';
+    case 'wo': return 'Add Work Order';
+    case 'milestone': return 'Add Milestone';
+    case 'schedule': return 'Add Schedule Block';
+    case 'member': return 'Add Member';
+    case 'stage': return 'Add Stage';
     default: return '';
   }
 }
@@ -803,11 +817,13 @@ function StatMini({ label, value }: { label: string; value: string }) {
 
 function EntityList({
   title,
+  addLabel = 'Add',
   empty,
   onAdd,
   rows,
 }: {
   title: string;
+  addLabel?: string;
   empty: string;
   onAdd: () => void;
   rows: { id: string; primary: string; secondary: string; badge?: string; action?: React.ReactNode }[];
@@ -820,11 +836,20 @@ function EntityList({
           {title}
         </h3>
         <button type="button" onClick={onAdd} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium bg-[#D4A017] text-white hover:bg-[#c49415]">
-          <Plus size={14} /> Add
+          <Plus size={14} /> {addLabel}
         </button>
       </div>
       {rows.length === 0 ? (
-        <div className="glass-panel rounded-2xl border border-border/50 p-10 text-center text-muted-foreground text-sm italic">{empty}</div>
+        <div className="glass-panel rounded-2xl border border-border/50 p-10 text-center text-muted-foreground">
+          <p className="text-sm italic">{empty}</p>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#D4A017] text-white text-sm font-medium hover:bg-[#c49415]"
+          >
+            <Plus size={16} /> {addLabel}
+          </button>
+        </div>
       ) : (
         <ul className="glass-panel rounded-2xl border border-border/50 divide-y divide-border/50 overflow-hidden">
           {rows.map((r) => (

@@ -222,7 +222,7 @@ export default function PmSchedulePage() {
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header
           title="Staff Schedule"
-          actions={[{ label: 'Add Block', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
+          actions={[{ label: 'Add Schedule Block', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
         />
         <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
@@ -230,7 +230,7 @@ export default function PmSchedulePage() {
               <AlertCircle size={18} className="mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold">Schedule API not ready</div>
-                <div className="text-xs mt-0.5 opacity-80">Waiting on <code className="font-mono">GET /api/pm/schedule</code>.</div>
+                <div className="text-xs mt-0.5 opacity-80">Waiting on <code className="font-mono">GET /api/pm/schedule-blocks</code>.</div>
               </div>
             </div>
           )}
@@ -332,7 +332,7 @@ export default function PmSchedulePage() {
         </main>
       </div>
 
-      <PmModal open={showCreate} onClose={() => setShowCreate(false)} title="Schedule block" icon={Calendar} wide>
+      <PmModal open={showCreate} onClose={() => setShowCreate(false)} title="Add Schedule Block" icon={Calendar} wide>
         <form onSubmit={handleCreate} className="space-y-4">
           <PmField label="Staff">
             <select required className={pmInputClass} value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })}>
@@ -359,7 +359,7 @@ export default function PmSchedulePage() {
             <PmField label="End"><input required type="datetime-local" className={pmInputClass} value={form.endAt} onChange={(e) => setForm({ ...form, endAt: e.target.value })} /></PmField>
           </div>
           <PmField label="Notes"><textarea className={pmTextareaClass} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></PmField>
-          <PmModalActions onCancel={() => setShowCreate(false)} submitLabel="Save" submitting={saving} />
+          <PmModalActions onCancel={() => setShowCreate(false)} submitLabel="Add Schedule Block" submitting={saving} />
         </form>
       </PmModal>
     </div>
@@ -373,7 +373,7 @@ function EmptySchedule({ onAdd }: { onAdd: () => void }) {
       <p className="font-medium text-foreground">No schedule blocks this week</p>
       <p className="text-sm mt-1">Assign staff time to projects or tasks.</p>
       <button type="button" onClick={onAdd} className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#D4A017] text-white text-sm font-medium hover:bg-[#c49415]">
-        <Plus size={16} /> Add block
+        <Plus size={16} /> Add Schedule Block
       </button>
     </div>
   );

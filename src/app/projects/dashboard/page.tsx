@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { Sidebar } from '@/components/sidebar';
@@ -9,10 +9,27 @@ import {
   FolderKanban, CheckSquare, Flag, ClipboardList, AlertCircle,
   Plus, Calendar, TrendingUp
 } from 'lucide-react';
-import { getPmDashboard, listPmMilestones, listPmTasks } from '@/lib/api';
-import { formatDate, pmApiError, statusBadgeClass, userLabel } from '@/lib/pm-utils';
+import { createPmProject, getPmDashboard, listCustomers, listPmMilestones, listPmTasks, listUsers } from '@/lib/api';
+import { formatDate, pmApiError, PROJECT_STATUSES, statusBadgeClass, userLabel } from '@/lib/pm-utils';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { PmModal, PmField, PmModalActions, pmInputClass, pmTextareaClass } from '@/components/pm/pm-modal';
+import { CrmCustomerSelect } from '@/components/crm/crm-customer-select';
+import { displayName } from '@/lib/crm-utils';
+
+const emptyForm = {
+  name: '',
+  code: '',
+  customerId: '',
+  scope: '',
+  objectives: '',
+  status: 'draft',
+  startDate: '',
+  endDate: '',
+  budget: '',
+  currency: 'GBP',
+  ownerUserId: '',
+};
 
 export default function ProjectsDashboardPage() {
   const router = useRouter();
@@ -21,6 +38,13 @@ export default function ProjectsDashboardPage() {
   const [overdueTasks, setOverdueTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiReady, setApiReady] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [orgId, setOrgId] = useState<string | undefined>();
+  const [sessionUserId, setSessionUserId] = useState<string | undefined>();
 
   useEffect(() => {
     const s = getSession();
@@ -28,12 +52,14 @@ export default function ProjectsDashboardPage() {
       router.replace('/login');
       return;
     }
+    const oid = s.user?.organizationId;
+    setOrgId(oid);
+    setSessionUserId(s.user?.id);
 
     async function load() {
-      const orgId = s!.user?.organizationId;
       try {
         try {
-          const dash = await getPmDashboard(orgId ? { organizationId: orgId } : undefined);
+          const dash = await getPmDashboard(oid ? { organizationId: oid } : undefined);
           setStats(dash.data || {});
           setApiReady(true);
           if (Array.isArray(dash.data?.upcomingMilestones)) {
@@ -50,7 +76,7 @@ export default function ProjectsDashboardPage() {
 
         try {
           const ms = await listPmMilestones({
-            organizationId: orgId,
+            organizationId: oid,
             upcoming: true,
             limit: 8,
           });
@@ -58,11 +84,11 @@ export default function ProjectsDashboardPage() {
         } catch { /* optional until API ready */ }
 
         try {
-          const tasks = await listPmTasks({ organizationId: orgId, overdue: true, limit: 50 });
+          const tasks = await listPmTasks({ organizationId: oid, overdue: true, limit: 50 });
           setOverdueTasks((tasks.data || []).slice(0, 8));
         } catch {
           try {
-            const tasks = await listPmTasks({ organizationId: orgId, limit: 50 });
+            const tasks = await listPmTasks({ organizationId: oid, limit: 50 });
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const overdue = (tasks.data || []).filter((t: any) => {
@@ -79,8 +105,57 @@ export default function ProjectsDashboardPage() {
       }
     }
     void load();
+
+    if (oid) {
+      void Promise.all([
+        listCustomers({ organizationId: oid, limit: 200 }),
+        listUsers(),
+      ]).then(([cust, us]) => {
+        setCustomers(cust.data || []);
+        setUsers(us.data || []);
+      }).catch(() => undefined);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  const customerOptions = useMemo(
+    () => customers.map((c) => ({
+      id: String(c.id),
+      label: displayName(c),
+      sublabel: c.email || c.companyName,
+    })),
+    [customers]
+  );
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!orgId || !form.name.trim()) return;
+    setSaving(true);
+    try {
+      const res = await createPmProject({
+        organizationId: orgId,
+        name: form.name.trim(),
+        code: form.code || null,
+        customerId: form.customerId || null,
+        scope: form.scope || null,
+        objectives: form.objectives || null,
+        status: form.status,
+        startDate: form.startDate || null,
+        endDate: form.endDate || null,
+        budget: form.budget ? Number(form.budget) : 0,
+        currency: form.currency || 'GBP',
+        ownerUserId: form.ownerUserId || sessionUserId || null,
+      });
+      toast.success('Project created');
+      setShowCreate(false);
+      setForm(emptyForm);
+      router.push(`/projects/projects/${res.data.id}`);
+    } catch (err) {
+      toast.error(pmApiError(err, 'Failed to create project'));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const overdueCount =
     typeof stats?.overdueTasks === 'number'
@@ -96,7 +171,10 @@ export default function ProjectsDashboardPage() {
     <div className="min-h-screen app-surface">
       <Sidebar />
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
-        <Header title="Project Management" />
+        <Header
+          title="Project Management"
+          actions={[{ label: 'Create Project', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
+        />
         <main className="p-6 md:p-8 space-y-6">
           {!apiReady && !loading && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400">
@@ -170,7 +248,7 @@ export default function ProjectsDashboardPage() {
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium bg-[#D4A017] text-white hover:bg-[#c49415] shadow-sm transition"
                 >
                   <Plus size={16} />
-                  New task
+                  Create Task
                 </button>
               </div>
               <div className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
@@ -269,6 +347,64 @@ export default function ProjectsDashboardPage() {
           </div>
         </main>
       </div>
+
+      <PmModal open={showCreate} onClose={() => setShowCreate(false)} title="Create Project" icon={FolderKanban} wide>
+        <form onSubmit={handleCreate} className="space-y-4">
+          <PmField label="Name">
+            <input required className={pmInputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Job / project name" />
+          </PmField>
+          <div className="grid grid-cols-2 gap-3">
+            <PmField label="Code">
+              <input className={pmInputClass} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="JOB-001" />
+            </PmField>
+            <PmField label="Status">
+              <select className={pmInputClass} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {PROJECT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </PmField>
+          </div>
+          <PmField label="Customer" hint="Optional ERP customer link">
+            <CrmCustomerSelect
+              value={form.customerId}
+              onChange={(id) => setForm({ ...form, customerId: id })}
+              options={customerOptions}
+              allowEmpty
+              emptyLabel="No customer"
+            />
+          </PmField>
+          <PmField label="Scope">
+            <textarea className={pmTextareaClass} value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} placeholder="What is in / out of scope" />
+          </PmField>
+          <PmField label="Objectives">
+            <textarea className={pmTextareaClass} value={form.objectives} onChange={(e) => setForm({ ...form, objectives: e.target.value })} placeholder="Success criteria" />
+          </PmField>
+          <div className="grid grid-cols-2 gap-3">
+            <PmField label="Start date">
+              <input type="date" className={pmInputClass} value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            </PmField>
+            <PmField label="End date">
+              <input type="date" className={pmInputClass} value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+            </PmField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <PmField label="Budget">
+              <input type="number" min="0" step="0.01" className={pmInputClass} value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+            </PmField>
+            <PmField label="Currency">
+              <input className={pmInputClass} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} maxLength={3} />
+            </PmField>
+          </div>
+          <PmField label="Owner">
+            <select className={pmInputClass} value={form.ownerUserId} onChange={(e) => setForm({ ...form, ownerUserId: e.target.value })}>
+              <option value="">Assign later</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{userLabel(u)}</option>
+              ))}
+            </select>
+          </PmField>
+          <PmModalActions onCancel={() => setShowCreate(false)} submitLabel="Create Project" submitting={saving} />
+        </form>
+      </PmModal>
     </div>
   );
 }

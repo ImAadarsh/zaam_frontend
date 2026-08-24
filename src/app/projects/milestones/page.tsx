@@ -173,7 +173,7 @@ export default function PmMilestonesPage() {
     <div className="min-h-screen app-surface">
       <Sidebar />
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
-        <Header title="Milestones" actions={[{ label: 'New Milestone', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]} />
+        <Header title="Milestones" actions={[{ label: 'Create Milestone', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]} />
         <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
@@ -199,6 +199,13 @@ export default function PmMilestonesPage() {
               <Flag className="mx-auto mb-3 opacity-40" size={32} />
               <p className="font-medium text-foreground">No milestones yet</p>
               <p className="text-sm mt-1">Track key dates and mark them achieved when hit.</p>
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#D4A017] text-white text-sm font-medium hover:bg-[#c49415]"
+              >
+                <Plus size={16} /> Create Milestone
+              </button>
             </div>
           ) : (
             <RichDataTable columns={columns} data={items} hideSearch />
@@ -206,7 +213,7 @@ export default function PmMilestonesPage() {
         </main>
       </div>
 
-      <PmModal open={showCreate} onClose={() => setShowCreate(false)} title="New Milestone" icon={Flag}>
+      <PmModal open={showCreate} onClose={() => setShowCreate(false)} title="Create Milestone" icon={Flag}>
         <form onSubmit={handleCreate} className="space-y-4">
           <PmField label="Project">
             <select required className={pmInputClass} value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })}>
@@ -228,7 +235,7 @@ export default function PmMilestonesPage() {
               {MILESTONE_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </PmField>
-          <PmModalActions onCancel={() => setShowCreate(false)} submitLabel="Create" submitting={saving} />
+          <PmModalActions onCancel={() => setShowCreate(false)} submitLabel="Create Milestone" submitting={saving} />
         </form>
       </PmModal>
     </div>

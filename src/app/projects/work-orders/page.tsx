@@ -206,7 +206,7 @@ export default function PmWorkOrdersPage() {
     <div className="min-h-screen app-surface">
       <Sidebar />
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
-        <Header title="Work Orders" actions={[{ label: 'New Work Order', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]} />
+        <Header title="Work Orders" actions={[{ label: 'Create Work Order', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]} />
         <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
@@ -232,6 +232,13 @@ export default function PmWorkOrdersPage() {
               <ClipboardList className="mx-auto mb-3 opacity-40" size={32} />
               <p className="font-medium text-foreground">No work orders yet</p>
               <p className="text-sm mt-1">Create one with a stage, assignee, and schedule window.</p>
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#D4A017] text-white text-sm font-medium hover:bg-[#c49415]"
+              >
+                <Plus size={16} /> Create Work Order
+              </button>
             </div>
           ) : (
             <RichDataTable columns={columns} data={items} hideSearch />
@@ -239,7 +246,7 @@ export default function PmWorkOrdersPage() {
         </main>
       </div>
 
-      <PmModal open={showCreate} onClose={() => setShowCreate(false)} title="New Work Order" icon={ClipboardList} wide>
+      <PmModal open={showCreate} onClose={() => setShowCreate(false)} title="Create Work Order" icon={ClipboardList} wide>
         <form onSubmit={handleCreate} className="space-y-4">
           <PmField label="Project">
             <select required className={pmInputClass} value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value, stageId: '' })}>
@@ -280,7 +287,7 @@ export default function PmWorkOrdersPage() {
               <input type="datetime-local" className={pmInputClass} value={form.scheduledEnd} onChange={(e) => setForm({ ...form, scheduledEnd: e.target.value })} />
             </PmField>
           </div>
-          <PmModalActions onCancel={() => setShowCreate(false)} submitLabel="Create" submitting={saving} />
+          <PmModalActions onCancel={() => setShowCreate(false)} submitLabel="Create Work Order" submitting={saving} />
         </form>
       </PmModal>
     </div>

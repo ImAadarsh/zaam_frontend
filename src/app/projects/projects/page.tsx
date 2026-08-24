@@ -226,7 +226,7 @@ export default function ProjectsListPage() {
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header
           title="Projects"
-          actions={[{ label: 'New Project', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
+          actions={[{ label: 'Create Project', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
         />
         <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
@@ -260,7 +260,7 @@ export default function ProjectsListPage() {
                 onClick={() => setShowCreate(true)}
                 className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#D4A017] text-white text-sm font-medium hover:bg-[#c49415]"
               >
-                <Plus size={16} /> New Project
+                <Plus size={16} /> Create Project
               </button>
             </div>
           ) : (
@@ -269,7 +269,7 @@ export default function ProjectsListPage() {
         </main>
       </div>
 
-      <PmModal open={showCreate} onClose={() => setShowCreate(false)} title="New Project" icon={FolderKanban} wide>
+      <PmModal open={showCreate} onClose={() => setShowCreate(false)} title="Create Project" icon={FolderKanban} wide>
         <form onSubmit={handleCreate} className="space-y-4">
           <PmField label="Name">
             <input required className={pmInputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Job / project name" />
@@ -323,7 +323,7 @@ export default function ProjectsListPage() {
               ))}
             </select>
           </PmField>
-          <PmModalActions onCancel={() => setShowCreate(false)} submitLabel="Create project" submitting={saving} />
+          <PmModalActions onCancel={() => setShowCreate(false)} submitLabel="Create Project" submitting={saving} />
         </form>
       </PmModal>
     </div>
