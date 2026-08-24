@@ -29,14 +29,21 @@ import {
 } from 'lucide-react';
 import { CrmModal, CrmField, CrmModalActions, crmInputClass } from '@/components/crm/crm-modal';
 
-const PROVIDERS: { value: MarketingEmailProvider; label: string; hint: string }[] = [
+const PROVIDERS: {
+  value: MarketingEmailProvider;
+  label: string;
+  hint: string;
+  stub?: boolean;
+}[] = [
   { value: 'sendgrid', label: 'SendGrid', hint: 'API key + verified sender (best for mass campaigns)' },
   { value: 'gmail_smtp', label: 'Gmail SMTP', hint: 'App password over smtp.gmail.com:587' },
-  { value: 'brevo', label: 'Brevo', hint: 'API key from Brevo (Sendinblue)' },
-  { value: 'ses', label: 'Amazon SES', hint: 'Access key, secret, and region' },
+  { value: 'brevo', label: 'Brevo', hint: 'Stub until fully wired — API key still accepted', stub: true },
+  { value: 'ses', label: 'Amazon SES', hint: 'Stub until fully wired — access keys still accepted', stub: true },
+  { value: 'mailchimp', label: 'Mailchimp', hint: 'Stub until fully wired — API key still accepted', stub: true },
 ];
 
 type CredForm = {
+  useEnv: boolean;
   apiKey: string;
   smtpUser: string;
   smtpPass: string;
@@ -50,6 +57,7 @@ type CredForm = {
 };
 
 const emptyCreds = (): CredForm => ({
+  useEnv: false,
   apiKey: '',
   smtpUser: '',
   smtpPass: '',
@@ -65,12 +73,24 @@ const emptyCreds = (): CredForm => ({
 function buildCredentials(provider: MarketingEmailProvider, c: CredForm): Record<string, unknown> {
   const fromEmail = c.fromEmail.trim();
   const fromName = c.fromName.trim();
-  if (provider === 'sendgrid' || provider === 'brevo') {
-    return {
-      apiKey: c.apiKey.trim(),
-      ...(fromEmail ? { fromEmail } : {}),
-      ...(fromName ? { fromName } : {}),
-    };
+  const fromBits = {
+    ...(fromEmail ? { fromEmail } : {}),
+    ...(fromName ? { fromName } : {}),
+  };
+
+  if (c.useEnv) {
+    if (provider === 'gmail_smtp') {
+      return {
+        useEnv: true,
+        ...(fromEmail ? { from: fromEmail } : {}),
+        ...(fromName ? { fromName } : {}),
+      };
+    }
+    return { useEnv: true, ...fromBits };
+  }
+
+  if (provider === 'sendgrid' || provider === 'brevo' || provider === 'mailchimp') {
+    return { apiKey: c.apiKey.trim(), ...fromBits };
   }
   if (provider === 'gmail_smtp') {
     // API: { host, port, user, pass, from } — see MARKETING_EMAIL_PROVIDERS.md
@@ -88,8 +108,7 @@ function buildCredentials(provider: MarketingEmailProvider, c: CredForm): Record
     accessKeyId: c.accessKeyId.trim(),
     secretAccessKey: c.secretAccessKey.trim(),
     region: c.region.trim() || 'eu-west-1',
-    ...(fromEmail ? { fromEmail } : {}),
-    ...(fromName ? { fromName } : {}),
+    ...fromBits,
   };
 }
 
@@ -158,19 +177,21 @@ export default function MarketingEmailConnectorsPage() {
       return;
     }
     const credentials = buildCredentials(provider, creds);
-    if (provider === 'sendgrid' || provider === 'brevo') {
-      if (!credentials.apiKey) {
-        toast.error('API key is required');
+    if (!creds.useEnv) {
+      if (provider === 'sendgrid' || provider === 'brevo' || provider === 'mailchimp') {
+        if (!credentials.apiKey) {
+          toast.error('API key is required');
+          return;
+        }
+      }
+      if (provider === 'gmail_smtp' && (!credentials.user || !credentials.pass)) {
+        toast.error('SMTP user and app password are required');
         return;
       }
-    }
-    if (provider === 'gmail_smtp' && (!credentials.user || !credentials.pass)) {
-      toast.error('SMTP user and app password are required');
-      return;
-    }
-    if (provider === 'ses' && (!credentials.accessKeyId || !credentials.secretAccessKey)) {
-      toast.error('SES access key and secret are required');
-      return;
+      if (provider === 'ses' && (!credentials.accessKeyId || !credentials.secretAccessKey)) {
+        toast.error('SES access key and secret are required');
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -423,12 +444,35 @@ export default function MarketingEmailConnectorsPage() {
               {PROVIDERS.map((p) => (
                 <option key={p.value} value={p.value}>
                   {p.label}
+                  {p.stub ? ' (stub)' : ''}
                 </option>
               ))}
             </select>
           </CrmField>
 
-          {(provider === 'sendgrid' || provider === 'brevo') && (
+          {providerMeta?.stub && (
+            <p className="text-xs rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-amber-700 dark:text-amber-400">
+              This provider adapter is a stub on the API — test/send may return “not configured” until fully wired.
+            </p>
+          )}
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={creds.useEnv}
+              onChange={(e) => setCreds({ ...creds, useEnv: e.target.checked })}
+              className="rounded border-border"
+            />
+            Use server env keys (no secret stored in DB)
+          </label>
+          {creds.useEnv && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              Requires the matching env on the API host (e.g. <code className="font-mono">SENDGRID_API_KEY</code> /{' '}
+              <code className="font-mono">SMTP_*</code>).
+            </p>
+          )}
+
+          {!creds.useEnv && (provider === 'sendgrid' || provider === 'brevo' || provider === 'mailchimp') && (
             <CrmField label="API key">
               <input
                 required
@@ -437,12 +481,14 @@ export default function MarketingEmailConnectorsPage() {
                 value={creds.apiKey}
                 onChange={(e) => setCreds({ ...creds, apiKey: e.target.value })}
                 className={crmInputClass}
-                placeholder={provider === 'sendgrid' ? 'SG.…' : 'xkeysib-…'}
+                placeholder={
+                  provider === 'sendgrid' ? 'SG.…' : provider === 'brevo' ? 'xkeysib-…' : 'mailchimp key'
+                }
               />
             </CrmField>
           )}
 
-          {provider === 'gmail_smtp' && (
+          {!creds.useEnv && provider === 'gmail_smtp' && (
             <>
               <CrmField label="SMTP user (Gmail address)">
                 <input
@@ -482,7 +528,7 @@ export default function MarketingEmailConnectorsPage() {
             </>
           )}
 
-          {provider === 'ses' && (
+          {!creds.useEnv && provider === 'ses' && (
             <>
               <CrmField label="Access key ID">
                 <input
