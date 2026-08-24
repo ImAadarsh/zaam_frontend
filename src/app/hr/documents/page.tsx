@@ -8,7 +8,7 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import {
-  listEmployeeDocuments, createEmployeeDocument, deleteEmployeeDocument,
+  listHrDocuments, createHrDocument, deleteHrDocument,
   listEmployees, uploadRtwDocument, createRtwDocument,
 } from '@/lib/api';
 import { employeeName, formatDate, hrApiError, isApiMissing } from '@/lib/hr-utils';
@@ -17,14 +17,12 @@ import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { FileText, Plus, Trash2, Upload } from 'lucide-react';
 
-const DOC_TYPES = [
+const DOC_CATEGORIES = [
   { value: 'contract', label: 'Contract' },
-  { value: 'offer_letter', label: 'Offer letter' },
+  { value: 'handbook', label: 'Handbook' },
+  { value: 'policy', label: 'Policy' },
   { value: 'id', label: 'ID' },
-  { value: 'passport', label: 'Passport' },
   { value: 'certificate', label: 'Certificate' },
-  { value: 'performance_review', label: 'Performance review' },
-  { value: 'warning', label: 'Warning' },
   { value: 'other', label: 'Other / RTW' },
 ] as const;
 
@@ -40,10 +38,9 @@ export default function DocumentsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     employeeId: '',
-    documentType: 'contract' as typeof DOC_TYPES[number]['value'],
+    docCategory: 'contract' as typeof DOC_CATEGORIES[number]['value'],
     documentName: '',
     documentUrl: '',
-    documentNumber: '',
     issueDate: '',
     expiryDate: '',
     isRtw: false,
@@ -55,7 +52,7 @@ export default function DocumentsPage() {
     setLoading(true);
     try {
       const [docs, emp] = await Promise.all([
-        listEmployeeDocuments({ limit: 200 }),
+        listHrDocuments({ limit: 200 }),
         listEmployees({ organizationId: orgId }),
       ]);
       setItems(docs.data || []);
@@ -85,7 +82,7 @@ export default function DocumentsPage() {
         const fd = new FormData();
         fd.append('file', file);
         fd.append('employeeId', form.employeeId);
-        fd.append('docType', form.documentType);
+        fd.append('docType', form.docCategory);
         fd.append('documentName', form.documentName || file.name);
         if (form.expiryDate) fd.append('expiresAt', form.expiryDate);
         try {
@@ -108,8 +105,8 @@ export default function DocumentsPage() {
           }
         }
       }
-      if (!url) {
-        toast.error('Document URL required');
+      if (!url && !file) {
+        toast.error('Document URL or file required');
         setSaving(false);
         return;
       }
@@ -117,30 +114,28 @@ export default function DocumentsPage() {
         try {
           await createRtwDocument({
             employeeId: form.employeeId,
-            docType: form.documentType,
+            docType: form.docCategory,
             documentName: form.documentName,
-            documentUrl: url,
+            documentUrl: url || undefined,
             expiresAt: form.expiryDate || undefined,
           });
         } catch (err) {
           if (!isApiMissing(err)) throw err;
-          await createEmployeeDocument({
+          await createHrDocument({
             employeeId: form.employeeId,
-            documentType: form.documentType === 'passport' || form.documentType === 'id' || form.documentType === 'contract' || form.documentType === 'offer_letter' || form.documentType === 'certificate' || form.documentType === 'performance_review' || form.documentType === 'warning' ? form.documentType : 'other',
+            docCategory: form.docCategory,
             documentName: form.documentName,
-            documentUrl: url,
-            documentNumber: form.documentNumber || undefined,
+            documentUrl: url || undefined,
             issueDate: form.issueDate || undefined,
             expiryDate: form.expiryDate || undefined,
           });
         }
       } else {
-        await createEmployeeDocument({
+        await createHrDocument({
           employeeId: form.employeeId,
-          documentType: form.documentType === 'passport' || form.documentType === 'id' || form.documentType === 'contract' || form.documentType === 'offer_letter' || form.documentType === 'certificate' || form.documentType === 'performance_review' || form.documentType === 'warning' ? form.documentType : 'other',
+          docCategory: form.docCategory,
           documentName: form.documentName,
-          documentUrl: url,
-          documentNumber: form.documentNumber || undefined,
+          documentUrl: url || undefined,
           issueDate: form.issueDate || undefined,
           expiryDate: form.expiryDate || undefined,
         });
@@ -159,7 +154,7 @@ export default function DocumentsPage() {
   async function onDelete(id: string) {
     if (!confirm('Delete this document?')) return;
     try {
-      await deleteEmployeeDocument(id);
+      await deleteHrDocument(id);
       toast.success('Deleted');
       void load();
     } catch (err) {
@@ -171,16 +166,19 @@ export default function DocumentsPage() {
     {
       header: 'Employee',
       cell: ({ row }) => (
-        <Link href={`/hr/employees/${row.original.employee?.id}`} className="text-[#D4A017] hover:underline">
+        <Link href={`/hr/employees/${row.original.employee?.id || row.original.employeeId}`} className="text-[#D4A017] hover:underline">
           {employeeName(row.original.employee)}
         </Link>
       ),
     },
     { accessorKey: 'documentName', header: 'Name' },
     {
-      accessorKey: 'documentType',
       header: 'Type',
-      cell: ({ row }) => <span className="capitalize">{(row.original.documentType || '').replace(/_/g, ' ')}</span>,
+      cell: ({ row }) => (
+        <span className="capitalize">
+          {(row.original.docCategory || row.original.documentType || '').replace(/_/g, ' ')}
+        </span>
+      ),
     },
     { header: 'Issue', cell: ({ row }) => formatDate(row.original.issueDate) },
     { header: 'Expiry', cell: ({ row }) => formatDate(row.original.expiryDate) },
@@ -213,6 +211,7 @@ export default function DocumentsPage() {
               <Plus size={14} /> Add document
             </button>
           </div>
+          {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
           <RichDataTable columns={columns} data={items} searchPlaceholder="Search documents…" />
         </main>
       </div>
@@ -225,9 +224,9 @@ export default function DocumentsPage() {
               {employees.map((e) => <option key={e.id} value={e.id}>{employeeName(e)}</option>)}
             </select>
           </HrField>
-          <HrField label="Type">
-            <select className={hrInputClass} value={form.documentType} onChange={(e) => setForm({ ...form, documentType: e.target.value as any })}>
-              {DOC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          <HrField label="Category">
+            <select className={hrInputClass} value={form.docCategory} onChange={(e) => setForm({ ...form, docCategory: e.target.value as any })}>
+              {DOC_CATEGORIES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </HrField>
           <HrField label="Name"><input className={hrInputClass} required value={form.documentName} onChange={(e) => setForm({ ...form, documentName: e.target.value })} /></HrField>
@@ -235,7 +234,6 @@ export default function DocumentsPage() {
             <HrField label="Issue date"><input type="date" className={hrInputClass} value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} /></HrField>
             <HrField label="Expiry"><input type="date" className={hrInputClass} value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} /></HrField>
           </div>
-          <HrField label="Document number"><input className={hrInputClass} value={form.documentNumber} onChange={(e) => setForm({ ...form, documentNumber: e.target.value })} /></HrField>
           <HrField label="Upload file"><input type="file" className="text-sm" onChange={(e) => setFile(e.target.files?.[0] || null)} /></HrField>
           <HrField label="Document URL" hint="Required if multipart upload is unavailable">
             <input className={hrInputClass} value={form.documentUrl} onChange={(e) => setForm({ ...form, documentUrl: e.target.value })} placeholder="https://…" />

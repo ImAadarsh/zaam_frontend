@@ -11,7 +11,7 @@ import {
   listEmployees, listLeaveRequests, listPayrollRuns, listTimeEntries,
   getHrReportsSummary, listVisaExpiring, listComplianceAlerts,
 } from '@/lib/api';
-import { employeeName, formatDate, hrApiError, isApiMissing, visaRiskClass, daysUntil } from '@/lib/hr-utils';
+import { employeeName, flattenHrSummary, formatDate, hrApiError, isApiMissing, visaRiskClass, daysUntil } from '@/lib/hr-utils';
 import {
   Users, Calendar, Clock, DollarSign, AlertTriangle, ShieldCheck,
   FileText, Briefcase, UserCheck, ClipboardList, PiggyBank, BarChart3,
@@ -53,7 +53,7 @@ export default function HRDashboard() {
       try {
         try {
           const res = await getHrReportsSummary({ organizationId: orgId });
-          setSummary(res.data || {});
+          setSummary(flattenHrSummary(res.data || {}));
         } catch (err) {
           if (!isApiMissing(err)) throw err;
           const [emp, leave, payroll, time] = await Promise.all([
@@ -76,7 +76,7 @@ export default function HRDashboard() {
 
         try {
           const v = await listVisaExpiring({ organizationId: orgId, withinDays: 90, limit: 8 });
-          setVisaRisk(v.data || []);
+          setVisaRisk(Array.isArray(v.data) ? v.data : []);
         } catch { /* optional until UK API live */ }
 
         try {
@@ -190,7 +190,7 @@ export default function HRDashboard() {
                   return (
                     <div key={row.id || row.employeeId} className="px-5 py-3 flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-medium text-sm">{employeeName(row.employee || row)}</div>
+                        <div className="font-medium text-sm">{row.employeeName || employeeName(row.employee || row)}</div>
                         <div className="text-xs text-muted-foreground">{row.visaType || row.status || '—'}</div>
                       </div>
                       <div className="text-right">

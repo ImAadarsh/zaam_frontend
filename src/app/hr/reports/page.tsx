@@ -11,7 +11,7 @@ import {
   getHrReportsSummary, listVisaExpiring, listEmployees, listLeaveRequests,
   listPayrollRuns, listTimeEntries, listComplianceAlerts,
 } from '@/lib/api';
-import { daysUntil, employeeName, formatDate, formatMoney, hrApiError, isApiMissing, visaRiskClass } from '@/lib/hr-utils';
+import { daysUntil, employeeName, flattenHrSummary, formatDate, formatMoney, hrApiError, isApiMissing, visaRiskClass } from '@/lib/hr-utils';
 import { toast } from 'sonner';
 import { AlertTriangle, BarChart3, Calendar, Clock, DollarSign, ShieldCheck, Users } from 'lucide-react';
 
@@ -35,7 +35,7 @@ export default function HrReportsPage() {
       try {
         try {
           const res = await getHrReportsSummary({ organizationId: orgId });
-          setSummary(res.data || {});
+          setSummary(flattenHrSummary(res.data || {}));
         } catch (err) {
           if (!isApiMissing(err)) throw err;
           setFallback(true);
@@ -63,8 +63,9 @@ export default function HrReportsPage() {
         }
         try {
           const v = await listVisaExpiring({ organizationId: orgId, withinDays: 90 });
-          setVisa(v.data || []);
-          setSummary((s: any) => ({ ...s, visaAtRisk: v.data?.length ?? s?.visaAtRisk }));
+          const rows = Array.isArray(v.data) ? v.data : [];
+          setVisa(rows);
+          setSummary((s: any) => ({ ...s, visaAtRisk: rows.length ?? s?.visaAtRisk }));
         } catch {
           try {
             await listComplianceAlerts({ organizationId: orgId });
@@ -133,7 +134,7 @@ export default function HrReportsPage() {
                 <div key={row.id || `${row.employeeId}-${row.visaExpiry}`} className="px-5 py-3 border-b border-border/30 last:border-0 flex justify-between gap-3 text-sm">
                   <div>
                     <Link href={`/hr/employees/${row.employeeId || row.employee?.id}`} className="font-medium text-[#D4A017] hover:underline">
-                      {employeeName(row.employee || row)}
+                      {row.employeeName || employeeName(row.employee || row)}
                     </Link>
                     <div className="text-xs text-muted-foreground">{row.visaType || '—'}</div>
                   </div>

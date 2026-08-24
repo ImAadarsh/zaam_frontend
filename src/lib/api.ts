@@ -6391,7 +6391,18 @@ export async function listVisaExpiring(params?: {
     `${API_BASE}/api/hr/compliance/visa-expiring${hrQuery(params)}`,
     { headers: authHeaders() }
   );
-  return data as { data: any[]; meta?: any };
+  // API returns `{ data: { expiring: [...], alerts, ... } }` — normalize to an array for UI `.map`
+  const payload = data?.data;
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.expiring)
+      ? payload.expiring
+      : [];
+  return { data: rows, meta: data?.meta, raw: payload } as {
+    data: any[];
+    meta?: any;
+    raw?: any;
+  };
 }
 
 export async function listComplianceAlerts(params?: {
@@ -6735,4 +6746,75 @@ export async function listHrMeDocuments(params?: { page?: number; limit?: number
     { headers: authHeaders() }
   );
   return data as { data: any[]; meta?: any };
+}
+
+/** UK HR attendance (`hr_attendance`) — preferred over legacy `/time-entries`. */
+export async function listHrAttendance(params?: {
+  employeeId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/attendance${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function upsertHrAttendance(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/attendance`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function listHrOvertime(params?: {
+  employeeId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/overtime${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createHrOvertime(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/overtime`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateHrOvertime(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/overtime/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+/** UK HR documents (`hr_documents`) — preferred over legacy `/employee-documents`. */
+export async function listHrDocuments(params?: {
+  employeeId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/documents${hrQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; meta?: any };
+}
+
+export async function createHrDocument(payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/documents`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateHrDocument(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/documents/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteHrDocument(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/hr/documents/${id}`, { headers: authHeaders() });
+  return status === 204;
 }

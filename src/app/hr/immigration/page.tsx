@@ -66,7 +66,7 @@ export default function ImmigrationRtwPage() {
           listComplianceAlerts({ organizationId: orgId, limit: 50 }),
           listRtwDocuments({ limit: 50 }),
         ]);
-        setBoard(v.data || []);
+        setBoard(Array.isArray(v.data) ? v.data : []);
         setAlerts(a.data || []);
         setRtw(r.data || []);
         setApiMissing(false);
@@ -198,7 +198,7 @@ export default function ImmigrationRtwPage() {
       header: 'Employee',
       cell: ({ row }) => (
         <Link href={`/hr/employees/${row.original.employeeId || row.original.employee?.id}`} className="text-[#D4A017] hover:underline font-medium">
-          {employeeName(row.original.employee || row.original)}
+          {row.original.employeeName || employeeName(row.original.employee || row.original)}
         </Link>
       ),
     },

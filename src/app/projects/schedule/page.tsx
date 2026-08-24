@@ -56,7 +56,10 @@ export default function PmSchedulePage() {
   const [saving, setSaving] = useState(false);
 
   const orgId = session?.user?.organizationId;
-  const weekEnd = addDays(weekStart, 7);
+  const weekFromIso = useMemo(() => weekStart.toISOString(), [weekStart]);
+  const weekToIso = useMemo(() => addDays(weekStart, 7).toISOString(), [weekStart]);
+  const filterUserId = filters.userId || undefined;
+  const filterProjectId = filters.projectId || undefined;
 
   const load = useCallback(async () => {
     if (!orgId) return;
@@ -64,10 +67,10 @@ export default function PmSchedulePage() {
     try {
       const res = await listPmSchedule({
         organizationId: orgId,
-        userId: filters.userId || undefined,
-        projectId: filters.projectId || undefined,
-        from: weekStart.toISOString(),
-        to: weekEnd.toISOString(),
+        userId: filterUserId,
+        projectId: filterProjectId,
+        from: weekFromIso,
+        to: weekToIso,
         limit: 500,
       });
       setItems(res.data || []);
@@ -82,7 +85,7 @@ export default function PmSchedulePage() {
     } finally {
       setLoading(false);
     }
-  }, [orgId, filters, weekStart, weekEnd]);
+  }, [orgId, filterUserId, filterProjectId, weekFromIso, weekToIso]);
 
   useEffect(() => {
     if (!hydrated) return;

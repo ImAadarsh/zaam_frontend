@@ -7,34 +7,46 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import {
-  listTimeEntries, createTimeEntry, updateTimeEntry, listEmployees, listBusinessUnits,
+  listHrAttendance, upsertHrAttendance, listHrOvertime, createHrOvertime, updateHrOvertime,
+  listEmployees,
 } from '@/lib/api';
-import { employeeName, formatDate, formatDateTime, hrApiError, statusBadgeClass } from '@/lib/hr-utils';
+import { employeeName, formatDate, hrApiError, statusBadgeClass } from '@/lib/hr-utils';
 import { HrModal, HrField, HrModalActions, hrInputClass, hrTextareaClass } from '@/components/hr/hr-modal';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { Check, Clock, Plus } from 'lucide-react';
+
+type AttendanceRow = {
+  id: string;
+  kind: 'attendance' | 'overtime';
+  employee?: any;
+  workDate?: string;
+  clockIn?: string | null;
+  clockOut?: string | null;
+  hoursWorked?: number | null;
+  overtimeHours?: number;
+  status?: string;
+  notes?: string | null;
+  rateMultiplier?: number;
+};
 
 export default function AttendancePage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']);
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<AttendanceRow[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
-  const [bus, setBus] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     employeeId: '',
-    businessUnitId: '',
-    entryDate: '',
-    clockInTime: '',
-    clockOutTime: '',
-    totalHours: '',
-    overtimeHours: '0',
-    breakMinutes: '0',
-    entryType: 'regular',
+    workDate: '',
+    clockIn: '',
+    clockOut: '',
+    hoursWorked: '',
+    overtimeHours: '',
+    status: 'present',
     notes: '',
   });
 
@@ -43,18 +55,40 @@ export default function AttendancePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [t, e] = await Promise.all([
-        listTimeEntries({ limit: 200 }),
+      const [att, ot, e] = await Promise.all([
+        listHrAttendance({ limit: 200 }),
+        listHrOvertime({ limit: 200 }),
         listEmployees({ organizationId: orgId }),
       ]);
-      setItems(t.data || []);
+      const attendanceRows: AttendanceRow[] = (att.data || []).map((r: any) => ({
+        id: `a-${r.id}`,
+        kind: 'attendance' as const,
+        employee: r.employee,
+        workDate: r.workDate,
+        clockIn: r.clockIn,
+        clockOut: r.clockOut,
+        hoursWorked: r.hoursWorked,
+        overtimeHours: 0,
+        status: r.status,
+        notes: r.notes,
+      }));
+      const overtimeRows: AttendanceRow[] = (ot.data || []).map((r: any) => ({
+        id: `o-${r.id}`,
+        kind: 'overtime' as const,
+        employee: r.employee,
+        workDate: r.workDate,
+        clockIn: null,
+        clockOut: null,
+        hoursWorked: null,
+        overtimeHours: Number(r.hours) || 0,
+        status: r.status,
+        notes: r.reason,
+        rateMultiplier: r.rateMultiplier,
+      }));
+      setItems([...attendanceRows, ...overtimeRows].sort((a, b) =>
+        String(b.workDate || '').localeCompare(String(a.workDate || ''))
+      ));
       setEmployees(e.data || []);
-      if (orgId) {
-        try {
-          const bu = await listBusinessUnits(orgId);
-          setBus(bu.data || []);
-        } catch { setBus([]); }
-      }
     } catch (err) {
       toast.error(hrApiError(err, 'Failed to load attendance'));
     } finally {
@@ -75,24 +109,24 @@ export default function AttendancePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const clockIn = form.clockInTime.includes('T')
-        ? form.clockInTime
-        : `${form.entryDate}T${form.clockInTime}:00`;
-      const clockOut = form.clockOutTime
-        ? (form.clockOutTime.includes('T') ? form.clockOutTime : `${form.entryDate}T${form.clockOutTime}:00`)
-        : undefined;
-      await createTimeEntry({
+      await upsertHrAttendance({
         employeeId: form.employeeId,
-        businessUnitId: form.businessUnitId,
-        entryDate: form.entryDate,
-        clockInTime: clockIn,
-        clockOutTime: clockOut,
-        totalHours: form.totalHours ? Number(form.totalHours) : undefined,
-        overtimeHours: Number(form.overtimeHours) || 0,
-        breakMinutes: Number(form.breakMinutes) || 0,
-        entryType: form.entryType as any,
-        notes: form.notes || undefined,
+        workDate: form.workDate,
+        status: form.status,
+        clockIn: form.clockIn || null,
+        clockOut: form.clockOut || null,
+        hoursWorked: form.hoursWorked ? Number(form.hoursWorked) : null,
+        notes: form.notes || null,
       });
+      if (form.overtimeHours && Number(form.overtimeHours) > 0) {
+        await createHrOvertime({
+          employeeId: form.employeeId,
+          workDate: form.workDate,
+          hours: Number(form.overtimeHours),
+          reason: form.notes || null,
+          status: 'pending',
+        });
+      }
       toast.success('Attendance entry saved');
       setOpen(false);
       void load();
@@ -103,10 +137,15 @@ export default function AttendancePage() {
     }
   }
 
-  async function approve(id: string) {
+  async function approve(row: AttendanceRow) {
     try {
-      await updateTimeEntry(id, { status: 'approved' });
-      toast.success('Approved');
+      if (row.kind !== 'overtime') {
+        toast.message('Attendance statuses are recorded as present/absent — no approve step');
+        return;
+      }
+      const rawId = row.id.replace(/^o-/, '');
+      await updateHrOvertime(rawId, { status: 'approved' });
+      toast.success('Overtime approved');
       void load();
     } catch (err) {
       toast.error(hrApiError(err, 'Approve failed'));
@@ -115,28 +154,38 @@ export default function AttendancePage() {
 
   const overtimeTotal = items.reduce((s, r) => s + (Number(r.overtimeHours) || 0), 0);
 
-  const columns = useMemo<ColumnDef<any>[]>(() => [
+  const columns = useMemo<ColumnDef<AttendanceRow>[]>(() => [
     { header: 'Employee', cell: ({ row }) => employeeName(row.original.employee) },
-    { header: 'Date', cell: ({ row }) => formatDate(row.original.entryDate) },
+    { header: 'Date', cell: ({ row }) => formatDate(row.original.workDate) },
     {
       header: 'Clock',
       cell: ({ row }) => (
         <span className="text-xs">
-          {formatDateTime(row.original.clockInTime)}
-          {row.original.clockOutTime ? ` → ${formatDateTime(row.original.clockOutTime)}` : ''}
+          {row.original.kind === 'overtime'
+            ? 'Overtime'
+            : [row.original.clockIn, row.original.clockOut].filter(Boolean).join(' → ') || '—'}
         </span>
       ),
     },
-    { accessorKey: 'totalHours', header: 'Hours' },
     {
-      accessorKey: 'overtimeHours',
-      header: 'OT',
-      cell: ({ row }) => <span className="font-medium text-[#D4A017]">{row.original.overtimeHours || 0}</span>,
+      header: 'Hours',
+      cell: ({ row }) => row.original.hoursWorked ?? (row.original.kind === 'overtime' ? row.original.overtimeHours : '—'),
     },
     {
-      accessorKey: 'entryType',
+      header: 'OT',
+      cell: ({ row }) => (
+        <span className="font-medium text-[#D4A017]">
+          {row.original.kind === 'overtime' ? row.original.overtimeHours || 0 : 0}
+        </span>
+      ),
+    },
+    {
       header: 'Type',
-      cell: ({ row }) => <span className="capitalize">{(row.original.entryType || '').replace(/_/g, ' ')}</span>,
+      cell: ({ row }) => (
+        <span className="capitalize">
+          {row.original.kind === 'overtime' ? 'overtime' : (row.original.status || '').replace(/_/g, ' ')}
+        </span>
+      ),
     },
     {
       accessorKey: 'status',
@@ -150,8 +199,8 @@ export default function AttendancePage() {
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => row.original.status === 'pending' ? (
-        <button type="button" onClick={() => approve(row.original.id)} className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-500/10" title="Approve">
+      cell: ({ row }) => row.original.kind === 'overtime' && row.original.status === 'pending' ? (
+        <button type="button" onClick={() => approve(row.original)} className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-500/10" title="Approve">
           <Check size={16} />
         </button>
       ) : null,
@@ -168,6 +217,7 @@ export default function AttendancePage() {
             <div className="glass-panel rounded-xl border border-border/40 px-4 py-3 text-sm">
               <span className="text-muted-foreground">Overtime (loaded rows): </span>
               <span className="font-bold text-[#D4A017]">{overtimeTotal.toFixed(1)}h</span>
+              {loading && <span className="ml-2 text-muted-foreground text-xs">Loading…</span>}
             </div>
             <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
               <Plus size={14} /> Add attendance
@@ -185,29 +235,24 @@ export default function AttendancePage() {
               {employees.map((e) => <option key={e.id} value={e.id}>{employeeName(e)}</option>)}
             </select>
           </HrField>
-          <HrField label="Business unit">
-            <select className={hrInputClass} required value={form.businessUnitId} onChange={(e) => setForm({ ...form, businessUnitId: e.target.value })}>
-              <option value="">Select…</option>
-              {bus.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-          </HrField>
-          <HrField label="Date"><input type="date" className={hrInputClass} required value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })} /></HrField>
+          <HrField label="Date"><input type="date" className={hrInputClass} required value={form.workDate} onChange={(e) => setForm({ ...form, workDate: e.target.value })} /></HrField>
           <div className="grid grid-cols-2 gap-3">
-            <HrField label="Clock in (HH:MM)"><input className={hrInputClass} required placeholder="09:00" value={form.clockInTime} onChange={(e) => setForm({ ...form, clockInTime: e.target.value })} /></HrField>
-            <HrField label="Clock out (HH:MM)"><input className={hrInputClass} placeholder="17:30" value={form.clockOutTime} onChange={(e) => setForm({ ...form, clockOutTime: e.target.value })} /></HrField>
+            <HrField label="Clock in (HH:MM)"><input className={hrInputClass} placeholder="09:00" value={form.clockIn} onChange={(e) => setForm({ ...form, clockIn: e.target.value })} /></HrField>
+            <HrField label="Clock out (HH:MM)"><input className={hrInputClass} placeholder="17:30" value={form.clockOut} onChange={(e) => setForm({ ...form, clockOut: e.target.value })} /></HrField>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <HrField label="Total hours"><input type="number" step="0.25" className={hrInputClass} value={form.totalHours} onChange={(e) => setForm({ ...form, totalHours: e.target.value })} /></HrField>
-            <HrField label="Overtime"><input type="number" step="0.25" className={hrInputClass} value={form.overtimeHours} onChange={(e) => setForm({ ...form, overtimeHours: e.target.value })} /></HrField>
-            <HrField label="Break (min)"><input type="number" className={hrInputClass} value={form.breakMinutes} onChange={(e) => setForm({ ...form, breakMinutes: e.target.value })} /></HrField>
+          <div className="grid grid-cols-2 gap-3">
+            <HrField label="Hours worked"><input type="number" step="0.25" className={hrInputClass} value={form.hoursWorked} onChange={(e) => setForm({ ...form, hoursWorked: e.target.value })} /></HrField>
+            <HrField label="Overtime hours"><input type="number" step="0.25" className={hrInputClass} value={form.overtimeHours} onChange={(e) => setForm({ ...form, overtimeHours: e.target.value })} /></HrField>
           </div>
-          <HrField label="Entry type">
-            <select className={hrInputClass} value={form.entryType} onChange={(e) => setForm({ ...form, entryType: e.target.value })}>
-              <option value="regular">Regular</option>
-              <option value="overtime">Overtime</option>
+          <HrField label="Status">
+            <select className={hrInputClass} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="present">Present</option>
+              <option value="absent">Absent</option>
+              <option value="late">Late</option>
+              <option value="half_day">Half day</option>
               <option value="holiday">Holiday</option>
               <option value="sick">Sick</option>
-              <option value="unpaid">Unpaid</option>
+              <option value="remote">Remote</option>
             </select>
           </HrField>
           <HrField label="Notes"><textarea className={hrTextareaClass} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></HrField>

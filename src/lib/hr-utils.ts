@@ -18,11 +18,29 @@ export function employeeName(e?: {
   lastName?: string;
   employeeNumber?: string;
   email?: string;
+  employeeName?: string;
 } | null): string {
   if (!e) return '—';
+  if (typeof (e as any).employeeName === 'string' && (e as any).employeeName.trim()) {
+    return (e as any).employeeName.trim();
+  }
   const full = [e.firstName, e.lastName].filter(Boolean).join(' ').trim();
   if (full) return full;
   return e.employeeNumber || e.email || '—';
+}
+
+/** Flatten nested UK reports summary into dashboard-friendly scalars. */
+export function flattenHrSummary(raw: any): Record<string, any> {
+  if (!raw || typeof raw !== 'object') return {};
+  const head = raw.headcount && typeof raw.headcount === 'object' ? raw.headcount : null;
+  return {
+    ...raw,
+    headcount: head ? head.total ?? (Number(head.active || 0) + Number(head.onLeave || 0) + Number(head.terminated || 0)) : raw.headcount,
+    activeEmployees: raw.activeEmployees ?? head?.active,
+    onLeave: raw.onLeave ?? head?.onLeave,
+    pendingLeave: raw.pendingLeave ?? raw.pendingLeaveRequests,
+    visaAtRisk: raw.visaAtRisk ?? raw.compliance?.visasExpiringWithin90Days,
+  };
 }
 
 export function formatMoney(amount?: number | null, currency = 'GBP'): string {
