@@ -12,10 +12,12 @@ import {
   deleteMarketingEmailCampaign,
   listMarketingEmailCampaignSends,
   listMarketingEmailCampaigns,
+  listMarketingEmailConnectors,
   listSegments,
   sendMarketingEmailCampaign,
 } from '@/lib/api';
 import { crmApiError } from '@/lib/crm-utils';
+import { emptyBuilderJson, renderEmailHtml } from '@/lib/email-builder';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import {
@@ -27,6 +29,8 @@ import {
   X,
   FlaskConical,
   ScrollText,
+  PenLine,
+  Plug,
 } from 'lucide-react';
 import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 
@@ -39,6 +43,10 @@ const emptyForm = {
   source: 'crm_leads' as AudienceSource,
   segmentId: '',
   manualEmails: '',
+  connectorId: '',
+  fromName: '',
+  replyTo: '',
+  useBuilder: true,
 };
 
 function statusBadgeClass(status: string) {
@@ -63,6 +71,12 @@ function parseEmailList(raw: string): string[] {
     .filter((e) => e.includes('@'));
 }
 
+function connectorLabel(c: any) {
+  if (!c) return '—';
+  const provider = String(c.provider || '').replace(/_/g, ' ');
+  return `${c.name}${provider ? ` (${provider})` : ''}`;
+}
+
 export default function MarketingEmailCampaignsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
@@ -73,6 +87,8 @@ export default function MarketingEmailCampaignsPage() {
   const [smtpHint, setSmtpHint] = useState<string | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [segments, setSegments] = useState<any[]>([]);
+  const [connectors, setConnectors] = useState<any[]>([]);
+  const [connectorsApiMissing, setConnectorsApiMissing] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -91,14 +107,25 @@ export default function MarketingEmailCampaignsPage() {
     if (!orgId) return;
     setLoading(true);
     try {
-      const [campRes, segRes] = await Promise.all([
+      const [campRes, segRes, connRes] = await Promise.all([
         listMarketingEmailCampaigns({ organizationId: orgId }),
         listSegments().catch(() => ({ data: [] as any[] })),
+        listMarketingEmailConnectors({ organizationId: orgId }).catch((err: any) => {
+          if (err?.response?.status === 404) return { data: null as any };
+          return { data: [] as any[] };
+        }),
       ]);
       setItems(campRes.data || []);
       setSmtpConfigured(campRes.meta?.smtpConfigured ?? null);
       setSmtpHint(null);
       setSegments(segRes.data || []);
+      if (connRes.data === null) {
+        setConnectors([]);
+        setConnectorsApiMissing(true);
+      } else {
+        setConnectors(connRes.data || []);
+        setConnectorsApiMissing(false);
+      }
       setApiMissing(false);
     } catch (err: any) {
       if (err?.response?.status === 404) {
@@ -121,6 +148,20 @@ export default function MarketingEmailCampaignsPage() {
     void load();
   }, [hydrated, hasAccess, session?.accessToken, router, load]);
 
+  const defaultConnectorId = useMemo(() => {
+    const d = connectors.find((c) => c.isDefault || c.is_default);
+    return d?.id ? String(d.id) : connectors[0]?.id ? String(connectors[0].id) : '';
+  }, [connectors]);
+
+  function openCreate() {
+    setForm({
+      ...emptyForm,
+      connectorId: defaultConnectorId,
+      useBuilder: true,
+    });
+    setShowCreate(true);
+  }
+
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     if (form.source === 'segment' && !form.segmentId) {
@@ -131,26 +172,43 @@ export default function MarketingEmailCampaignsPage() {
       toast.error('Add at least one email for a manual audience');
       return;
     }
+    if (!form.useBuilder && !form.htmlBody.trim()) {
+      toast.error('Add HTML body or use the builder');
+      return;
+    }
     setSaving(true);
     try {
+      const builder = emptyBuilderJson();
+      const htmlBody = form.useBuilder
+        ? renderEmailHtml(builder, { previewTitle: form.subject.trim() })
+        : form.htmlBody;
       const res = await createMarketingEmailCampaign({
         organizationId: orgId,
         name: form.name.trim(),
         subject: form.subject.trim(),
-        htmlBody: form.htmlBody,
+        htmlBody,
+        builderJson: form.useBuilder ? builder : null,
+        connectorId: form.connectorId || null,
+        fromName: form.fromName.trim() || null,
+        replyTo: form.replyTo.trim() || null,
         source: form.source,
+        audienceType: form.source,
         segmentId: form.source === 'segment' ? form.segmentId : null,
       });
-      if (form.source === 'manual' && res.data?.id) {
+      const newId = res.data?.id;
+      if (form.source === 'manual' && newId) {
         setManualEmailsById((prev) => ({
           ...prev,
-          [String(res.data.id)]: parseEmailList(form.manualEmails),
+          [String(newId)]: parseEmailList(form.manualEmails),
         }));
       }
       setShowCreate(false);
       setForm(emptyForm);
       toast.success('Campaign created');
       await load();
+      if (form.useBuilder && newId) {
+        router.push(`/marketing/email-campaigns/${newId}/builder`);
+      }
     } catch (err) {
       toast.error(crmApiError(err, 'Failed to create campaign'));
     } finally {
@@ -180,7 +238,7 @@ export default function MarketingEmailCampaignsPage() {
       await load();
     } catch (err: any) {
       const msg = crmApiError(err, 'Send failed');
-      if (err?.response?.status === 503 || /smtp/i.test(msg)) {
+      if (err?.response?.status === 503 || /smtp|connector|sendgrid/i.test(msg)) {
         setSmtpConfigured(false);
         setSmtpHint(msg);
       }
@@ -199,8 +257,6 @@ export default function MarketingEmailCampaignsPage() {
     setSaving(true);
     setSmtpHint(null);
     try {
-      // Manual source accepts arbitrary emails; other sources filter to audience.
-      // For a true one-off test, send with emails=[test] — works fully when source=manual.
       const res = await sendMarketingEmailCampaign(testFor.id, {
         emails: [testEmail.trim().toLowerCase()],
       });
@@ -219,7 +275,7 @@ export default function MarketingEmailCampaignsPage() {
       await load();
     } catch (err: any) {
       const msg = crmApiError(err, 'Test send failed');
-      if (err?.response?.status === 503 || /smtp/i.test(msg)) {
+      if (err?.response?.status === 503 || /smtp|connector|sendgrid/i.test(msg)) {
         setSmtpConfigured(false);
         setSmtpHint(msg);
       }
@@ -255,6 +311,12 @@ export default function MarketingEmailCampaignsPage() {
     }
   }
 
+  const connectorById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const c of connectors) m.set(String(c.id), c);
+    return m;
+  }, [connectors]);
+
   const columns = useMemo<ColumnDef<any>[]>(
     () => [
       {
@@ -268,6 +330,19 @@ export default function MarketingEmailCampaignsPage() {
         cell: ({ row }) => (
           <span className="text-sm text-muted-foreground line-clamp-1">{row.original.subject}</span>
         ),
+      },
+      {
+        id: 'connector',
+        header: 'Connector',
+        cell: ({ row }) => {
+          const cid = row.original.connectorId ?? row.original.connector_id;
+          const c = cid ? connectorById.get(String(cid)) : null;
+          return (
+            <span className="text-xs text-muted-foreground">
+              {c ? connectorLabel(c) : cid ? `#${cid}` : 'Default'}
+            </span>
+          );
+        },
       },
       {
         accessorKey: 'source',
@@ -311,6 +386,14 @@ export default function MarketingEmailCampaignsPage() {
             <div className="flex items-center gap-1 justify-end">
               <button
                 type="button"
+                title="Open builder"
+                onClick={() => router.push(`/marketing/email-campaigns/${c.id}/builder`)}
+                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-[#D4A017]"
+              >
+                <PenLine size={15} />
+              </button>
+              <button
+                type="button"
                 title="Send"
                 disabled={saving || c.status === 'sending'}
                 onClick={() => void doSend(c)}
@@ -351,10 +434,12 @@ export default function MarketingEmailCampaignsPage() {
         },
       },
     ],
-    [saving, manualEmailsById]
+    [saving, manualEmailsById, connectorById, router]
   );
 
   if (!hydrated || !hasAccess || !session?.accessToken) return null;
+
+  const noConnectors = !connectorsApiMissing && connectors.length === 0;
 
   return (
     <div className="min-h-screen app-surface">
@@ -365,17 +450,15 @@ export default function MarketingEmailCampaignsPage() {
           actions={[
             {
               label: 'Create Campaign',
-              onClick: () => {
-                setForm(emptyForm);
-                setShowCreate(true);
-              },
+              onClick: openCreate,
               icon: <Plus size={18} />,
             },
           ]}
         />
         <main className="p-6 md:p-8 space-y-5">
           <p className="text-sm text-muted-foreground max-w-2xl">
-            Cold-email CRM leads or a marketing segment via Gmail SMTP.
+            Mass-email CRM leads or a marketing segment via your email connector (SendGrid, Gmail
+            SMTP, and more). Design with the block builder, then send.
           </p>
 
           {apiMissing && (
@@ -390,14 +473,33 @@ export default function MarketingEmailCampaignsPage() {
             </div>
           )}
 
-          {smtpConfigured === false && (
+          {noConnectors && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
+              <Plug size={18} className="mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <div className="font-semibold">No email connector configured</div>
+                <div className="text-xs mt-0.5 opacity-90">
+                  Add SendGrid or Gmail SMTP under Email Connectors before sending mass campaigns.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push('/marketing/email-connectors')}
+                  className="mt-2 text-xs font-semibold underline underline-offset-2"
+                >
+                  Open Email Connectors
+                </button>
+              </div>
+            </div>
+          )}
+
+          {smtpConfigured === false && !noConnectors && (
             <div className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-3 text-rose-700 dark:text-rose-400 text-sm">
               <AlertCircle size={18} className="mt-0.5 shrink-0" />
               <div>
-                <div className="font-semibold">Gmail SMTP is not configured</div>
+                <div className="font-semibold">Email delivery not ready</div>
                 <div className="text-xs mt-0.5 opacity-90">
                   {smtpHint ||
-                    'Set SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER, SMTP_PASS (app password), and SMTP_FROM on the API server. Sends will fail until then.'}
+                    'Check your connector credentials (Test connection) or server SMTP fallback.'}
                 </div>
               </div>
             </div>
@@ -409,15 +511,12 @@ export default function MarketingEmailCampaignsPage() {
               <div>
                 <p className="font-medium text-foreground">No email campaigns yet</p>
                 <p className="text-sm mt-1 max-w-md mx-auto">
-                  Create a campaign to email CRM leads, a segment, or a manual list. Nothing is marked sent without the API.
+                  Create a campaign, pick a connector and audience, then open the builder.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setForm(emptyForm);
-                  setShowCreate(true);
-                }}
+                onClick={openCreate}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#D4A017] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#B89015] mx-auto"
               >
                 <Plus size={18} />
@@ -462,15 +561,89 @@ export default function MarketingEmailCampaignsPage() {
               placeholder="Quick intro from Zaam"
             />
           </CrmField>
-          <CrmField label="Body (HTML or plain text)">
-            <textarea
-              required
-              value={form.htmlBody}
-              onChange={(e) => setForm({ ...form, htmlBody: e.target.value })}
-              className={`${crmTextareaClass} min-h-[160px]`}
-              placeholder="<p>Hi …</p>"
-            />
+
+          <CrmField
+            label="Email connector"
+            hint={
+              connectorsApiMissing
+                ? 'Connectors API not ready — sends may use server SMTP fallback'
+                : undefined
+            }
+          >
+            <select
+              value={form.connectorId}
+              onChange={(e) => setForm({ ...form, connectorId: e.target.value })}
+              className={crmInputClass}
+            >
+              <option value="">Org default / SMTP fallback</option>
+              {connectors.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {connectorLabel(c)}
+                  {c.isDefault || c.is_default ? ' · default' : ''}
+                </option>
+              ))}
+            </select>
           </CrmField>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <CrmField label="From name (optional)">
+              <input
+                value={form.fromName}
+                onChange={(e) => setForm({ ...form, fromName: e.target.value })}
+                className={crmInputClass}
+                placeholder="Zaam Marketing"
+              />
+            </CrmField>
+            <CrmField label="Reply-to (optional)">
+              <input
+                type="email"
+                value={form.replyTo}
+                onChange={(e) => setForm({ ...form, replyTo: e.target.value })}
+                className={crmInputClass}
+                placeholder="hello@…"
+              />
+            </CrmField>
+          </div>
+
+          <CrmField label="Content">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, useBuilder: true })}
+                className={`flex-1 h-10 rounded-xl text-sm font-medium border transition ${
+                  form.useBuilder
+                    ? 'bg-[#D4A017]/15 border-[#D4A017]/40 text-foreground'
+                    : 'bg-background border-border text-muted-foreground'
+                }`}
+              >
+                Open builder after create
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, useBuilder: false })}
+                className={`flex-1 h-10 rounded-xl text-sm font-medium border transition ${
+                  !form.useBuilder
+                    ? 'bg-[#D4A017]/15 border-[#D4A017]/40 text-foreground'
+                    : 'bg-background border-border text-muted-foreground'
+                }`}
+              >
+                Paste HTML
+              </button>
+            </div>
+          </CrmField>
+
+          {!form.useBuilder && (
+            <CrmField label="Body (HTML or plain text)">
+              <textarea
+                required={!form.useBuilder}
+                value={form.htmlBody}
+                onChange={(e) => setForm({ ...form, htmlBody: e.target.value })}
+                className={`${crmTextareaClass} min-h-[160px]`}
+                placeholder="<p>Hi …</p>"
+              />
+            </CrmField>
+          )}
+
           <CrmField label="Audience">
             <select
               value={form.source}
@@ -514,7 +687,7 @@ export default function MarketingEmailCampaignsPage() {
           )}
           <CrmModalActions
             onCancel={() => setShowCreate(false)}
-            submitLabel="Create campaign"
+            submitLabel={form.useBuilder ? 'Create & open builder' : 'Create campaign'}
             submitting={saving}
             submitIcon={<Mail size={16} />}
           />
@@ -524,8 +697,8 @@ export default function MarketingEmailCampaignsPage() {
       <CrmModal open={!!testFor} onClose={() => setTestFor(null)} title="Send test email" icon={FlaskConical}>
         <form onSubmit={onSendTest} className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Uses Gmail SMTP via the API. For CRM/segment campaigns the address must already be in the audience;
-            manual campaigns accept any address.
+            Sends via the campaign connector. For CRM/segment campaigns the address must already be
+            in the audience; manual campaigns accept any address.
           </p>
           <CrmField label="Test address">
             <input

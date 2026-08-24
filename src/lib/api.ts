@@ -5925,42 +5925,122 @@ export async function createMarketingEmailCampaign(payload: {
   organizationId?: string;
   name: string;
   subject: string;
-  htmlBody: string;
+  htmlBody?: string;
+  /** API expects a JSON string (see MARKETING_EMAIL_PROVIDERS.md) */
+  builderJson?: Record<string, unknown> | string | null;
+  connectorId?: string | null;
+  fromName?: string | null;
+  replyTo?: string | null;
   source?: 'crm_leads' | 'segment' | 'manual';
+  audienceType?: 'crm_leads' | 'segment' | 'manual';
   segmentId?: string | null;
   status?: string;
   scheduledAt?: string | null;
 }) {
-  const { data } = await axios.post(`${API_BASE}/api/marketing/email-campaigns`, payload, {
+  const body = {
+    ...payload,
+    audienceType: payload.audienceType || payload.source,
+    builderJson:
+      payload.builderJson == null
+        ? payload.builderJson
+        : typeof payload.builderJson === 'string'
+          ? payload.builderJson
+          : JSON.stringify(payload.builderJson),
+  };
+  const { data } = await axios.post(`${API_BASE}/api/marketing/email-campaigns`, body, {
     headers: authHeaders(),
   });
   return data as { data: any };
 }
 
 export async function updateMarketingEmailCampaign(id: string, payload: Record<string, any>) {
-  const { data } = await axios.patch(`${API_BASE}/api/marketing/email-campaigns/${id}`, payload, {
+  const body = { ...payload };
+  if (body.builderJson != null && typeof body.builderJson !== 'string') {
+    body.builderJson = JSON.stringify(body.builderJson);
+  }
+  if (body.source && !body.audienceType) body.audienceType = body.source;
+  const { data } = await axios.patch(`${API_BASE}/api/marketing/email-campaigns/${id}`, body, {
     headers: authHeaders(),
   });
   return data as { data: any };
 }
 
-export async function deleteMarketingEmailCampaign(id: string) {
-  const { status } = await axios.delete(`${API_BASE}/api/marketing/email-campaigns/${id}`, {
+// ---------------------------------------------------------------------------
+// Marketing email connectors (SendGrid, Gmail SMTP, Brevo, SES, …)
+// See zaam-api/docs/MARKETING_EMAIL_PROVIDERS.md when present
+// ---------------------------------------------------------------------------
+
+export type MarketingEmailProvider = 'sendgrid' | 'gmail_smtp' | 'brevo' | 'ses' | 'mailchimp';
+
+export async function listMarketingEmailConnectors(params?: {
+  organizationId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/marketing/email-connectors${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: any[];
+    meta?: { total?: number; page?: number; limit?: number };
+  };
+}
+
+export async function getMarketingEmailConnector(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/email-connectors/${id}`, {
+    headers: authHeaders(),
+  });
+  return data as { data: any };
+}
+
+export async function createMarketingEmailConnector(payload: {
+  organizationId?: string;
+  name: string;
+  provider: MarketingEmailProvider;
+  credentials: Record<string, unknown>;
+  isDefault?: boolean;
+  status?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/marketing/email-connectors`, payload, {
+    headers: authHeaders(),
+  });
+  return data as { data: any };
+}
+
+export async function updateMarketingEmailConnector(id: string, payload: Record<string, any>) {
+  const { data } = await axios.patch(`${API_BASE}/api/marketing/email-connectors/${id}`, payload, {
+    headers: authHeaders(),
+  });
+  return data as { data: any };
+}
+
+export async function deleteMarketingEmailConnector(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/marketing/email-connectors/${id}`, {
     headers: authHeaders(),
   });
   return status === 204 || status === 200;
 }
 
-export async function listMarketingEmailCampaignSends(id: string) {
-  const { data } = await axios.get(`${API_BASE}/api/marketing/email-campaigns/${id}/sends`, {
-    headers: authHeaders(),
-  });
-  return data as { data: any[] };
+export async function testMarketingEmailConnector(id: string) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/marketing/email-connectors/${id}/test`,
+    {},
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: { ok?: boolean; message?: string; connector?: any; [key: string]: any };
+  };
+}
+
+/** Prefer PATCH isDefault — no dedicated set-default route in API docs. */
+export async function setDefaultMarketingEmailConnector(id: string) {
+  return updateMarketingEmailConnector(id, { isDefault: true });
 }
 
 export async function sendMarketingEmailCampaign(
   id: string,
-  payload?: { emails?: string[]; full?: boolean },
+  payload?: { emails?: string[]; full?: boolean; connectorId?: string | null },
   params?: { full?: boolean }
 ) {
   const qs = crmQuery({
@@ -5981,6 +6061,20 @@ export async function sendMarketingEmailCampaign(
       smtpConfigured: boolean;
     };
   };
+}
+
+export async function deleteMarketingEmailCampaign(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/marketing/email-campaigns/${id}`, {
+    headers: authHeaders(),
+  });
+  return status === 204 || status === 200;
+}
+
+export async function listMarketingEmailCampaignSends(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/email-campaigns/${id}/sends`, {
+    headers: authHeaders(),
+  });
+  return data as { data: any[] };
 }
 
 // ---------------------------------------------------------------------------

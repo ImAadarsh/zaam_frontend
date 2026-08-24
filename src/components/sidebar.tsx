@@ -386,6 +386,7 @@ export function Sidebar() {
               {hasRole(['ADMIN', 'SUPER_ADMIN', 'MARKETING']) && (
                 <>
                   <Item href="/marketing/segments" icon={<Users size={18} />} label="Segments" active={pathname?.startsWith('/marketing/segments')} />
+                  <Item href="/marketing/email-connectors" icon={<Plug size={18} />} label="Email Connectors" active={pathname?.startsWith('/marketing/email-connectors')} />
                   <Item href="/marketing/email-campaigns" icon={<Mail size={18} />} label="Email Campaigns" active={pathname?.startsWith('/marketing/email-campaigns')} />
                   <Item href="/marketing/campaigns" icon={<Megaphone size={18} />} label="Campaigns" active={pathname?.startsWith('/marketing/campaigns')} />
                   <Item href="/marketing/coupons" icon={<Tag size={18} />} label="Coupons" active={pathname?.startsWith('/marketing/coupons')} />
@@ -728,6 +729,7 @@ export function Sidebar() {
                   {hasRole(['ADMIN', 'SUPER_ADMIN', 'MARKETING']) && (
                     <>
                       <Item href="/marketing/segments" icon={<Users size={18} />} label="Segments" active={pathname?.startsWith('/marketing/segments')} />
+                      <Item href="/marketing/email-connectors" icon={<Plug size={18} />} label="Email Connectors" active={pathname?.startsWith('/marketing/email-connectors')} />
                       <Item href="/marketing/email-campaigns" icon={<Mail size={18} />} label="Email Campaigns" active={pathname?.startsWith('/marketing/email-campaigns')} />
                       <Item href="/marketing/campaigns" icon={<Megaphone size={18} />} label="Campaigns" active={pathname?.startsWith('/marketing/campaigns')} />
                       <Item href="/marketing/coupons" icon={<Tag size={18} />} label="Coupons" active={pathname?.startsWith('/marketing/coupons')} />
