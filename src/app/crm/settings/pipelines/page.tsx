@@ -217,6 +217,30 @@ export default function CrmPipelineSettingsPage() {
                   onChange={(e) => void toggleSetting('autoFollowupOnLead', e.target.checked)}
                 />
               </label>
+              {!!(crmSettings.assignableUsers?.length || crmSettings.salesReps?.length) && (
+                <div className="pt-2 border-t border-border/40">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Assignable staff ({(crmSettings.assignableUsers || crmSettings.salesReps || []).length})
+                  </div>
+                  <ul className="space-y-1.5 max-h-40 overflow-y-auto text-sm">
+                    {(crmSettings.assignableUsers || crmSettings.salesReps || []).map((u: any) => (
+                      <li key={u.id} className="flex items-center justify-between gap-2">
+                        <span>
+                          {[u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {u.role || 'SALES_REP'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {(crmSettings.salesRepCount ?? 0) === 0 && (
+                <p className="text-xs text-amber-600">
+                  No SALES_REP users yet — round-robin will not assign. Add the role or re-run CRM seed.
+                </p>
+              )}
             </div>
           )}
 

@@ -3727,6 +3727,12 @@ export async function createEmployee(payload: {
   maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | 'other';
   nationalId?: string;
   taxId?: string;
+  niNumber?: string;
+  taxCode?: string;
+  department?: string;
+  jobTitle?: string;
+  annualSalary?: number;
+  payFrequency?: string;
   passportNumber?: string;
   addressLine1?: string;
   addressLine2?: string;
@@ -4555,6 +4561,23 @@ export async function getCrmSettings(params?: { organizationId?: string }) {
   return data as { data: any };
 }
 
+export async function listCrmAssignableUsers(params?: { organizationId?: string }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/crm/assignable-users${crmQuery(params)}`,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: Array<{
+      id: string;
+      email: string;
+      firstName?: string | null;
+      lastName?: string | null;
+      role?: string;
+    }>;
+    meta?: { total?: number };
+  };
+}
+
 export async function updateCrmSettings(payload: {
   autoAssignLeads?: boolean;
   autoFollowupOnLead?: boolean;
@@ -4726,6 +4749,22 @@ export async function createCrmLead(payload: {
 export async function updateCrmLead(id: string, payload: Record<string, any>) {
   const { data } = await axios.patch(`${API_BASE}/api/crm/leads/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
+}
+
+export async function bulkAssignCrmLeads(payload: {
+  leadIds: string[];
+  ownerUserId: string;
+  organizationId?: string;
+}) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/crm/leads/bulk-assign`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as {
+    data: { updated: number; followUps: number; ownerUserId: string };
+    meta?: { requested?: number; found?: number };
+  };
 }
 
 export async function convertCrmLead(id: string, payload?: {

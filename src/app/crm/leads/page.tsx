@@ -1,19 +1,34 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { RichDataTable } from '@/components/rich-data-table';
 import { FilterBar, type FilterField } from '@/components/filter-bar';
 import { useSession } from '@/hooks/use-session';
 import {
-  listCrmLeads, createCrmLead, updateCrmLead, convertCrmLead, listCrmPipelines, syncCrmLeadToMarketing
+  listCrmLeads,
+  createCrmLead,
+  updateCrmLead,
+  convertCrmLead,
+  listCrmPipelines,
+  syncCrmLeadToMarketing,
+  listCrmAssignableUsers,
+  bulkAssignCrmLeads,
 } from '@/lib/api';
 import { crmApiError, displayName, LEAD_SOURCES, LEAD_STATUSES, LEAD_PRIORITIES } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, Pencil, ArrowRightLeft, AlertCircle, Target, Send, Megaphone } from 'lucide-react';
+import { Plus, Pencil, ArrowRightLeft, AlertCircle, Target, Send, Megaphone, UserPlus, Users } from 'lucide-react';
 import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
+
+type AssignableUser = {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  role?: string;
+};
 
 const emptyForm = {
   name: '',
@@ -26,6 +41,7 @@ const emptyForm = {
   score: '',
   disqualifiedReason: '',
   notes: '',
+  ownerUserId: '',
 };
 
 function statusBadgeClass(status: string) {
@@ -59,15 +75,31 @@ function priorityBadgeClass(priority: string) {
   }
 }
 
+function ownerLabel(user?: AssignableUser | { firstName?: string | null; lastName?: string | null; email?: string; name?: string } | null) {
+  if (!user) return 'Unassigned';
+  return displayName(user);
+}
+
 export default function CrmLeadsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen app-surface" />}>
+      <CrmLeadsPageInner />
+    </Suspense>
+  );
+}
+
+function CrmLeadsPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { session, hydrated } = useSession();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [apiMissing, setApiMissing] = useState(false);
-  const [modal, setModal] = useState<'create' | 'edit' | 'convert' | null>(null);
+  const [modal, setModal] = useState<'create' | 'edit' | 'convert' | 'assign' | null>(
+    searchParams.get('new') === 'true' ? 'create' : null
+  );
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState(emptyForm);
   const [convertForm, setConvertForm] = useState({
@@ -80,8 +112,23 @@ export default function CrmLeadsPage() {
   });
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>([]);
+  const [assignUserId, setAssignUserId] = useState('');
+  const [assignSearch, setAssignSearch] = useState('');
+  const [assignTargets, setAssignTargets] = useState<any[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const orgId = session?.user?.organizationId;
+
+  const loadUsers = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      const res = await listCrmAssignableUsers({ organizationId: orgId });
+      setAssignableUsers(res.data || []);
+    } catch {
+      setAssignableUsers([]);
+    }
+  }, [orgId]);
 
   const load = useCallback(async () => {
     if (!orgId) return;
@@ -92,9 +139,15 @@ export default function CrmLeadsPage() {
         search: search || undefined,
         status: filters.status || undefined,
         priority: filters.priority || undefined,
+        ownerUserId: filters.ownerUserId === 'unassigned' ? undefined : filters.ownerUserId || undefined,
       });
-      setItems(res.data || []);
+      let rows = res.data || [];
+      if (filters.ownerUserId === 'unassigned') {
+        rows = rows.filter((l: any) => !l.ownerUserId && !l.owner?.id);
+      }
+      setItems(rows);
       setApiMissing(false);
+      setSelectedIds(new Set());
     } catch (err: any) {
       if (err?.response?.status === 404) {
         setApiMissing(true);
@@ -114,7 +167,8 @@ export default function CrmLeadsPage() {
       return;
     }
     void load();
-  }, [hydrated, session?.accessToken, router, load]);
+    void loadUsers();
+  }, [hydrated, session?.accessToken, router, load, loadUsers]);
 
   useEffect(() => {
     if (modal !== 'convert' || !orgId) return;
@@ -136,7 +190,10 @@ export default function CrmLeadsPage() {
 
   function openCreate() {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      ownerUserId: session?.user?.id || '',
+    });
     setModal('create');
   }
 
@@ -153,8 +210,17 @@ export default function CrmLeadsPage() {
       score: lead.score != null ? String(lead.score) : '',
       disqualifiedReason: lead.disqualifiedReason || '',
       notes: lead.notes || '',
+      ownerUserId: lead.ownerUserId || lead.owner?.id || '',
     });
     setModal('edit');
+  }
+
+  function openAssign(leads: any[]) {
+    if (!leads.length) return;
+    setAssignTargets(leads);
+    setAssignUserId(leads.length === 1 ? (leads[0].ownerUserId || leads[0].owner?.id || '') : '');
+    setAssignSearch('');
+    setModal('assign');
   }
 
   function openConvert(lead: any) {
@@ -170,10 +236,27 @@ export default function CrmLeadsPage() {
     setModal('convert');
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === items.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map((l) => String(l.id))));
+    }
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const payload = {
+    const payload: Record<string, unknown> = {
       name: form.name,
       company: form.company || null,
       email: form.email || null,
@@ -185,19 +268,52 @@ export default function CrmLeadsPage() {
       disqualifiedReason: form.status === 'unqualified' ? (form.disqualifiedReason || null) : null,
       notes: form.notes || null,
     };
+    if (form.ownerUserId) {
+      payload.ownerUserId = form.ownerUserId;
+    } else if (modal === 'edit') {
+      payload.ownerUserId = null;
+    }
     try {
       if (modal === 'edit' && editing) {
         await updateCrmLead(editing.id, payload);
         toast.success('Lead updated');
       } else {
-        // Omit owner so API can auto-assign (round-robin) when enabled
-        await createCrmLead({ organizationId: orgId, ...payload });
-        toast.success('Lead created');
+        await createCrmLead({ organizationId: orgId, ...payload } as any);
+        toast.success(form.ownerUserId ? 'Lead created' : 'Lead created (auto-assign if enabled)');
       }
       setModal(null);
       void load();
     } catch (err) {
       toast.error(crmApiError(err, 'Failed to save lead'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAssign(e: React.FormEvent) {
+    e.preventDefault();
+    if (!assignUserId || !assignTargets.length) {
+      toast.error('Select a person to assign to');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (assignTargets.length === 1) {
+        await updateCrmLead(assignTargets[0].id, { ownerUserId: assignUserId });
+        toast.success('Lead assigned');
+      } else {
+        const res = await bulkAssignCrmLeads({
+          leadIds: assignTargets.map((l) => String(l.id)),
+          ownerUserId: assignUserId,
+          organizationId: orgId,
+        });
+        toast.success(`Assigned ${res.data?.updated ?? assignTargets.length} lead(s)`);
+      }
+      setModal(null);
+      setSelectedIds(new Set());
+      void load();
+    } catch (err) {
+      toast.error(crmApiError(err, 'Failed to assign lead'));
     } finally {
       setSaving(false);
     }
@@ -215,7 +331,7 @@ export default function CrmLeadsPage() {
         currency: convertForm.currency,
         pipelineId: convertForm.pipelineId || undefined,
         stageId: convertForm.stageId || undefined,
-        ownerUserId: session?.user?.id,
+        ownerUserId: editing.ownerUserId || editing.owner?.id || session?.user?.id,
       });
       toast.success('Lead converted');
       setModal(null);
@@ -247,6 +363,15 @@ export default function CrmLeadsPage() {
     }
   }
 
+  const filteredAssignable = useMemo(() => {
+    const q = assignSearch.trim().toLowerCase();
+    if (!q) return assignableUsers;
+    return assignableUsers.filter((u) => {
+      const label = `${u.firstName || ''} ${u.lastName || ''} ${u.email} ${u.role || ''}`.toLowerCase();
+      return label.includes(q);
+    });
+  }, [assignableUsers, assignSearch]);
+
   const filterFields = useMemo<FilterField[]>(() => [
     {
       key: 'status',
@@ -262,9 +387,45 @@ export default function CrmLeadsPage() {
       primary: true,
       options: LEAD_PRIORITIES.map((s) => ({ value: s.value, label: s.label })),
     },
-  ], []);
+    {
+      key: 'ownerUserId',
+      label: 'Owner',
+      type: 'select',
+      primary: true,
+      options: [
+        { value: 'unassigned', label: 'Unassigned' },
+        ...assignableUsers.map((u) => ({
+          value: String(u.id),
+          label: ownerLabel(u),
+        })),
+      ],
+    },
+  ], [assignableUsers]);
 
   const columns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      id: 'select',
+      header: () => (
+        <input
+          type="checkbox"
+          checked={items.length > 0 && selectedIds.size === items.length}
+          onChange={toggleSelectAll}
+          aria-label="Select all"
+        />
+      ),
+      cell: (info) => {
+        const id = String(info.row.original.id);
+        return (
+          <input
+            type="checkbox"
+            checked={selectedIds.has(id)}
+            onChange={() => toggleSelect(id)}
+            aria-label={`Select ${info.row.original.name}`}
+          />
+        );
+      },
+      enableSorting: false,
+    },
     {
       accessorKey: 'name',
       header: 'Lead',
@@ -272,6 +433,20 @@ export default function CrmLeadsPage() {
     },
     { accessorKey: 'company', header: 'Company', cell: (i) => (i.getValue() as string) || '—' },
     { accessorKey: 'email', header: 'Email', cell: (i) => (i.getValue() as string) || '—' },
+    {
+      id: 'owner',
+      header: 'Owner',
+      cell: (info) => {
+        const lead = info.row.original;
+        const name = ownerLabel(lead.owner);
+        const unassigned = !lead.ownerUserId && !lead.owner?.id;
+        return (
+          <span className={unassigned ? 'text-amber-600 text-xs font-medium' : 'text-sm'}>
+            {unassigned ? 'Unassigned' : name}
+          </span>
+        );
+      },
+    },
     {
       accessorKey: 'status',
       header: 'Status',
@@ -322,6 +497,14 @@ export default function CrmLeadsPage() {
           <div className="flex items-center gap-1 justify-end">
             <button
               type="button"
+              title="Assign to…"
+              onClick={() => openAssign([lead])}
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-[#D4A017]"
+            >
+              <UserPlus size={16} />
+            </button>
+            <button
+              type="button"
               title="Sync to Marketing"
               disabled={saving || !lead.email}
               onClick={() => void handleSyncToMarketing(lead)}
@@ -341,15 +524,54 @@ export default function CrmLeadsPage() {
         );
       },
     },
-  ], [saving]);
+  ], [saving, selectedIds, items]);
 
   const selectedPipeline = pipelines.find((p) => p.id === convertForm.pipelineId);
+  const selectedLeads = items.filter((l) => selectedIds.has(String(l.id)));
+
+  const ownerSelect = (
+    <CrmField label="Owner / Assigned to" hint={modal === 'create' ? 'Leave blank to auto-assign (round-robin) when enabled' : undefined}>
+      <select
+        value={form.ownerUserId}
+        onChange={(e) => setForm({ ...form, ownerUserId: e.target.value })}
+        className={crmInputClass}
+        required={modal === 'edit'}
+      >
+        <option value="">{modal === 'create' ? 'Auto-assign / Unassigned' : 'Unassigned'}</option>
+        {assignableUsers.map((u) => (
+          <option key={u.id} value={u.id}>
+            {ownerLabel(u)}{u.role ? ` · ${u.role}` : ''}
+          </option>
+        ))}
+      </select>
+      {!assignableUsers.length && (
+        <p className="text-[11px] text-amber-600 mt-1">
+          No assignable users found. Add SALES_REP / ADMIN roles or re-run CRM seed.
+        </p>
+      )}
+    </CrmField>
+  );
 
   return (
     <div className="min-h-screen app-surface">
       <Sidebar />
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
-        <Header title="Leads" actions={[{ label: 'New Lead', onClick: openCreate, icon: <Plus size={18} /> }]} />
+        <Header
+          title="Leads"
+          actions={[
+            {
+              label: 'Assign',
+              onClick: () => {
+                if (selectedLeads.length) openAssign(selectedLeads);
+                else if (items.length === 1) openAssign(items);
+                else toast.message('Select one or more leads, then Assign');
+              },
+              icon: <UserPlus size={16} />,
+              variant: 'secondary',
+            },
+            { label: 'Create Lead', onClick: openCreate, icon: <Plus size={18} /> },
+          ]}
+        />
         <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
@@ -372,11 +594,39 @@ export default function CrmLeadsPage() {
             loading={loading}
           />
 
+          {selectedLeads.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#D4A017]/30 bg-[#D4A017]/5 px-4 py-3 text-sm">
+              <Users size={16} className="text-[#D4A017]" />
+              <span className="font-medium">{selectedLeads.length} selected</span>
+              <button
+                type="button"
+                onClick={() => openAssign(selectedLeads)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D4A017] text-white text-xs font-semibold hover:opacity-90"
+              >
+                <UserPlus size={14} /> Assign to…
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
           {!loading && items.length === 0 && !apiMissing ? (
             <div className="glass-panel rounded-2xl border border-border/50 p-12 text-center text-muted-foreground">
               <Target className="mx-auto mb-3 opacity-40" size={32} />
               <p className="font-medium text-foreground">No leads yet</p>
               <p className="text-sm mt-1">Capture inbound interest and convert qualified leads into accounts and deals.</p>
+              <button
+                type="button"
+                onClick={openCreate}
+                className="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+              >
+                <Plus size={16} /> Create Lead
+              </button>
             </div>
           ) : (
             <RichDataTable data={items} columns={columns} hideSearch />
@@ -400,6 +650,7 @@ export default function CrmLeadsPage() {
               placeholder="e.g. Aisha Khan"
             />
           </CrmField>
+          {ownerSelect}
           <CrmField label="Company">
             <input
               value={form.company}
@@ -480,6 +731,55 @@ export default function CrmLeadsPage() {
             submitLabel={modal === 'edit' ? 'Save Lead' : 'Create Lead'}
             submitting={saving}
             submitIcon={<Send size={16} />}
+          />
+        </form>
+      </CrmModal>
+
+      <CrmModal
+        open={modal === 'assign'}
+        onClose={() => setModal(null)}
+        title={assignTargets.length > 1 ? `Assign ${assignTargets.length} leads` : `Assign ${assignTargets[0]?.name || 'lead'}`}
+        icon={UserPlus}
+      >
+        <form onSubmit={handleAssign} className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Choose who owns {assignTargets.length > 1 ? 'these leads' : 'this lead'}. A follow-up task is created when auto follow-up is enabled.
+          </p>
+          <CrmField label="Search staff">
+            <input
+              value={assignSearch}
+              onChange={(e) => setAssignSearch(e.target.value)}
+              className={crmInputClass}
+              placeholder="Name, email, or role…"
+              autoFocus
+            />
+          </CrmField>
+          <CrmField label="Assign to">
+            <select
+              required
+              value={assignUserId}
+              onChange={(e) => setAssignUserId(e.target.value)}
+              className={crmInputClass}
+              size={Math.min(8, Math.max(4, filteredAssignable.length + 1))}
+            >
+              <option value="">Select person…</option>
+              {filteredAssignable.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {ownerLabel(u)}{u.role ? ` · ${u.role}` : ''} — {u.email}
+                </option>
+              ))}
+            </select>
+            {!assignableUsers.length && (
+              <p className="text-[11px] text-amber-600 mt-1">
+                No assignable users. Ensure staff have SALES_REP, ADMIN, or CS_AGENT roles.
+              </p>
+            )}
+          </CrmField>
+          <CrmModalActions
+            onCancel={() => setModal(null)}
+            submitLabel={assignTargets.length > 1 ? 'Assign all' : 'Assign'}
+            submitting={saving}
+            submitIcon={<UserPlus size={16} />}
           />
         </form>
       </CrmModal>
