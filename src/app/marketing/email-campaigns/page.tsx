@@ -364,7 +364,7 @@ export default function MarketingEmailCampaignsPage() {
           title="Marketing · Email Campaigns"
           actions={[
             {
-              label: 'New campaign',
+              label: 'Create Campaign',
               onClick: () => {
                 setForm(emptyForm);
                 setShowCreate(true);
@@ -374,6 +374,10 @@ export default function MarketingEmailCampaignsPage() {
           ]}
         />
         <main className="p-6 md:p-8 space-y-5">
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Cold-email CRM leads or a marketing segment via Gmail SMTP.
+          </p>
+
           {apiMissing && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400 text-sm">
               <AlertCircle size={18} className="mt-0.5 shrink-0" />
@@ -400,12 +404,25 @@ export default function MarketingEmailCampaignsPage() {
           )}
 
           {!loading && items.length === 0 && !apiMissing ? (
-            <div className="glass-panel rounded-2xl border border-border/50 p-12 text-center text-muted-foreground">
-              <Mail className="mx-auto mb-3 opacity-40" size={32} />
-              <p className="font-medium text-foreground">No email campaigns yet</p>
-              <p className="text-sm mt-1">
-                Cold-email CRM leads or a marketing segment via Gmail SMTP. Nothing is marked sent without the API.
-              </p>
+            <div className="glass-panel rounded-2xl border border-border/50 p-12 text-center text-muted-foreground space-y-4">
+              <Mail className="mx-auto opacity-40" size={32} />
+              <div>
+                <p className="font-medium text-foreground">No email campaigns yet</p>
+                <p className="text-sm mt-1 max-w-md mx-auto">
+                  Create a campaign to email CRM leads, a segment, or a manual list. Nothing is marked sent without the API.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(emptyForm);
+                  setShowCreate(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#D4A017] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#B89015] mx-auto"
+              >
+                <Plus size={18} />
+                Create Campaign
+              </button>
             </div>
           ) : (
             <div className="rounded-2xl border border-border/60 bg-card p-4">
@@ -422,7 +439,7 @@ export default function MarketingEmailCampaignsPage() {
       <CrmModal
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        title="New email campaign"
+        title="Create Campaign"
         icon={Plus}
         wide
       >

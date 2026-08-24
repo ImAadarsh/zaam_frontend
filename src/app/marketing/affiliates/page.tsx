@@ -232,9 +232,9 @@ function AffiliatesPage() {
                 setForm({ affiliateCode: '', contactName: '', email: '', commissionType: 'percentage', commissionValue: 0, status: 'pending' });
                 setShowCreate(true);
               }}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#D4A017] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#B89015]"
             >
-              <Plus className="h-4 w-4" /> New Affiliate
+              <Plus className="h-4 w-4" /> Create Affiliate
             </button>
           </div>
 
@@ -251,9 +251,27 @@ function AffiliatesPage() {
             </div>
           )}
 
-          <div className="bg-card rounded-lg border shadow-sm">
-            <RichDataTable columns={columns} data={items} />
-          </div>
+          {items.length === 0 ? (
+            <div className="bg-card rounded-lg border shadow-sm p-12 text-center space-y-4">
+              <p className="font-medium">No affiliates yet</p>
+              <p className="text-sm text-muted-foreground">Create a partner to track referral codes and commissions.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(null);
+                  setForm({ affiliateCode: '', contactName: '', email: '', commissionType: 'percentage', commissionValue: 0, status: 'pending' });
+                  setShowCreate(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#D4A017] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#B89015] mx-auto"
+              >
+                <Plus className="h-4 w-4" /> Create Affiliate
+              </button>
+            </div>
+          ) : (
+            <div className="bg-card rounded-lg border shadow-sm">
+              <RichDataTable columns={columns} data={items} />
+            </div>
+          )}
 
           {showCreate && (
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">

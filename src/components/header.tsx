@@ -1,6 +1,6 @@
 'use client';
 
-import { Sun, MoonStar, Menu, ChevronDown, Sparkles, User, LogOut } from 'lucide-react';
+import { Sun, MoonStar, Menu, User, LogOut } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import Image from 'next/image';
 import { useUI } from '@/lib/ui';
@@ -12,12 +12,13 @@ export type HeaderAction = {
   label: string;
   onClick: () => void;
   icon?: React.ReactNode;
+  /** primary = gold CTA (default); secondary = outline muted */
+  variant?: 'primary' | 'secondary';
 };
 
 export function Header({ title, actions }: { title: string; actions?: HeaderAction[] }) {
   const { theme, setTheme } = useTheme();
   const { toggleSidebar } = useUI();
-  const [showActions, setShowActions] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const router = useRouter();
   const session = getSession();
@@ -29,50 +30,40 @@ export function Header({ title, actions }: { title: string; actions?: HeaderActi
 
   return (
     <header className="sticky top-0 z-20 h-16 backdrop-blur-xl bg-white/70 dark:bg-[#0f0f0f]/70 border-b border-border/50 flex items-center justify-between px-4 md:px-6 shadow-sm transition-all duration-300">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 min-w-0">
         <button className="md:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
           onClick={() => toggleSidebar(true)} aria-label="Open menu">
           <Menu size={20} />
         </button>
-        <div className="flex items-center gap-4">
-          <div className="relative h-6 w-[140px] md:hidden">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="relative h-6 w-[140px] md:hidden shrink-0">
             <Image src="/brand/golden-shine.png" alt="Zaam" fill className="object-contain object-left" />
           </div>
-          <div className="hidden md:block h-5 w-px bg-border/60" />
-          <h1 className="text-lg font-semibold tracking-tight text-foreground/90">{title}</h1>
+          <div className="hidden md:block h-5 w-px bg-border/60 shrink-0" />
+          <h1 className="text-lg font-semibold tracking-tight text-foreground/90 truncate">{title}</h1>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {actions && actions.length > 0 && (
-          <div className="relative">
-            <button
-              onClick={() => setShowActions(!showActions)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium text-sm"
-            >
-              <Sparkles size={16} />
-              <span className="hidden sm:inline">Features</span>
-              <ChevronDown size={16} />
-            </button>
-            {showActions && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setShowActions(false)} />
-                <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-xl shadow-xl z-40 py-1 animate-in fade-in zoom-in-95">
-                  {actions.map((action, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        action.onClick();
-                        setShowActions(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors flex items-center gap-2"
-                    >
-                      {action.icon}
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {actions.map((action, i) => {
+              const isPrimary = action.variant !== 'secondary';
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={action.onClick}
+                  className={
+                    isPrimary
+                      ? 'inline-flex items-center gap-2 h-9 px-3.5 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm shadow-[#D4A017]/25 border-none transition'
+                      : 'inline-flex items-center gap-2 h-9 px-3.5 rounded-xl text-sm font-medium border border-border bg-background hover:bg-muted text-foreground transition'
+                  }
+                >
+                  {action.icon}
+                  <span className="whitespace-nowrap">{action.label}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 
