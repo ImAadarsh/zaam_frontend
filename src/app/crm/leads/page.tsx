@@ -77,7 +77,12 @@ function priorityBadgeClass(priority: string) {
 
 function ownerLabel(user?: AssignableUser | { firstName?: string | null; lastName?: string | null; email?: string; name?: string } | null) {
   if (!user) return 'Unassigned';
-  return displayName(user);
+  return displayName({
+    firstName: user.firstName ?? undefined,
+    lastName: user.lastName ?? undefined,
+    email: user.email,
+    name: 'name' in user ? user.name : undefined,
+  });
 }
 
 export default function CrmLeadsPage() {
@@ -564,7 +569,7 @@ function CrmLeadsPageInner() {
               onClick: () => {
                 if (selectedLeads.length) openAssign(selectedLeads);
                 else if (items.length === 1) openAssign(items);
-                else toast.message('Select one or more leads, then Assign');
+                else toast.info('Select one or more leads, then Assign');
               },
               icon: <UserPlus size={16} />,
               variant: 'secondary',

@@ -341,6 +341,13 @@ export default function CrmIntegrationsPage() {
                 <Key className="mx-auto mb-3 opacity-40" size={32} />
                 <p className="font-medium text-foreground">No integration keys yet</p>
                 <p className="text-sm mt-1">Create a key for Salesforce, Zapier, or a generic webhook.</p>
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(true)}
+                  className="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+                >
+                  <Plus size={16} /> Create API Key
+                </button>
               </div>
             ) : (
               <RichDataTable columns={columns} data={items} searchPlaceholder="Search keys…" />

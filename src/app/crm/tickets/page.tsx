@@ -7,7 +7,7 @@ import { Header } from '@/components/header';
 import { listTickets, listCustomers, createTicket } from '@/lib/api';
 import { RichDataTable } from '@/components/rich-data-table';
 import { FilterBar, type FilterField } from '@/components/filter-bar';
-import { Plus, Eye, Send } from 'lucide-react';
+import { Plus, Eye, Send, MessageSquare } from 'lucide-react';
 import { ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -227,7 +227,7 @@ function TicketsPageInner() {
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header
           title="Support Tickets"
-          actions={[{ label: 'New Ticket', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
+          actions={[{ label: 'Create Ticket', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
         />
 
         <main className="p-6 md:p-8 space-y-5">
@@ -241,7 +241,22 @@ function TicketsPageInner() {
             stats={[{ label: 'Tickets', value: loading ? '…' : String(tickets.length) }]}
             loading={loading}
           />
-          <RichDataTable data={tickets} columns={columns} hideSearch searchPlaceholder="Search tickets..." />
+          {!loading && tickets.length === 0 ? (
+            <div className="glass-panel rounded-2xl border border-border/50 p-12 text-center text-muted-foreground">
+              <MessageSquare className="mx-auto mb-3 opacity-40" size={32} />
+              <p className="font-medium text-foreground">No tickets yet</p>
+              <p className="text-sm mt-1">Open a support ticket to start the queue.</p>
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+              >
+                <Plus size={16} /> Create Ticket
+              </button>
+            </div>
+          ) : (
+            <RichDataTable data={tickets} columns={columns} hideSearch searchPlaceholder="Search tickets..." />
+          )}
         </main>
       </div>
 

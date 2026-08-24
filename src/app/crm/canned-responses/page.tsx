@@ -154,12 +154,31 @@ export default function CannedResponsesPage() {
                     ]}
                 />
 
-                <main className="p-6 md:p-8">
-                    <RichDataTable
-                        data={items}
-                        columns={columns}
-                        searchPlaceholder="Search templates..."
-                    />
+                <main className="p-6 md:p-8 space-y-5">
+                    {!loading && items.length === 0 ? (
+                        <div className="glass-panel rounded-2xl border border-border/50 p-12 text-center text-muted-foreground">
+                            <MessageSquare className="mx-auto mb-3 opacity-40" size={32} />
+                            <p className="font-medium text-foreground">No templates yet</p>
+                            <p className="text-sm mt-1">Create canned responses agents can insert into ticket replies.</p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEditing(null);
+                                    setForm({ title: '', shortcut: '', category: '', content: '', isActive: true });
+                                    setShowCreate(true);
+                                }}
+                                className="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+                            >
+                                <Plus size={16} /> Create Template
+                            </button>
+                        </div>
+                    ) : (
+                        <RichDataTable
+                            data={items}
+                            columns={columns}
+                            searchPlaceholder="Search templates..."
+                        />
+                    )}
                 </main>
             </div>
 

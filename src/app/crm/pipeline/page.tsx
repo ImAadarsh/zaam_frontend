@@ -1,6 +1,6 @@
 'use client';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
@@ -19,7 +19,16 @@ import { CrmModal, CrmField, CrmModalActions, crmInputClass } from '@/components
 import { CrmCustomerSelect, customerOptionFromRecord } from '@/components/crm/crm-customer-select';
 
 export default function CrmPipelinePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen app-surface" />}>
+      <CrmPipelinePageInner />
+    </Suspense>
+  );
+}
+
+function CrmPipelinePageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { session, hydrated } = useSession();
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [pipelineId, setPipelineId] = useState('');
@@ -27,7 +36,7 @@ export default function CrmPipelinePage() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [apiMissing, setApiMissing] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(searchParams.get('new') === 'true');
   const [moveDeal, setMoveDeal] = useState<any>(null);
   const [moveStageId, setMoveStageId] = useState('');
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -224,10 +233,14 @@ export default function CrmPipelinePage() {
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header
           title="Pipeline"
-          actions={[{ label: 'New Deal', onClick: () => {
-            setForm((f) => ({ ...f, stageId: stages[0]?.id || '' }));
-            setShowCreate(true);
-          }, icon: <Plus size={18} /> }]}
+          actions={[{
+            label: 'Create Deal',
+            onClick: () => {
+              setForm((f) => ({ ...f, stageId: stages[0]?.id || '' }));
+              setShowCreate(true);
+            },
+            icon: <Plus size={18} />,
+          }]}
         />
         <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
@@ -291,11 +304,24 @@ export default function CrmPipelinePage() {
               <Columns3 className="mx-auto mb-3 opacity-40" size={32} />
               <p className="font-medium text-foreground">No pipeline stages</p>
               <p className="text-sm mt-1">Create a pipeline with stages in Settings first.</p>
-              <Link href="/crm/settings/pipelines" className="btn btn-primary mt-4 inline-flex">Open settings</Link>
+              <Link href="/crm/settings/pipelines" className="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm">Open settings</Link>
             </div>
           ) : view === 'list' ? (
             deals.length === 0 ? (
-              <div className="glass-panel rounded-2xl border border-border/50 p-12 text-center text-muted-foreground italic">No deals in this pipeline.</div>
+              <div className="glass-panel rounded-2xl border border-border/50 p-12 text-center text-muted-foreground">
+                <p className="font-medium text-foreground">No deals in this pipeline</p>
+                <p className="text-sm mt-1">Create a deal to populate the board.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((f) => ({ ...f, stageId: stages[0]?.id || '' }));
+                    setShowCreate(true);
+                  }}
+                  className="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+                >
+                  <Plus size={16} /> Create Deal
+                </button>
+              </div>
             ) : (
               <RichDataTable data={deals} columns={columns} searchPlaceholder="Search deals…" />
             )
@@ -342,15 +368,32 @@ export default function CrmPipelinePage() {
                           {columnDeals.length} deal{columnDeals.length === 1 ? '' : 's'} · {formatMoney(colValue)}
                         </div>
                       </div>
-                      <span className="shrink-0 h-6 min-w-6 px-1.5 rounded-full bg-[#D4A017]/15 text-[#D4A017] text-[11px] font-bold flex items-center justify-center">
-                        {columnDeals.length}
-                      </span>
+                      <button
+                        type="button"
+                        title="Create deal in this stage"
+                        onClick={() => {
+                          setForm((f) => ({ ...f, stageId: stage.id }));
+                          setShowCreate(true);
+                        }}
+                        className="shrink-0 h-6 w-6 rounded-full bg-[#D4A017]/15 text-[#D4A017] hover:bg-[#D4A017] hover:text-white flex items-center justify-center transition"
+                      >
+                        <Plus size={14} />
+                      </button>
                     </div>
                     <div className="p-2.5 space-y-2.5 flex-1 overflow-y-auto max-h-[70vh]">
                       {columnDeals.length === 0 && (
                         <div className="rounded-xl border border-dashed border-border/70 bg-background/40 py-10 px-3 text-center">
                           <p className="text-xs text-muted-foreground">Empty stage</p>
-                          <p className="text-[10px] text-muted-foreground/80 mt-1">Drop a deal here</p>
+                          <button
+                            type="button"
+                            className="text-[11px] text-[#D4A017] hover:underline mt-1"
+                            onClick={() => {
+                              setForm((f) => ({ ...f, stageId: stage.id }));
+                              setShowCreate(true);
+                            }}
+                          >
+                            Create deal
+                          </button>
                         </div>
                       )}
                       {columnDeals.map((deal) => (

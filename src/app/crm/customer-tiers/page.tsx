@@ -194,7 +194,7 @@ export default function CustomerTiersPage() {
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header
           title="Customer Tiers"
-          actions={[{ label: 'New Tier', onClick: openCreate, icon: <Plus size={18} /> }]}
+          actions={[{ label: 'Create Tier', onClick: openCreate, icon: <Plus size={18} /> }]}
         />
 
         <main className="p-6 md:p-8 space-y-4">

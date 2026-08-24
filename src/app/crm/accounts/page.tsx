@@ -166,7 +166,7 @@ export default function CrmAccountsPage() {
         <Header
           title="CRM Accounts"
           actions={[
-            { label: 'ERP Customers', onClick: () => router.push('/orders/customers'), icon: <ExternalLink size={16} /> },
+            { label: 'Open in Orders', onClick: () => router.push('/orders/customers'), icon: <ExternalLink size={16} />, variant: 'secondary' },
             { label: 'New Account', onClick: () => setShowCreate(true), icon: <Plus size={18} /> },
           ]}
         />
@@ -180,6 +180,14 @@ export default function CrmAccountsPage() {
               </div>
             </div>
           )}
+
+          <p className="text-sm text-muted-foreground">
+            Accounts mirror ERP customers. Prefer{' '}
+            <button type="button" onClick={() => router.push('/orders/customers')} className="text-[#D4A017] hover:underline font-medium">
+              Open in Orders
+            </button>{' '}
+            for full customer management, or create a lightweight account here.
+          </p>
 
           <FilterBar
             fields={filterFields}
@@ -196,7 +204,23 @@ export default function CrmAccountsPage() {
             <div className="glass-panel rounded-2xl border border-border/50 p-12 text-center text-muted-foreground">
               <Building2 className="mx-auto mb-3 opacity-40" size={32} />
               <p className="font-medium text-foreground">No accounts yet</p>
-              <p className="text-sm mt-1">CRM accounts are ERP customers. Create one here or import from Orders.</p>
+              <p className="text-sm mt-1">CRM accounts are ERP customers. Create one here or open Orders.</p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(true)}
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+                >
+                  <Plus size={16} /> New Account
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push('/orders/customers')}
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium border border-border bg-background hover:bg-muted"
+                >
+                  <ExternalLink size={16} /> Open in Orders
+                </button>
+              </div>
             </div>
           ) : (
             <RichDataTable data={items} columns={columns} hideSearch />

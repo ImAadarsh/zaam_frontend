@@ -218,7 +218,34 @@ export default function CrmActivitiesPage() {
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header
           title="Activities"
-          actions={[{ label: 'New Activity', onClick: () => setShowCreate(true), icon: <Plus size={18} /> }]}
+          actions={[
+            {
+              label: 'Log Call',
+              onClick: () => {
+                setForm({ type: 'call', subject: '', body: '', dueAt: '' });
+                setShowCreate(true);
+              },
+              icon: <PhoneCall size={16} />,
+              variant: 'secondary',
+            },
+            {
+              label: 'New Task',
+              onClick: () => {
+                setForm({ type: 'task', subject: '', body: '', dueAt: '' });
+                setShowCreate(true);
+              },
+              icon: <Plus size={16} />,
+              variant: 'secondary',
+            },
+            {
+              label: 'Create Activity',
+              onClick: () => {
+                setForm({ type: 'task', subject: '', body: '', dueAt: '' });
+                setShowCreate(true);
+              },
+              icon: <Plus size={18} />,
+            },
+          ]}
         />
         <main className="p-6 md:p-8 space-y-5">
           {apiMissing && (
@@ -247,6 +274,28 @@ export default function CrmActivitiesPage() {
               <PhoneCall className="mx-auto mb-3 opacity-40" size={32} />
               <p className="font-medium text-foreground">No activities match</p>
               <p className="text-sm mt-1">Create a task, call, or note — or clear filters.</p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm({ type: 'call', subject: '', body: '', dueAt: '' });
+                    setShowCreate(true);
+                  }}
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium border border-border bg-background hover:bg-muted"
+                >
+                  <PhoneCall size={16} /> Log Call
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm({ type: 'task', subject: '', body: '', dueAt: '' });
+                    setShowCreate(true);
+                  }}
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+                >
+                  <Plus size={16} /> Create Activity
+                </button>
+              </div>
             </div>
           ) : (
             <RichDataTable data={items} columns={columns} hideSearch />

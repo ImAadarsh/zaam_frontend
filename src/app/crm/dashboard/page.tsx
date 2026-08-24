@@ -74,7 +74,14 @@ export default function CRMDashboard() {
     <div className="min-h-screen app-surface">
       <Sidebar />
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
-        <Header title="CRM Dashboard" />
+        <Header
+          title="CRM Dashboard"
+          actions={[
+            { label: 'Create Lead', onClick: () => router.push('/crm/leads?new=true'), icon: <Plus size={16} /> },
+            { label: 'Create Deal', onClick: () => router.push('/crm/pipeline?new=true'), icon: <Plus size={16} />, variant: 'secondary' },
+            { label: 'Create Ticket', onClick: () => router.push('/crm/tickets?new=true'), icon: <Plus size={16} />, variant: 'secondary' },
+          ]}
+        />
 
         <main className="p-6 md:p-8 space-y-6">
           {!apiReady && !loading && (

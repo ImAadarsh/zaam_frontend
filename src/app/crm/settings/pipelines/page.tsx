@@ -182,7 +182,12 @@ export default function CrmPipelineSettingsPage() {
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header
           title="CRM Settings"
-          actions={[{ label: 'New Pipeline', onClick: () => setShowPipeline(true), icon: <Plus size={18} /> }]}
+          actions={[
+            ...(selected
+              ? [{ label: 'Add Stage', onClick: () => openStage(), icon: <Plus size={16} />, variant: 'secondary' as const }]
+              : []),
+            { label: 'Add Pipeline', onClick: () => setShowPipeline(true), icon: <Plus size={18} /> },
+          ]}
         />
         <main className="p-6 md:p-8 space-y-6">
           <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -259,11 +264,17 @@ export default function CrmPipelineSettingsPage() {
           ) : (
             <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
               <div className="glass-panel rounded-2xl border border-border/50 p-3 space-y-1">
-                <div className="px-2 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <Settings size={14} /> Pipelines
+                <div className="px-2 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-2"><Settings size={14} /> Pipelines</span>
+                  <button type="button" onClick={() => setShowPipeline(true)} className="text-[10px] font-bold uppercase tracking-wide text-[#D4A017] hover:underline">+ Add</button>
                 </div>
                 {pipelines.length === 0 ? (
-                  <p className="text-sm text-muted-foreground px-2 py-6 text-center italic">No pipelines yet.</p>
+                  <div className="px-2 py-6 text-center space-y-3">
+                    <p className="text-sm text-muted-foreground italic">No pipelines yet.</p>
+                    <button type="button" onClick={() => setShowPipeline(true)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#D4A017] hover:underline">
+                      <Plus size={14} /> Add Pipeline
+                    </button>
+                  </div>
                 ) : (
                   pipelines.map((p) => (
                     <button
@@ -290,6 +301,13 @@ export default function CrmPipelineSettingsPage() {
                     <Settings className="mx-auto mb-3 opacity-40" size={32} />
                     <p className="font-medium text-foreground">Select or create a pipeline</p>
                     <p className="text-sm mt-1">Stages become columns on the deal board.</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowPipeline(true)}
+                      className="mt-4 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+                    >
+                      <Plus size={16} /> Add Pipeline
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-6">
@@ -302,13 +320,24 @@ export default function CrmPipelineSettingsPage() {
                         {!selected.isDefault && (
                           <button type="button" onClick={() => setDefault(selected)} className="btn bg-muted text-sm">Set default</button>
                         )}
-                        <button type="button" onClick={() => openStage()} className="btn btn-primary text-sm gap-1.5"><Plus size={16} /> Stage</button>
+                        <button
+                          type="button"
+                          onClick={() => openStage()}
+                          className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+                        >
+                          <Plus size={16} /> Add Stage
+                        </button>
                       </div>
                     </div>
 
                     <ul className="space-y-2">
                       {stages.length === 0 && (
-                        <li className="text-sm text-muted-foreground italic py-8 text-center">No stages — add Qualification, Proposal, Won, Lost, etc.</li>
+                        <li className="text-sm text-muted-foreground py-8 text-center space-y-3">
+                          <p className="italic">No stages — add Qualification, Proposal, Won, Lost, etc.</p>
+                          <button type="button" onClick={() => openStage()} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#D4A017] hover:underline">
+                            <Plus size={14} /> Add Stage
+                          </button>
+                        </li>
                       )}
                       {stages.map((stage: any) => (
                         <li key={stage.id} className="flex items-center gap-3 rounded-xl border border-border/50 px-3 py-3 bg-muted/10">

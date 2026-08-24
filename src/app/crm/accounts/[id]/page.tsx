@@ -195,7 +195,18 @@ export default function CrmAccount360Page() {
     <div className="min-h-screen app-surface">
       <Sidebar />
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
-        <Header title={loading ? 'Account…' : title} />
+        <Header
+          title={loading ? 'Account…' : title}
+          actions={
+            !loading && customer
+              ? [
+                  { label: 'Add Contact', onClick: () => openContact(), icon: <Users size={16} />, variant: 'secondary' },
+                  { label: 'Add Note', onClick: () => setNoteOpen(true), icon: <StickyNote size={16} />, variant: 'secondary' },
+                  { label: 'Add Activity', onClick: () => setActivityOpen(true), icon: <PhoneCall size={16} /> },
+                ]
+              : undefined
+          }
+        />
         <main className="p-6 md:p-8 space-y-6">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <Link href="/crm/accounts" className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
@@ -227,7 +238,7 @@ export default function CrmAccount360Page() {
                   <p className="text-xs text-muted-foreground font-mono">
                     ERP customer #{id}{' '}
                     <Link href="/orders/customers" className="inline-flex items-center gap-1 text-[#D4A017] hover:underline">
-                      Orders module <ExternalLink size={12} />
+                      Open in Orders <ExternalLink size={12} />
                     </Link>
                     {payload.portalRetailer && (
                       <span className="ml-2 text-emerald-600">· B2B portal {payload.portalRetailer.status}</span>
@@ -244,8 +255,8 @@ export default function CrmAccount360Page() {
                   <button type="button" onClick={() => setNoteOpen(true)} className="btn bg-muted gap-2 text-sm">
                     <StickyNote size={16} /> Add note
                   </button>
-                  <button type="button" onClick={() => router.push('/crm/tickets?new=true')} className="btn btn-primary gap-2 text-sm">
-                    <Plus size={16} /> Ticket
+                  <button type="button" onClick={() => router.push('/crm/tickets?new=true')} className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm">
+                    <Plus size={16} /> Create Ticket
                   </button>
                 </div>
               </div>
@@ -332,9 +343,18 @@ export default function CrmAccount360Page() {
                       </button>
                     </div>
                     {!contacts.length && (
-                      <p className="text-sm text-muted-foreground italic text-center py-8">
-                        No contacts yet. Add buyers and people on this account.
-                      </p>
+                      <div className="text-center py-8 space-y-3">
+                        <p className="text-sm text-muted-foreground italic">
+                          No contacts yet. Add buyers and people on this account.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => openContact()}
+                          className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl text-sm font-medium bg-[#D4A017] hover:bg-[#c49415] text-white shadow-sm"
+                        >
+                          <Plus size={16} /> Add Contact
+                        </button>
+                      </div>
                     )}
                     <ul className="divide-y divide-border/50">
                       {contacts.map((c: any) => (
