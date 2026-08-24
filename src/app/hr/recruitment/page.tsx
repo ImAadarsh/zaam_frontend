@@ -150,8 +150,8 @@ export default function RecruitmentPage() {
             <button type="button" onClick={() => { setAppForm((f) => ({ ...f, jobPostingId: selectedJob || '' })); setAppOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium">
               <Users size={14} /> Add applicant
             </button>
-            <button type="button" onClick={() => setJobOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
-              <Plus size={14} /> Post job
+            <button type="button" onClick={() => setJobOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+              <Plus size={14} /> Create job
             </button>
           </div>
 
@@ -161,7 +161,14 @@ export default function RecruitmentPage() {
                 <Briefcase size={16} className="text-[#D4A017]" /> Jobs
               </div>
               {loading && <div className="p-6 text-sm text-muted-foreground">Loading…</div>}
-              {!loading && jobs.length === 0 && <div className="p-8 text-sm text-muted-foreground text-center">No job postings.</div>}
+              {!loading && jobs.length === 0 && (
+                <div className="p-8 text-sm text-muted-foreground text-center">
+                  <p className="mb-3">No job postings.</p>
+                  <button type="button" onClick={() => setJobOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
+                    <Plus size={14} /> Post job
+                  </button>
+                </div>
+              )}
               {jobs.map((j) => (
                 <button
                   key={j.id}
@@ -189,7 +196,14 @@ export default function RecruitmentPage() {
               <div className="px-5 py-4 border-b border-border/50 font-semibold flex items-center gap-2">
                 <Users size={16} className="text-[#D4A017]" /> Applicants {selectedJob ? '(filtered)' : ''}
               </div>
-              {applicants.length === 0 && <div className="p-8 text-sm text-muted-foreground text-center">No applicants.</div>}
+              {applicants.length === 0 && (
+                <div className="p-8 text-sm text-muted-foreground text-center">
+                  <p className="mb-3">No applicants.</p>
+                  <button type="button" onClick={() => { setAppForm((f) => ({ ...f, jobPostingId: selectedJob || '' })); setAppOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border text-sm font-medium">
+                    <Users size={14} /> Add applicant
+                  </button>
+                </div>
+              )}
               {applicants.map((a) => (
                 <div key={a.id} className="px-5 py-3 border-b border-border/30 last:border-0 text-sm">
                   <div className="flex justify-between gap-2">

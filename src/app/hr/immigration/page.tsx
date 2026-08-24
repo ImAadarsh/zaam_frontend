@@ -282,8 +282,8 @@ export default function ImmigrationRtwPage() {
               <button type="button" onClick={() => setUploadOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium hover:border-[#D4A017]/40">
                 <Upload size={14} /> Upload RTW
               </button>
-              <button type="button" onClick={() => setImmOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
-                <Plus size={14} /> Add visa record
+              <button type="button" onClick={() => setImmOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+                <Plus size={14} /> Add visa / RTW record
               </button>
             </div>
           </div>

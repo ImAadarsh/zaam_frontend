@@ -7,11 +7,16 @@ import { Header } from '@/components/header';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import {
-  listOnboardingChecklists, updateOnboardingChecklist, seedOnboardingChecklist, listEmployees,
+  listOnboardingChecklists, updateOnboardingChecklist, seedOnboardingChecklist,
+  createOnboardingChecklist, listEmployees,
 } from '@/lib/api';
 import { employeeName, formatDate, hrApiError, isApiMissing, statusBadgeClass } from '@/lib/hr-utils';
+import { HrModal, HrField, HrModalActions, hrInputClass } from '@/components/hr/hr-modal';
 import { toast } from 'sonner';
 import { AlertTriangle, CheckSquare, ClipboardList, Plus } from 'lucide-react';
+
+const GOLD_BTN =
+  'inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20 disabled:opacity-50';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -23,6 +28,9 @@ export default function OnboardingPage() {
   const [employeeId, setEmployeeId] = useState('');
   const [items, setItems] = useState<any[]>([]);
   const [seeding, setSeeding] = useState(false);
+  const [itemOpen, setItemOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [itemForm, setItemForm] = useState({ itemLabel: '', itemKey: '', dueDate: '', sortOrder: 0 });
 
   const orgId = session?.user?.organizationId;
 
@@ -83,6 +91,34 @@ export default function OnboardingPage() {
     }
   }
 
+  async function onAddItem(e: React.FormEvent) {
+    e.preventDefault();
+    if (!employeeId) {
+      toast.error('Select an employee');
+      return;
+    }
+    setSaving(true);
+    try {
+      await createOnboardingChecklist({
+        employeeId,
+        organizationId: orgId,
+        itemKey: itemForm.itemKey || itemForm.itemLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 80) || `item_${Date.now()}`,
+        itemLabel: itemForm.itemLabel,
+        dueDate: itemForm.dueDate || undefined,
+        sortOrder: itemForm.sortOrder || items.length + 1,
+        isDone: false,
+      });
+      toast.success('Checklist item added');
+      setItemOpen(false);
+      setItemForm({ itemLabel: '', itemKey: '', dueDate: '', sortOrder: 0 });
+      void loadChecklist(employeeId);
+    } catch (err) {
+      toast.error(isApiMissing(err) ? 'Onboarding API not live yet' : hrApiError(err, 'Add failed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function toggleItem(row: any) {
     try {
       await updateOnboardingChecklist(row.id, { isDone: !row.isDone });
@@ -110,7 +146,7 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="space-y-1.5 min-w-[240px]">
               <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.14em]">Employee</label>
               <select
@@ -124,15 +160,31 @@ export default function OnboardingPage() {
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              disabled={!employeeId || seeding}
-              onClick={() => void onSeed()}
-              className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium disabled:opacity-50"
-            >
-              <Plus size={14} /> {seeding ? 'Seeding…' : 'Seed default checklist'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={!employeeId}
+                onClick={() => setItemOpen(true)}
+                className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-border bg-card text-sm font-medium disabled:opacity-50"
+              >
+                <Plus size={14} /> Add checklist item
+              </button>
+              <button
+                type="button"
+                disabled={!employeeId || seeding}
+                onClick={() => void onSeed()}
+                className={GOLD_BTN}
+              >
+                <Plus size={14} /> {seeding ? 'Seeding…' : 'Seed default checklist'}
+              </button>
+            </div>
           </div>
+
+          {!employeeId && (
+            <div className="glass-panel rounded-2xl border border-border/50 p-10 text-center text-sm text-muted-foreground">
+              Select an employee to view or create their onboarding checklist.
+            </div>
+          )}
 
           {employeeId && (
             <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
@@ -152,8 +204,16 @@ export default function OnboardingPage() {
               </div>
               {loading && <div className="p-6 text-sm text-muted-foreground">Loading…</div>}
               {!loading && items.length === 0 && (
-                <div className="p-8 text-center text-sm text-muted-foreground">
-                  No checklist items — seed the UK defaults to start.
+                <div className="p-8 text-center">
+                  <p className="text-sm text-muted-foreground mb-4">No checklist items — seed UK defaults or add a custom item.</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <button type="button" onClick={() => setItemOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border text-sm font-medium">
+                      <Plus size={14} /> Add item
+                    </button>
+                    <button type="button" disabled={seeding} onClick={() => void onSeed()} className={GOLD_BTN.replace('h-11', 'h-10')}>
+                      <Plus size={14} /> Seed defaults
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="p-3 space-y-1">
@@ -176,6 +236,18 @@ export default function OnboardingPage() {
           )}
         </main>
       </div>
+
+      <HrModal open={itemOpen} onClose={() => setItemOpen(false)} title="Add checklist item" icon={ClipboardList}>
+        <form onSubmit={onAddItem} className="space-y-4">
+          <HrField label="Item label">
+            <input className={hrInputClass} required value={itemForm.itemLabel} onChange={(e) => setItemForm({ ...itemForm, itemLabel: e.target.value })} placeholder="e.g. Complete RTW check" />
+          </HrField>
+          <HrField label="Due date">
+            <input type="date" className={hrInputClass} value={itemForm.dueDate} onChange={(e) => setItemForm({ ...itemForm, dueDate: e.target.value })} />
+          </HrField>
+          <HrModalActions onCancel={() => setItemOpen(false)} submitLabel="Add item" submitting={saving} />
+        </form>
+      </HrModal>
     </div>
   );
 }

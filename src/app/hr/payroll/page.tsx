@@ -214,13 +214,18 @@ export default function PayrollPage() {
               ))}
             </div>
             {tab === 'runs' && (
-              <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
-                <Plus size={14} /> New payroll run
+              <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+                <Plus size={14} /> Create payroll run
               </button>
             )}
             {tab === 'tax' && (
-              <button type="button" onClick={() => setTaxOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
+              <button type="button" onClick={() => setTaxOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
                 <Plus size={14} /> Add P45/P60
+              </button>
+            )}
+            {tab === 'payslips' && (
+              <button type="button" onClick={() => { setTab('runs'); setOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+                <Plus size={14} /> Create payroll run
               </button>
             )}
           </div>

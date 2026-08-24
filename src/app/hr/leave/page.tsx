@@ -209,12 +209,12 @@ export default function LeavePage() {
             </div>
             <div className="flex gap-2">
               {view === 'ssp' ? (
-                <button type="button" onClick={() => setSickOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
+                <button type="button" onClick={() => setSickOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
                   <Thermometer size={14} /> Record sick episode
                 </button>
               ) : (
-                <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
-                  <Plus size={14} /> Request leave
+                <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+                  <Plus size={14} /> Create leave request
                 </button>
               )}
             </div>
@@ -238,7 +238,14 @@ export default function LeavePage() {
             <RichDataTable columns={columns} data={items} searchPlaceholder="Search leave…" />
           ) : (
             <div className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-              {sick.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">No SSP / sick episodes recorded yet.</div>}
+              {sick.length === 0 && (
+                <div className="p-8 text-center">
+                  <p className="text-sm text-muted-foreground mb-3">No SSP / sick episodes recorded yet.</p>
+                  <button type="button" onClick={() => setSickOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
+                    <Thermometer size={14} /> Record sick episode
+                  </button>
+                </div>
+              )}
               {sick.map((s: any) => (
                 <div key={s.id} className="px-5 py-3 border-b border-border/30 last:border-0 flex justify-between gap-3 text-sm">
                   <div>

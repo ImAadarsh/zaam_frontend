@@ -205,9 +205,14 @@ export default function SelfServicePage() {
                   <h1 className="text-xl font-bold">{employeeName(me)}</h1>
                   <div className="text-sm text-muted-foreground mt-0.5">#{me.employeeNumber} · {me.email || session?.user?.email}</div>
                 </div>
-                <button type="button" onClick={openEdit} className="h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
-                  Update my details
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setLeaveOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+                    <Calendar size={14} /> Request leave
+                  </button>
+                  <button type="button" onClick={openEdit} className="h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium">
+                    Update my details
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -249,12 +254,19 @@ export default function SelfServicePage() {
               {tab === 'leave' && (
                 <div className="space-y-3">
                   <div className="flex justify-end">
-                    <button type="button" onClick={() => setLeaveOpen(true)} className="h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
-                      Request leave
+                    <button type="button" onClick={() => setLeaveOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
+                      <Calendar size={14} /> Request leave
                     </button>
                   </div>
                   <div className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-                    {leave.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">No leave requests.</div>}
+                    {leave.length === 0 && (
+                      <div className="p-8 text-center">
+                        <p className="text-sm text-muted-foreground mb-3">No leave requests.</p>
+                        <button type="button" onClick={() => setLeaveOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
+                          Request leave
+                        </button>
+                      </div>
+                    )}
                     {leave.map((r: any) => (
                       <div key={r.id} className="px-5 py-3 border-b border-border/30 last:border-0 flex justify-between text-sm">
                         <div>

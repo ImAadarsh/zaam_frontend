@@ -3766,6 +3766,12 @@ export async function updateEmployee(id: string, payload: {
   maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | 'other';
   nationalId?: string;
   taxId?: string;
+  niNumber?: string;
+  taxCode?: string;
+  department?: string;
+  jobTitle?: string;
+  annualSalary?: number;
+  payFrequency?: string;
   passportNumber?: string;
   addressLine1?: string;
   addressLine2?: string;

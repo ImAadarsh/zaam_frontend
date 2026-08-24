@@ -129,6 +129,24 @@ export default function HRDashboard() {
       <div className="flex flex-col min-w-0 lg:ml-[280px]">
         <Header title="HR · Dashboard" />
         <main className="p-6 md:p-8 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">UK HR</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">People, leave, payroll &amp; compliance</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/hr/employees" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+                <Users size={14} /> Create employee
+              </Link>
+              <Link href="/hr/leave" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium">
+                <Calendar size={14} /> Leave
+              </Link>
+              <Link href="/hr/recruitment" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium">
+                <Briefcase size={14} /> Post job
+              </Link>
+            </div>
+          </div>
+
           {fallbackReady && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-700 dark:text-amber-400">
               <AlertTriangle size={18} className="mt-0.5 shrink-0" />

@@ -219,11 +219,20 @@ export default function AttendancePage() {
               <span className="font-bold text-[#D4A017]">{overtimeTotal.toFixed(1)}h</span>
               {loading && <span className="ml-2 text-muted-foreground text-xs">Loading…</span>}
             </div>
-            <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
-              <Plus size={14} /> Add attendance
+            <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+              <Plus size={14} /> Add attendance / overtime
             </button>
           </div>
-          <RichDataTable columns={columns} data={items} searchPlaceholder="Search attendance…" />
+          {!loading && items.length === 0 ? (
+            <div className="glass-panel rounded-2xl border border-border/50 p-10 text-center">
+              <p className="text-sm text-muted-foreground mb-3">No attendance entries yet.</p>
+              <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
+                <Plus size={14} /> Add attendance
+              </button>
+            </div>
+          ) : (
+            <RichDataTable columns={columns} data={items} searchPlaceholder="Search attendance…" />
+          )}
         </main>
       </div>
 

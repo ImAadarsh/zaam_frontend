@@ -8,17 +8,21 @@ import { useSession } from '@/hooks/use-session';
 import {
   getEmployee360, listEmploymentContracts, listEmployeeDocuments,
   listLeaveRequests, listLeaveBalances, listImmigration, listRtwDocuments,
-  updateEmployee, createImmigration,
+  updateEmployee, createImmigration, createLeaveRequest, createHrDocument,
+  createEmployeeDocument, createRtwDocument,
 } from '@/lib/api';
 import {
   daysUntil, employeeName, formatDate, formatMoney, hrApiError,
-  isApiMissing, statusBadgeClass, visaRiskClass, VISA_TYPES,
+  isApiMissing, LEAVE_TYPES, statusBadgeClass, visaRiskClass, VISA_TYPES,
 } from '@/lib/hr-utils';
 import { HrModal, HrField, HrModalActions, hrInputClass, hrTextareaClass } from '@/components/hr/hr-modal';
 import { toast } from 'sonner';
 import {
   ArrowLeft, User, Briefcase, ShieldCheck, Calendar, FileText, Pencil, Plus,
 } from 'lucide-react';
+
+const GOLD_BTN =
+  'inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20';
 
 type Tab = 'personal' | 'job' | 'immigration' | 'leave' | 'documents';
 
@@ -37,6 +41,8 @@ export default function Employee360Page() {
   const [rtw, setRtw] = useState<any[]>([]);
   const [editOpen, setEditOpen] = useState(false);
   const [immOpen, setImmOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [docOpen, setDocOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [immForm, setImmForm] = useState({
@@ -45,6 +51,20 @@ export default function Employee360Page() {
     visaExpiry: '',
     shareCode: '',
     notes: '',
+  });
+  const [leaveForm, setLeaveForm] = useState({
+    leaveType: 'vacation',
+    startDate: '',
+    endDate: '',
+    totalDays: 1,
+    reason: '',
+  });
+  const [docForm, setDocForm] = useState({
+    documentName: '',
+    documentType: 'contract',
+    documentUrl: '',
+    expiryDate: '',
+    isRtw: false,
   });
 
   const load = useCallback(async () => {
@@ -197,6 +217,99 @@ export default function Employee360Page() {
     }
   }
 
+  useEffect(() => {
+    if (leaveForm.startDate && leaveForm.endDate) {
+      const start = new Date(leaveForm.startDate);
+      const end = new Date(leaveForm.endDate);
+      const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+      setLeaveForm((f) => ({ ...f, totalDays: days }));
+    }
+  }, [leaveForm.startDate, leaveForm.endDate]);
+
+  async function saveLeave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+    setSaving(true);
+    try {
+      await createLeaveRequest({
+        employeeId: id,
+        leaveType: leaveForm.leaveType as any,
+        startDate: leaveForm.startDate,
+        endDate: leaveForm.endDate,
+        totalDays: leaveForm.totalDays,
+        reason: leaveForm.reason || undefined,
+      });
+      toast.success('Leave request created');
+      setLeaveOpen(false);
+      setLeaveForm({ leaveType: 'vacation', startDate: '', endDate: '', totalDays: 1, reason: '' });
+      void load();
+    } catch (err) {
+      toast.error(hrApiError(err, 'Failed to create leave request'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveDocument(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id || !docForm.documentUrl) {
+      toast.error('Document URL is required');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (docForm.isRtw) {
+        try {
+          await createRtwDocument({
+            employeeId: id,
+            docType: docForm.documentType,
+            documentName: docForm.documentName,
+            documentUrl: docForm.documentUrl,
+            expiresAt: docForm.expiryDate || undefined,
+          });
+        } catch (err) {
+          if (!isApiMissing(err)) throw err;
+          await createEmployeeDocument({
+            employeeId: id,
+            documentType: docForm.documentType === 'passport' ? 'passport' : docForm.documentType === 'id' ? 'id' : 'other',
+            documentName: docForm.documentName,
+            documentUrl: docForm.documentUrl,
+            expiryDate: docForm.expiryDate || undefined,
+          });
+        }
+      } else {
+        try {
+          await createHrDocument({
+            employeeId: id,
+            docCategory: docForm.documentType,
+            documentName: docForm.documentName,
+            documentUrl: docForm.documentUrl,
+            expiryDate: docForm.expiryDate || undefined,
+          });
+        } catch (err) {
+          if (!isApiMissing(err)) throw err;
+          await createEmployeeDocument({
+            employeeId: id,
+            documentType: (['contract', 'id', 'passport', 'certificate'].includes(docForm.documentType)
+              ? docForm.documentType
+              : 'other') as any,
+            documentName: docForm.documentName,
+            documentUrl: docForm.documentUrl,
+            expiryDate: docForm.expiryDate || undefined,
+          });
+        }
+      }
+      toast.success('Document added');
+      setDocOpen(false);
+      setDocForm({ documentName: '', documentType: 'contract', documentUrl: '', expiryDate: '', isRtw: false });
+      void load();
+    } catch (err) {
+      toast.error(hrApiError(err, 'Failed to add document'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const tabs: { id: Tab; label: string; icon: typeof User }[] = [
     { id: 'personal', label: 'Personal', icon: User },
     { id: 'job', label: 'Job', icon: Briefcase },
@@ -324,17 +437,16 @@ export default function Employee360Page() {
               {tab === 'immigration' && (
                 <div className="space-y-4">
                   <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setImmOpen(true)}
-                      className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium"
-                    >
+                    <button type="button" onClick={() => setImmOpen(true)} className={GOLD_BTN}>
                       <Plus size={14} /> Add visa / status
                     </button>
                   </div>
                   {immigration.length === 0 && (
-                    <div className="glass-panel rounded-2xl border border-border/50 p-8 text-center text-sm text-muted-foreground">
-                      No immigration records yet.
+                    <div className="glass-panel rounded-2xl border border-border/50 p-8 text-center">
+                      <p className="text-sm text-muted-foreground mb-3">No immigration records yet.</p>
+                      <button type="button" onClick={() => setImmOpen(true)} className={GOLD_BTN}>
+                        <Plus size={14} /> Add visa / status
+                      </button>
                     </div>
                   )}
                   {immigration.map((row: any) => {
@@ -371,6 +483,11 @@ export default function Employee360Page() {
 
               {tab === 'leave' && (
                 <div className="space-y-4">
+                  <div className="flex justify-end">
+                    <button type="button" onClick={() => setLeaveOpen(true)} className={GOLD_BTN}>
+                      <Plus size={14} /> Add leave request
+                    </button>
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {(balances.length ? balances : [{ leaveType: 'annual', remainingDays: '—', entitledDays: '—' }]).map((b: any, i: number) => (
                       <div key={b.id || i} className="glass-panel rounded-xl border border-border/40 p-4">
@@ -384,7 +501,14 @@ export default function Employee360Page() {
                   </div>
                   <div className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
                     <div className="px-4 py-3 border-b border-border/40 font-semibold text-sm">Recent requests</div>
-                    {leave.length === 0 && <div className="p-6 text-sm text-muted-foreground">No leave requests.</div>}
+                    {leave.length === 0 && (
+                      <div className="p-8 text-center">
+                        <p className="text-sm text-muted-foreground mb-3">No leave requests.</p>
+                        <button type="button" onClick={() => setLeaveOpen(true)} className={GOLD_BTN}>
+                          <Plus size={14} /> Add leave request
+                        </button>
+                      </div>
+                    )}
                     {leave.slice(0, 12).map((r: any) => (
                       <div key={r.id} className="px-4 py-3 border-b border-border/30 last:border-0 flex justify-between gap-3 text-sm">
                         <div>
@@ -400,12 +524,18 @@ export default function Employee360Page() {
 
               {tab === 'documents' && (
                 <div className="space-y-2">
-                  <div className="flex justify-end mb-2">
-                    <Link href="/hr/documents" className="text-sm text-[#D4A017] hover:underline">Manage documents</Link>
+                  <div className="flex justify-end gap-3 mb-2 items-center">
+                    <Link href="/hr/documents" className="text-sm text-muted-foreground hover:text-[#D4A017]">Manage all</Link>
+                    <button type="button" onClick={() => setDocOpen(true)} className={GOLD_BTN}>
+                      <Plus size={14} /> Add document
+                    </button>
                   </div>
                   {docs.length === 0 && (
-                    <div className="glass-panel rounded-2xl border border-border/50 p-8 text-center text-sm text-muted-foreground">
-                      No documents on file.
+                    <div className="glass-panel rounded-2xl border border-border/50 p-8 text-center">
+                      <p className="text-sm text-muted-foreground mb-3">No documents on file.</p>
+                      <button type="button" onClick={() => setDocOpen(true)} className={GOLD_BTN}>
+                        <Plus size={14} /> Add document
+                      </button>
                     </div>
                   )}
                   {docs.map((d: any) => (
@@ -470,6 +600,45 @@ export default function Employee360Page() {
           <HrField label="Share code"><input className={hrInputClass} value={immForm.shareCode} onChange={(e) => setImmForm({ ...immForm, shareCode: e.target.value })} /></HrField>
           <HrField label="Notes"><textarea className={hrTextareaClass} value={immForm.notes} onChange={(e) => setImmForm({ ...immForm, notes: e.target.value })} /></HrField>
           <HrModalActions onCancel={() => setImmOpen(false)} submitLabel="Save" submitting={saving} />
+        </form>
+      </HrModal>
+
+      <HrModal open={leaveOpen} onClose={() => setLeaveOpen(false)} title="Add leave request" icon={Calendar}>
+        <form onSubmit={saveLeave} className="space-y-4">
+          <HrField label="Type">
+            <select className={hrInputClass} value={leaveForm.leaveType} onChange={(e) => setLeaveForm({ ...leaveForm, leaveType: e.target.value })}>
+              {LEAVE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </HrField>
+          <div className="grid grid-cols-2 gap-3">
+            <HrField label="Start"><input type="date" className={hrInputClass} required value={leaveForm.startDate} onChange={(e) => setLeaveForm({ ...leaveForm, startDate: e.target.value })} /></HrField>
+            <HrField label="End"><input type="date" className={hrInputClass} required value={leaveForm.endDate} onChange={(e) => setLeaveForm({ ...leaveForm, endDate: e.target.value })} /></HrField>
+          </div>
+          <HrField label="Days"><input type="number" step="0.5" className={hrInputClass} value={leaveForm.totalDays} onChange={(e) => setLeaveForm({ ...leaveForm, totalDays: Number(e.target.value) })} /></HrField>
+          <HrField label="Reason"><textarea className={hrTextareaClass} value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} /></HrField>
+          <HrModalActions onCancel={() => setLeaveOpen(false)} submitLabel="Submit" submitting={saving} />
+        </form>
+      </HrModal>
+
+      <HrModal open={docOpen} onClose={() => setDocOpen(false)} title="Add document" icon={FileText}>
+        <form onSubmit={saveDocument} className="space-y-4">
+          <HrField label="Name"><input className={hrInputClass} required value={docForm.documentName} onChange={(e) => setDocForm({ ...docForm, documentName: e.target.value })} /></HrField>
+          <HrField label="Type">
+            <select className={hrInputClass} value={docForm.documentType} onChange={(e) => setDocForm({ ...docForm, documentType: e.target.value })}>
+              <option value="contract">Contract</option>
+              <option value="passport">Passport</option>
+              <option value="id">Photo ID</option>
+              <option value="certificate">Certificate</option>
+              <option value="other">Other</option>
+            </select>
+          </HrField>
+          <HrField label="Document URL"><input className={hrInputClass} required value={docForm.documentUrl} onChange={(e) => setDocForm({ ...docForm, documentUrl: e.target.value })} placeholder="https://…" /></HrField>
+          <HrField label="Expiry"><input type="date" className={hrInputClass} value={docForm.expiryDate} onChange={(e) => setDocForm({ ...docForm, expiryDate: e.target.value })} /></HrField>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={docForm.isRtw} onChange={(e) => setDocForm({ ...docForm, isRtw: e.target.checked })} />
+            Right to Work document
+          </label>
+          <HrModalActions onCancel={() => setDocOpen(false)} submitLabel="Add" submitting={saving} />
         </form>
       </HrModal>
     </div>
