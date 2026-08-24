@@ -440,7 +440,7 @@ function CrmLeadsPageInner() {
     { accessorKey: 'email', header: 'Email', cell: (i) => (i.getValue() as string) || '—' },
     {
       id: 'owner',
-      header: 'Owner',
+      header: 'Assigned to',
       cell: (info) => {
         const lead = info.row.original;
         const name = ownerLabel(lead.owner);
