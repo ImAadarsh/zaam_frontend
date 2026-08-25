@@ -34,7 +34,7 @@ export const modules = [
   },
   {
     slug: 'accounting', name: 'Finance & Accounting', icon: Landmark, color: '#D4A017',
-    description: 'GL, Journals, VAT, Bank'
+    description: 'UK ledger, VAT, invoices, bills, payroll journals'
   },
   {
     slug: 'hr', name: 'HR & Payroll', icon: Users, color: '#D4A017',

@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall, Plug, Mail, FolderKanban, Flag, ShieldCheck, PiggyBank, UserCheck } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall, Plug, Mail, FolderKanban, Flag, ShieldCheck, PiggyBank, UserCheck, History, Paperclip, Calculator, Banknote, Building } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -236,13 +236,22 @@ export function Sidebar() {
                 <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
                 <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Finance & Accounting</div>
               </div>
-              <Item href="/accounting/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/accounting/dashboard'} />
-              {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
+              <Item href="/accounting/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === '/accounting/dashboard'} />
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'ACCOUNTANT']) && (
                 <>
-                  <Item href="/accounting/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/accounting/chart-of-accounts')} />
-                  <Item href="/accounting/journal-entries" icon={<FileCheck size={18} />} label="Journal Entries" active={pathname?.startsWith('/accounting/journal-entries')} />
-                  <Item href="/accounting/bank-accounts" icon={<Landmark size={18} />} label="Bank Accounts" active={pathname?.startsWith('/accounting/bank-accounts')} />
-                  <Item href="/accounting/vat-returns" icon={<Receipt size={18} />} label="VAT Returns" active={pathname?.startsWith('/accounting/vat-returns')} />
+                  <Item href="/accounting/sales" icon={<Receipt size={18} />} label="Sales / Invoicing" active={pathname?.startsWith('/accounting/sales')} />
+                  <Item href="/accounting/purchases" icon={<ShoppingCart size={18} />} label="Purchases / Bills" active={pathname?.startsWith('/accounting/purchases')} />
+                  <Item href="/accounting/banking" icon={<Landmark size={18} />} label="Banking" active={pathname?.startsWith('/accounting/banking') || pathname?.startsWith('/accounting/bank-accounts')} />
+                  <Item href="/accounting/ledger" icon={<BookOpen size={18} />} label="Accounting" active={pathname?.startsWith('/accounting/ledger') || pathname?.startsWith('/accounting/chart-of-accounts') || pathname?.startsWith('/accounting/journal-entries') || pathname?.startsWith('/accounting/general-ledger') || pathname?.startsWith('/accounting/trial-balance')} />
+                  <Item href="/accounting/vat" icon={<Percent size={18} />} label="VAT" active={pathname?.startsWith('/accounting/vat')} />
+                  <Item href="/accounting/payroll" icon={<Banknote size={18} />} label="Payroll" active={pathname?.startsWith('/accounting/payroll')} />
+                  <Item href="/accounting/expenses" icon={<Wallet size={18} />} label="Expenses" active={pathname?.startsWith('/accounting/expenses')} />
+                  <Item href="/accounting/fixed-assets" icon={<Building size={18} />} label="Fixed Assets" active={pathname?.startsWith('/accounting/fixed-assets')} />
+                  <Item href="/accounting/tax" icon={<Calculator size={18} />} label="Tax" active={pathname?.startsWith('/accounting/tax')} />
+                  <Item href="/accounting/reporting" icon={<BarChart3 size={18} />} label="Reporting" active={pathname?.startsWith('/accounting/reporting')} />
+                  <Item href="/accounting/documents" icon={<Paperclip size={18} />} label="Documents" active={pathname?.startsWith('/accounting/documents')} />
+                  <Item href="/accounting/audit-trail" icon={<History size={18} />} label="Audit Trail" active={pathname?.startsWith('/accounting/audit-trail')} />
+                  <Item href="/accounting/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/accounting/settings')} />
                 </>
               )}
             </>
@@ -586,6 +595,32 @@ export function Sidebar() {
                       <Item href="/finance/bank-transactions" icon={<CreditCard size={18} />} label="Bank Transactions" active={pathname?.startsWith('/finance/bank-transactions')} />
                       <Item href="/finance/vat-returns" icon={<Receipt size={18} />} label="VAT Returns" active={pathname?.startsWith('/finance/vat-returns')} />
                       <Item href="/finance/budget-lines" icon={<BarChart size={18} />} label="Budget Lines" active={pathname?.startsWith('/finance/budget-lines')} />
+                    </>
+                  )}
+                </>
+              )}
+              {isAccounting && (
+                <>
+                  <div className="mt-6 mb-2 flex items-center gap-2 px-3">
+                    <div className="h-2 w-2 rounded-full bg-[#D4A017] animate-pulse" />
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Finance & Accounting</div>
+                  </div>
+                  <Item href="/accounting/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === '/accounting/dashboard'} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'ACCOUNTANT']) && (
+                    <>
+                      <Item href="/accounting/sales" icon={<Receipt size={18} />} label="Sales / Invoicing" active={pathname?.startsWith('/accounting/sales')} />
+                      <Item href="/accounting/purchases" icon={<ShoppingCart size={18} />} label="Purchases / Bills" active={pathname?.startsWith('/accounting/purchases')} />
+                      <Item href="/accounting/banking" icon={<Landmark size={18} />} label="Banking" active={pathname?.startsWith('/accounting/banking') || pathname?.startsWith('/accounting/bank-accounts')} />
+                      <Item href="/accounting/ledger" icon={<BookOpen size={18} />} label="Accounting" active={pathname?.startsWith('/accounting/ledger') || pathname?.startsWith('/accounting/chart-of-accounts') || pathname?.startsWith('/accounting/journal-entries')} />
+                      <Item href="/accounting/vat" icon={<Percent size={18} />} label="VAT" active={pathname?.startsWith('/accounting/vat')} />
+                      <Item href="/accounting/payroll" icon={<Banknote size={18} />} label="Payroll" active={pathname?.startsWith('/accounting/payroll')} />
+                      <Item href="/accounting/expenses" icon={<Wallet size={18} />} label="Expenses" active={pathname?.startsWith('/accounting/expenses')} />
+                      <Item href="/accounting/fixed-assets" icon={<Building size={18} />} label="Fixed Assets" active={pathname?.startsWith('/accounting/fixed-assets')} />
+                      <Item href="/accounting/tax" icon={<Calculator size={18} />} label="Tax" active={pathname?.startsWith('/accounting/tax')} />
+                      <Item href="/accounting/reporting" icon={<BarChart3 size={18} />} label="Reporting" active={pathname?.startsWith('/accounting/reporting')} />
+                      <Item href="/accounting/documents" icon={<Paperclip size={18} />} label="Documents" active={pathname?.startsWith('/accounting/documents')} />
+                      <Item href="/accounting/audit-trail" icon={<History size={18} />} label="Audit Trail" active={pathname?.startsWith('/accounting/audit-trail')} />
+                      <Item href="/accounting/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/accounting/settings')} />
                     </>
                   )}
                 </>
