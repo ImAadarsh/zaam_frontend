@@ -9,9 +9,10 @@ import { Header } from '@/components/header';
 import { RichDataTable } from '@/components/rich-data-table';
 import { FilterBar, type FilterField } from '@/components/filter-bar';
 import { listPayments, listOrderSyncConnections, syncAllChannelOrders, type OrderSyncConnection } from '@/lib/api';
-import { CreditCard, Eye, ArrowDownToLine, RefreshCw, Store, Monitor, X, Download } from 'lucide-react';
+import { CreditCard, Eye, ArrowDownToLine, RefreshCw, Store, Monitor, Download } from 'lucide-react';
 import { ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
+import { PaymentDetailModal } from '@/components/finance/payment-detail-modal';
 
 type Payment = {
   id: string;
@@ -480,53 +481,7 @@ export default function PaymentsPage() {
         </main>
       </div>
 
-      {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Payment details</h3>
-              <button onClick={() => setDetail(null)} className="rounded-lg p-1 hover:bg-muted">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              {([
-                ['Transaction ID', detail.transactionId || `#${detail.id}`],
-                ['Reference', detail.reference],
-                ['Amount', money(detail.amount, detail.currency)],
-                ['Status', detail.status],
-                ['Method', detail.paymentMethod?.replace(/_/g, ' ')],
-                ['Type', detail.paymentType?.replace(/_/g, ' ')],
-                ['Payment date', detail.paymentDate ? new Date(detail.paymentDate).toLocaleDateString('en-GB') : null],
-                ['Order', detail.order?.orderNumber],
-                ['Channel', detail.order?.channel ? (CHANNEL_LABELS[detail.order.channel] ?? detail.order.channel) : null],
-                ['Store / Till', detail.order?.channelConnection?.name],
-                ['Payer', detail.payerName],
-                ['Payer email', detail.payerEmail],
-                ['Gateway', detail.paymentGateway?.name],
-                ['Notes', detail.notes]
-              ] as Array<[string, string | null | undefined]>)
-                .filter(([, v]) => v)
-                .map(([label, value]) => (
-                  <div key={label}>
-                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
-                    <dd className="mt-0.5 break-words font-medium capitalize">{value}</dd>
-                  </div>
-                ))}
-            </dl>
-            {detail.gatewayResponse && (
-              <div className="mt-4">
-                <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">
-                  Channel payload
-                </p>
-                <pre className="max-h-56 overflow-auto rounded-lg bg-muted p-3 text-xs">
-                  {JSON.stringify(detail.gatewayResponse, null, 2)}
-                </pre>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <PaymentDetailModal payment={detail} onClose={() => setDetail(null)} />
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
   LayoutTemplate,
 } from 'lucide-react';
 import { crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
+import { FileUploadField } from '@/components/file-upload-field';
 
 const PALETTE: { type: EmailBlockType; icon: React.ReactNode }[] = [
   { type: 'logo', icon: <ImagePlus size={14} /> },
@@ -80,9 +81,22 @@ function BlockEditor({
               className={crmInputClass}
             />
           </label>
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Logo image
+            </span>
+            <FileUploadField
+              value={block.logoUrl ? [block.logoUrl] : []}
+              onChange={(urls) => set({ logoUrl: urls[0] || '' })}
+              folder="marketing/email"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              maxSizeInMB={5}
+              label="Upload logo"
+            />
+          </div>
           <label className="block space-y-1">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-              Logo image URL
+              …or logo image URL
             </span>
             <input
               value={block.logoUrl || ''}
@@ -138,9 +152,22 @@ function BlockEditor({
 
       {block.type === 'image' && (
         <>
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Image
+            </span>
+            <FileUploadField
+              value={block.imageUrl ? [block.imageUrl] : []}
+              onChange={(urls) => set({ imageUrl: urls[0] || '' })}
+              folder="marketing/email"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              maxSizeInMB={5}
+              label="Upload image"
+            />
+          </div>
           <label className="block space-y-1">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-              Image URL
+              …or image URL
             </span>
             <input
               value={block.imageUrl || ''}

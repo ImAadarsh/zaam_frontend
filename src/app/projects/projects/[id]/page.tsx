@@ -17,7 +17,7 @@ import {
 } from '@/lib/api';
 import {
   DELIVERABLE_STATUSES, formatDate, formatDateTime, formatMoney, MEMBER_ROLES,
-  MILESTONE_STATUSES, pmApiError, progressBarColor, PROJECT_STATUSES,
+  MILESTONE_STATUSES, pmApiError, progressBarColor, allowedProjectStatuses, projectStatusOptionLabel,
   statusBadgeClass, TASK_PRIORITIES, TASK_STATUSES, userLabel, WORK_ORDER_STATUSES,
 } from '@/lib/pm-utils';
 import { toast } from 'sonner';
@@ -320,7 +320,7 @@ export default function ProjectDetailPage() {
                   <button type="button" onClick={() => setEditOpen(true)} className="px-3 py-2 rounded-xl text-sm border border-border hover:bg-muted">
                     Edit overview
                   </button>
-                  {!project.productionReady && project.status !== 'completed' && (
+                  {!project.productionReady && project.status !== 'completed' && project.status !== 'cancelled' && (
                     <button
                       type="button"
                       disabled={actionBusy}
@@ -330,7 +330,7 @@ export default function ProjectDetailPage() {
                       <Rocket size={14} /> Production ready
                     </button>
                   )}
-                  {project.status !== 'completed' && (
+                  {(project.status === 'active' || project.status === 'on_hold') && (
                     <button
                       type="button"
                       disabled={actionBusy}
@@ -631,8 +631,13 @@ export default function ProjectDetailPage() {
         <form onSubmit={saveOverview} className="space-y-4">
           <PmField label="Status">
             <select className={pmInputClass} value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
-              {PROJECT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              {allowedProjectStatuses(project?.status).map((s) => (
+                <option key={s.value} value={s.value}>{projectStatusOptionLabel(project?.status, s.value, s.label)}</option>
+              ))}
             </select>
+            {project?.status === 'cancelled' && (
+              <p className="text-[11px] text-amber-600 mt-1">Cancelled projects cannot be completed. Reopen to Draft or Active first.</p>
+            )}
           </PmField>
           <PmField label="Scope">
             <textarea className={pmTextareaClass} value={editForm.scope} onChange={(e) => setEditForm({ ...editForm, scope: e.target.value })} />

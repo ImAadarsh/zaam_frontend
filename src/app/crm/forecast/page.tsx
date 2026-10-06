@@ -1,5 +1,7 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ColumnDef } from '@tanstack/react-table';
+import { RichDataTable } from '@/components/rich-data-table';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Sidebar } from '@/components/sidebar';
@@ -59,6 +61,60 @@ export default function CrmForecastPage() {
 
   const currency = data?.currency || 'GBP';
   const maxMonth = Math.max(1, ...(data?.byMonth || []).map((m: any) => Number(m.weighted) || 0));
+
+  const ownerColumns = useMemo<ColumnDef<any>[]>(() => [
+    { accessorKey: 'ownerName', header: 'Owner', cell: (i) => <span className="font-medium">{String(i.getValue() || 'Unassigned')}</span> },
+    { accessorKey: 'count', header: 'Deals', cell: (i) => Number(i.getValue() || 0) },
+    {
+      id: 'amount',
+      accessorFn: (r) => Number(r.amount) || 0,
+      header: 'Pipeline',
+      cell: (i) => formatMoney(i.getValue() as number, currency),
+    },
+    {
+      id: 'weighted',
+      accessorFn: (r) => Number(r.weighted) || 0,
+      header: 'Weighted',
+      cell: (i) => formatMoney(i.getValue() as number, currency),
+    },
+  ], [currency]);
+
+  const dealColumns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      accessorKey: 'name',
+      header: 'Deal',
+      cell: (i) => (
+        <Link href={`/crm/deals/${i.row.original.id}`} className="font-medium hover:text-[#D4A017]">
+          {String(i.getValue() || '—')}
+        </Link>
+      ),
+    },
+    { accessorKey: 'stageName', header: 'Stage', cell: (i) => <span className="text-muted-foreground">{String(i.getValue() || '—')}</span> },
+    {
+      id: 'amount',
+      accessorFn: (r) => Number(r.amount) || 0,
+      header: 'Amount',
+      cell: (i) => formatMoney(i.getValue() as number, i.row.original.currency || currency),
+    },
+    {
+      id: 'probability',
+      accessorFn: (r) => Number(r.probability) || 0,
+      header: 'Prob.',
+      cell: (i) => (
+        <>
+          {String(i.getValue())}%
+          <span className="text-[10px] text-muted-foreground ml-1">({i.row.original.probabilitySource})</span>
+        </>
+      ),
+    },
+    {
+      id: 'weighted',
+      accessorFn: (r) => Number(r.weighted) || 0,
+      header: 'Weighted',
+      cell: (i) => formatMoney(i.getValue() as number, i.row.original.currency || currency),
+    },
+    { accessorKey: 'expectedClose', header: 'Close', cell: (i) => <span className="text-muted-foreground">{String(i.getValue() || '—')}</span> },
+  ], [currency]);
 
   return (
     <div className="min-h-screen app-surface">
@@ -160,56 +216,14 @@ export default function CrmForecastPage() {
               </ul>
             </section>
 
-            <section className="glass-panel rounded-2xl border border-border/50 p-6 lg:col-span-2">
-              <h2 className="text-sm font-semibold mb-4">By owner</h2>
-              <ul className="grid sm:grid-cols-2 gap-3">
-                {(data?.byOwner || []).map((o: any) => (
-                  <li key={o.ownerUserId || 'unassigned'} className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
-                    <div className="font-medium text-sm">{o.ownerName}</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Pipeline {formatMoney(o.amount, currency)} · Weighted {formatMoney(o.weighted, currency)} · {o.count} deals
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            <section className="lg:col-span-2 space-y-3">
+              <h2 className="text-sm font-semibold">By owner</h2>
+              <RichDataTable data={data?.byOwner || []} columns={ownerColumns} />
             </section>
 
-            <section className="glass-panel rounded-2xl border border-border/50 p-6 lg:col-span-2">
-              <h2 className="text-sm font-semibold mb-4">Open deals</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-muted-foreground border-b border-border/50">
-                      <th className="py-2 pr-3 font-medium">Deal</th>
-                      <th className="py-2 pr-3 font-medium">Stage</th>
-                      <th className="py-2 pr-3 font-medium">Amount</th>
-                      <th className="py-2 pr-3 font-medium">Prob.</th>
-                      <th className="py-2 pr-3 font-medium">Weighted</th>
-                      <th className="py-2 font-medium">Close</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data?.deals || []).map((d: any) => (
-                      <tr key={d.id} className="border-b border-border/40">
-                        <td className="py-2.5 pr-3">
-                          <Link href={`/crm/deals/${d.id}`} className="font-medium hover:text-[#D4A017]">{d.name}</Link>
-                        </td>
-                        <td className="py-2.5 pr-3 text-muted-foreground">{d.stageName || '—'}</td>
-                        <td className="py-2.5 pr-3">{formatMoney(d.amount, d.currency || currency)}</td>
-                        <td className="py-2.5 pr-3">
-                          {d.probability}%
-                          <span className="text-[10px] text-muted-foreground ml-1">({d.probabilitySource})</span>
-                        </td>
-                        <td className="py-2.5 pr-3">{formatMoney(d.weighted, d.currency || currency)}</td>
-                        <td className="py-2.5 text-muted-foreground">{d.expectedClose || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {!data?.deals?.length && !loading && (
-                  <p className="text-sm text-muted-foreground italic py-6 text-center">No open deals.</p>
-                )}
-              </div>
+            <section className="lg:col-span-2 space-y-3">
+              <h2 className="text-sm font-semibold">Open deals</h2>
+              <RichDataTable data={data?.deals || []} columns={dealColumns} />
             </section>
           </div>
         </main>

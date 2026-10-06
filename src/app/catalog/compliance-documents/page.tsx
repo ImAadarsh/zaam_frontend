@@ -12,7 +12,8 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X, FileText, Download } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, FileText, Download, Loader2 } from 'lucide-react';
+import { MediaLink } from '@/components/catalog/media-preview';
 
 type ComplianceDocument = {
   id: string;
@@ -50,7 +51,8 @@ export default function ComplianceDocumentsPage() {
     expiryDate: '',
     status: 'active' as 'active' | 'expired' | 'pending'
   });
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentFiles, setDocumentFiles] = useState<File[]>([]);
+  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<ComplianceDocument | null>(null);
   const [editForm, setEditForm] = useState({
     type: 'certificate' as 'msds' | 'certificate' | 'safety_data' | 'test_report' | 'other',
@@ -94,62 +96,84 @@ export default function ComplianceDocumentsPage() {
     })();
   }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) {
-    const file = e.target.files?.[0];
-    if (file) {
-      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'text/plain'];
-      if (!allowedTypes.includes(file.type)) {
-        toast.error('Invalid file type. Please upload a PDF, Word document, or image.');
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('File size must be less than 10MB');
-        return;
-      }
-      if (isEdit) {
-        setEditDocumentFile(file);
-      } else {
-        setDocumentFile(file);
-      }
+  const ALLOWED_DOC_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'text/plain'];
+
+  function validDocument(file: File) {
+    if (!ALLOWED_DOC_TYPES.includes(file.type)) {
+      toast.error(`${file.name}: invalid file type. Please upload a PDF, Word document, or image.`);
+      return false;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(`${file.name}: file size must be less than 10MB`);
+      return false;
+    }
+    return true;
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) {
+    const files = Array.from(e.target.files ?? []).filter(validDocument);
+    if (isEdit) {
+      setEditDocumentFile(files[0] ?? null);
+    } else {
+      setDocumentFiles(files);
+    }
+  }
+
+  function resetCreateForm() {
+    setForm({
+      catalogItemId: '',
+      type: 'certificate',
+      name: '',
+      documentNumber: '',
+      issuer: '',
+      issuedDate: '',
+      expiryDate: '',
+      status: 'active'
+    });
+    setDocumentFiles([]);
   }
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!session) return;
-    if (!form.catalogItemId || !form.name || !documentFile) {
+    if (!form.catalogItemId || !form.name || documentFiles.length === 0) {
       toast.error('Please fill in required fields (Catalog Item, Name, Document)');
       return;
     }
-    try {
-      const res = await createComplianceDocument({
-        catalogItemId: form.catalogItemId,
-        type: form.type,
-        name: form.name,
-        documentNumber: form.documentNumber || undefined,
-        issuer: form.issuer || undefined,
-        issuedDate: form.issuedDate || undefined,
-        expiryDate: form.expiryDate || undefined,
-        status: form.status
-      }, documentFile);
-      
-      setItems([res.data, ...items]);
-      setShowCreate(false);
-      setForm({ 
-        catalogItemId: '',
-        type: 'certificate',
-        name: '',
-        documentNumber: '',
-        issuer: '',
-        issuedDate: '',
-        expiryDate: '',
-        status: 'active'
-      });
-      setDocumentFile(null);
-      toast.success('Compliance document created');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message ?? 'Create failed');
+    setCreating(true);
+    const created: ComplianceDocument[] = [];
+    const failed: string[] = [];
+    for (const file of documentFiles) {
+      const name = documentFiles.length > 1
+        ? `${form.name.trim()} – ${file.name.replace(/\.[^.]+$/, '')}`
+        : form.name.trim();
+      try {
+        const res = await createComplianceDocument({
+          catalogItemId: form.catalogItemId,
+          type: form.type,
+          name,
+          documentNumber: form.documentNumber || undefined,
+          issuer: form.issuer || undefined,
+          issuedDate: form.issuedDate || undefined,
+          expiryDate: form.expiryDate || undefined,
+          status: form.status
+        }, file);
+        created.push(res.data);
+      } catch (err: any) {
+        failed.push(`${file.name}: ${err?.response?.data?.error?.message ?? 'create failed'}`);
+      }
     }
+    setCreating(false);
+    if (created.length) {
+      setItems(prev => [...created, ...prev]);
+      toast.success(created.length === 1 ? 'Compliance document created' : `${created.length} compliance documents created`);
+    }
+    if (failed.length) {
+      toast.error(failed.join('\n'));
+      return;
+    }
+    setShowCreate(false);
+    resetCreateForm();
   }
 
   async function onUpdate(e: React.FormEvent) {
@@ -246,15 +270,9 @@ export default function ComplianceDocumentsPage() {
         return (
           <div className="flex items-center gap-2">
             {item.documentUrl && (
-              <a
-                href={item.documentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1 hover:bg-gray-100 rounded"
-                title="Download"
-              >
+              <MediaLink url={item.documentUrl} className="p-1 hover:bg-gray-100 rounded">
                 <Download className="h-4 w-4" />
-              </a>
+              </MediaLink>
             )}
             <button
               onClick={() => {
@@ -339,7 +357,10 @@ export default function ComplianceDocumentsPage() {
                 <p className="text-muted-foreground mt-1">Manage certifications, safety data, and compliance documents</p>
               </div>
               <button
-                onClick={() => setShowCreate(true)}
+                onClick={() => {
+                  resetCreateForm();
+                  setShowCreate(true);
+                }}
                 className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
               >
                 <Plus className="h-4 w-4" />
@@ -448,16 +469,17 @@ export default function ComplianceDocumentsPage() {
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="block text-sm font-medium mb-1.5">Document File *</label>
+                        <label className="block text-sm font-medium mb-1.5">Document Files * <span className="text-xs font-normal text-muted-foreground">(select one or more — one document is created per file)</span></label>
                         <input
                           type="file"
+                          multiple
                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
                           onChange={(e) => handleFileChange(e, false)}
                           className="input"
                           required
                         />
-                        {documentFile && (
-                          <p className="text-xs text-muted-foreground mt-1">Selected: {documentFile.name}</p>
+                        {documentFiles.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">Selected ({documentFiles.length}): {documentFiles.map(f => f.name).join(', ')}</p>
                         )}
                       </div>
                     </div>
@@ -466,7 +488,7 @@ export default function ComplianceDocumentsPage() {
                         type="button"
                         onClick={() => {
                           setShowCreate(false);
-                          setDocumentFile(null);
+                          setDocumentFiles([]);
                         }}
                         className="btn btn-outline"
                       >
@@ -474,9 +496,11 @@ export default function ComplianceDocumentsPage() {
                       </button>
                       <button
                         type="submit"
-                        className="btn btn-primary"
+                        disabled={creating}
+                        className="btn btn-primary inline-flex items-center gap-2"
                       >
-                        Create
+                        {creating && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {documentFiles.length > 1 ? `Create ${documentFiles.length} documents` : 'Create'}
                       </button>
                     </div>
                   </form>
@@ -583,7 +607,7 @@ export default function ComplianceDocumentsPage() {
                           <p className="text-xs text-muted-foreground mt-1">New file: {editDocumentFile.name}</p>
                         )}
                         {editing.documentUrl && !editDocumentFile && (
-                          <p className="text-xs text-muted-foreground mt-1">Current file: <a href={editing.documentUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">View</a></p>
+                          <p className="text-xs text-muted-foreground mt-1">Current file: <MediaLink url={editing.documentUrl} className="text-primary hover:underline">View</MediaLink></p>
                         )}
                       </div>
                     </div>

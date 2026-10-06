@@ -1,8 +1,11 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { ColumnDef } from '@tanstack/react-table';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
+import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { listPensions, upsertPension, listEmployees } from '@/lib/api';
@@ -89,24 +92,90 @@ export default function PensionPage() {
   }
 
   async function toggleEnrol(row: any) {
+    const wasEnrolled = Boolean(Number(row.enrolled));
     try {
       await upsertPension({
-        employeeId: row.employeeId || row.employee?.id,
-        enrolled: !row.enrolled,
-        eligible: row.eligible,
-        schemeName: row.schemeName,
-        contributionPct: row.contributionPct,
-        employerContributionPct: row.employerContributionPct,
+        employeeId: String(row.employeeId || row.employee?.id),
+        enrolled: !wasEnrolled,
+        eligible: Boolean(Number(row.eligible)),
       });
-      toast.success(row.enrolled ? 'Marked not enrolled' : 'Marked enrolled');
+      toast.success(wasEnrolled ? 'Marked not enrolled' : 'Marked enrolled');
       void load();
     } catch (err) {
       toast.error(hrApiError(err, 'Update failed'));
     }
   }
 
-  const enrolled = items.filter((i) => i.enrolled).length;
-  const eligible = items.filter((i) => i.eligible && !i.enrolled).length;
+  function openCreate() {
+    setForm({
+      employeeId: '',
+      eligible: true,
+      enrolled: false,
+      schemeName: 'NEST',
+      contributionPct: '5',
+      employerContributionPct: '3',
+      deferralDate: '',
+    });
+    setOpen(true);
+  }
+
+  const enrolled = items.filter((i) => Number(i.enrolled)).length;
+  const eligible = items.filter((i) => Number(i.eligible) && !Number(i.enrolled)).length;
+
+  const columns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      id: 'employee',
+      accessorFn: (r) => employeeName(r.employee),
+      header: 'Employee',
+      cell: ({ row }) => {
+        const eid = row.original.employeeId || row.original.employee?.id;
+        return eid ? (
+          <Link href={`/hr/employees/${eid}`} className="text-[#D4A017] hover:underline font-medium">{employeeName(row.original.employee)}</Link>
+        ) : employeeName(row.original.employee);
+      },
+    },
+    { id: 'schemeName', accessorFn: (r) => r.schemeName || '', header: 'Scheme', cell: ({ getValue }) => String(getValue() || '—') },
+    {
+      id: 'contributionPct',
+      accessorFn: (r) => (r.contributionPct == null ? null : Number(r.contributionPct)),
+      header: 'Employee %',
+      cell: ({ getValue }) => (getValue() == null ? '—' : `${getValue()}%`),
+    },
+    {
+      id: 'employerContributionPct',
+      accessorFn: (r) => (r.employerContributionPct == null ? null : Number(r.employerContributionPct)),
+      header: 'Employer %',
+      cell: ({ getValue }) => (getValue() == null ? '—' : `${getValue()}%`),
+    },
+    {
+      id: 'dates',
+      accessorFn: (r) => r.enrolmentDate || r.deferralDate || '',
+      header: 'Enrolment / deferral',
+      cell: ({ row }) => row.original.enrolmentDate
+        ? `Enrolled ${formatDate(row.original.enrolmentDate)}`
+        : row.original.deferralDate ? `Deferred to ${formatDate(row.original.deferralDate)}` : '—',
+    },
+    {
+      id: 'status',
+      accessorFn: (r) => (Number(r.enrolled) ? 'Enrolled' : Number(r.eligible) ? 'Eligible' : 'Not eligible'),
+      header: 'Status',
+      cell: ({ row, getValue }) => (
+        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${statusBadgeClass(Number(row.original.enrolled) ? 'enrolled' : Number(row.original.eligible) ? 'eligible' : 'pending')}`}>
+          {String(getValue())}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: '',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <button type="button" onClick={() => toggleEnrol(row.original)} className="text-xs text-[#D4A017] hover:underline whitespace-nowrap">
+          {Number(row.original.enrolled) ? 'Mark not enrolled' : 'Mark enrolled'}
+        </button>
+      ),
+    },
+  ], [load]);
 
   return (
     <div className="min-h-screen app-surface">
@@ -133,41 +202,22 @@ export default function PensionPage() {
                 Eligible not enrolled <span className="font-bold text-amber-600 ml-1">{eligible}</span>
               </div>
             </div>
-            <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+            <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
               <Plus size={14} /> Enrol / set pension
             </button>
           </div>
 
-          <div className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-            {loading && <div className="p-6 text-muted-foreground text-sm">Loading…</div>}
-            {!loading && items.length === 0 && (
-              <div className="p-8 text-center">
-                <p className="text-sm text-muted-foreground mb-3">No pension records yet.</p>
-                <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
-                  <Plus size={14} /> Set enrolment
-                </button>
-              </div>
-            )}
-            {items.map((row) => (
-              <div key={row.id} className="px-5 py-3 border-b border-border/30 last:border-0 flex flex-wrap items-center justify-between gap-3 text-sm">
-                <div>
-                  <div className="font-medium">{employeeName(row.employee)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {row.schemeName || '—'} · EE {row.contributionPct ?? '—'}% / ER {row.employerContributionPct ?? '—'}%
-                    {row.deferralDate ? ` · deferral ${formatDate(row.deferralDate)}` : ''}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${statusBadgeClass(row.enrolled ? 'enrolled' : row.eligible ? 'eligible' : 'pending')}`}>
-                    {row.enrolled ? 'Enrolled' : row.eligible ? 'Eligible' : 'Not eligible'}
-                  </span>
-                  <button type="button" onClick={() => toggleEnrol(row)} className="text-xs text-[#D4A017] hover:underline">
-                    Toggle
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          {loading && <div className="text-muted-foreground text-sm">Loading…</div>}
+          {!loading && items.length === 0 ? (
+            <div className="glass-panel rounded-2xl border border-border/50 p-8 text-center">
+              <p className="text-sm text-muted-foreground mb-3">No pension records yet.</p>
+              <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
+                <Plus size={14} /> Set enrolment
+              </button>
+            </div>
+          ) : (
+            !loading && <RichDataTable columns={columns} data={items} searchPlaceholder="Search pensions…" />
+          )}
         </main>
       </div>
 

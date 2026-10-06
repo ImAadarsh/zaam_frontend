@@ -74,12 +74,27 @@ export default function FiscalPeriodsPage() {
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.organizationId || !form.periodName || !form.startDate || !form.endDate) {
-      toast.error('Please fill in required fields');
+    const organizationId = session?.user?.organizationId || form.organizationId;
+    const missing = [
+      !form.periodName.trim() && 'Period name',
+      !form.startDate && 'Start date',
+      !form.endDate && 'End date',
+      !form.fiscalYear && 'Fiscal year'
+    ].filter(Boolean);
+    if (missing.length) {
+      toast.error(`Please fill in: ${missing.join(', ')}`);
+      return;
+    }
+    if (!organizationId) {
+      toast.error('Your session has no organisation — please sign in again');
+      return;
+    }
+    if (form.endDate <= form.startDate) {
+      toast.error('End date must be after start date');
       return;
     }
     try {
-      await createFiscalPeriod({ ...form, organizationId: session?.user?.organizationId || form.organizationId });
+      await createFiscalPeriod({ ...form, periodName: form.periodName.trim(), fiscalYear: Number(form.fiscalYear), organizationId });
       toast.success('Fiscal Period created');
       setShowCreate(false);
       setForm({
@@ -99,12 +114,27 @@ export default function FiscalPeriodsPage() {
 
   async function onUpdate(e: React.FormEvent) {
     e.preventDefault();
-    if (!editing || !editForm.periodName || !editForm.startDate || !editForm.endDate) {
-      toast.error('Please fill in required fields');
+    if (!editing) return;
+    const missing = [
+      !editForm.periodName.trim() && 'Period name',
+      !editForm.startDate && 'Start date',
+      !editForm.endDate && 'End date'
+    ].filter(Boolean);
+    if (missing.length) {
+      toast.error(`Please fill in: ${missing.join(', ')}`);
+      return;
+    }
+    if (editForm.endDate.slice(0, 10) <= editForm.startDate.slice(0, 10)) {
+      toast.error('End date must be after start date');
       return;
     }
     try {
-      await updateFiscalPeriod(editing.id, editForm);
+      await updateFiscalPeriod(editing.id, {
+        ...editForm,
+        startDate: editForm.startDate.slice(0, 10),
+        endDate: editForm.endDate.slice(0, 10),
+        fiscalYear: Number(editForm.fiscalYear)
+      });
       toast.success('Fiscal Period updated');
       setEditing(null);
       const res = await listFiscalPeriods({ organizationId: session?.user?.organizationId });
@@ -160,8 +190,8 @@ export default function FiscalPeriodsPage() {
               setEditForm({
                 periodName: row.original.periodName,
                 periodType: row.original.periodType,
-                startDate: row.original.startDate,
-                endDate: row.original.endDate,
+                startDate: String(row.original.startDate || '').slice(0, 10),
+                endDate: String(row.original.endDate || '').slice(0, 10),
                 fiscalYear: row.original.fiscalYear,
                 isClosed: row.original.isClosed
               });
@@ -228,7 +258,17 @@ export default function FiscalPeriodsPage() {
               </div>
               {hasAccess && (
                 <button
-                  onClick={() => setShowCreate(true)}
+                  onClick={() => {
+                    setForm({
+                      organizationId: session?.user?.organizationId || '',
+                      periodName: '',
+                      periodType: 'month',
+                      startDate: '',
+                      endDate: '',
+                      fiscalYear: new Date().getFullYear()
+                    });
+                    setShowCreate(true);
+                  }}
                   className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
                 >
                   <Plus size={20} />

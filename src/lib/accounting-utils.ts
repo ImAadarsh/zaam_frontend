@@ -3,6 +3,24 @@ export function accApiError(err: unknown, fallback = 'Something went wrong'): st
   return e?.response?.data?.error?.message || e?.response?.data?.message || e?.message || fallback;
 }
 
+export function accFieldErrors(err: unknown): Record<string, string> {
+  const details = (err as { response?: { data?: { error?: { details?: { path?: (string | number)[]; message?: string }[] } } } })
+    ?.response?.data?.error?.details;
+  const out: Record<string, string> = {};
+  if (!Array.isArray(details)) return out;
+  for (const d of details) {
+    const key = (d.path || []).join('.');
+    if (key && d.message && !out[key]) out[key] = d.message;
+  }
+  return out;
+}
+
+/** VAT code rates are stored as fractions (0.2 = 20%); tolerate legacy percentage values. */
+export function vatRateFraction(rate: unknown): number {
+  const n = Number(rate) || 0;
+  return n > 1 ? n / 100 : n;
+}
+
 export function isApiMissing(err: unknown): boolean {
   const status = (err as { response?: { status?: number } })?.response?.status;
   return status === 404 || status === 501;

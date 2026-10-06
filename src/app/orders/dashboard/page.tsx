@@ -1,40 +1,35 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { StatCard } from '@/components/stat-card';
+import { DateRangeFilter, rangeForPreset, inRange, bucketsForRange, bucketKey, type DateRange } from '@/components/date-range-filter';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { listCustomers, listOrders, listReturns } from '@/lib/api';
-import { Users, ShoppingCart, RotateCcw, DollarSign, TrendingUp, AlertCircle, TrendingDown } from 'lucide-react';
+import { Users, ShoppingCart, RotateCcw, DollarSign, AlertCircle, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 
-const mockChartData = [
-  { name: 'Mon', sales: 4000, returns: 240 },
-  { name: 'Tue', sales: 3000, returns: 139 },
-  { name: 'Wed', sales: 2000, returns: 980 },
-  { name: 'Thu', sales: 2780, returns: 390 },
-  { name: 'Fri', sales: 1890, returns: 480 },
-  { name: 'Sat', sales: 2390, returns: 380 },
-  { name: 'Sun', sales: 3490, returns: 430 }
-];
+const COLORS = ['#D4A017', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#E5B84A', '#64748b', '#f97316'];
+const tooltipStyle = { backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' };
+const gbp = (n: number) => `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const isRevenue = (o: any) => !['cancelled', 'refunded'].includes(o.status);
 
 export default function OrdersDashboard() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalCustomers: 0,
-    totalOrders: 0,
-    pendingOrders: 0,
-    totalReturns: 0,
-    totalRevenue: 0,
-    pendingReturns: 0
-  });
+  const [orders, setOrders] = useState<any[]>([]);
+  const [returns, setReturns] = useState<any[]>([]);
+  const [customerCount, setCustomerCount] = useState(0);
+  const [range, setRange] = useState<DateRange>(() => rangeForPreset('30d'));
+  const [channel, setChannel] = useState('');
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -44,32 +39,15 @@ export default function OrdersDashboard() {
     }
     (async () => {
       try {
+        const organizationId = session?.user?.organizationId;
         const [customersRes, ordersRes, returnsRes] = await Promise.all([
-          listCustomers({ organizationId: session?.user?.organizationId }),
-          listOrders({ organizationId: session?.user?.organizationId }),
-          listReturns({ organizationId: session?.user?.organizationId })
+          listCustomers({ organizationId, limit: 1 }),
+          listOrders({ organizationId }),
+          listReturns({ organizationId })
         ]);
-
-        const orders = ordersRes.data || [];
-        const returns = returnsRes.data || [];
-        const pendingOrders = orders.filter((o: any) => 
-          o.status === 'pending' || o.status === 'processing'
-        ).length;
-        const pendingReturns = returns.filter((r: any) => 
-          r.status === 'requested' || r.status === 'approved'
-        ).length;
-        const totalRevenue = orders
-          .filter((o: any) => o.status === 'completed' || o.status === 'processing')
-          .reduce((sum: number, o: any) => sum + (parseFloat(o.total) || 0), 0);
-
-        setStats({
-          totalCustomers: customersRes.data?.length || 0,
-          totalOrders: orders.length,
-          pendingOrders,
-          totalReturns: returns.length,
-          totalRevenue,
-          pendingReturns
-        });
+        setCustomerCount(customersRes.pagination?.total ?? customersRes.data?.length ?? 0);
+        setOrders(ordersRes.data || []);
+        setReturns(returnsRes.data || []);
       } catch (e: any) {
         console.error('Failed to load orders stats:', e);
       } finally {
@@ -77,6 +55,53 @@ export default function OrdersDashboard() {
       }
     })();
   }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
+
+  const channels = useMemo(() => Array.from(new Set(orders.map((o) => o.channel).filter(Boolean))).sort(), [orders]);
+  const statuses = useMemo(() => Array.from(new Set(orders.map((o) => o.status).filter(Boolean))).sort(), [orders]);
+
+  const view = useMemo(() => {
+    const filtered = orders.filter((o) =>
+      inRange(o.orderDate || o.createdAt, range) && (!channel || o.channel === channel) && (!status || o.status === status)
+    );
+    const rets = returns.filter((r) => inRange(r.returnDate || r.createdAt, range));
+    const buckets = bucketsForRange(range).map((b) => ({ ...b, orders: 0, revenue: 0, returns: 0 }));
+    const byKey = new Map(buckets.map((b) => [b.key, b]));
+    const byChannel = new Map<string, { name: string; orders: number; revenue: number }>();
+    const byStatus = new Map<string, number>();
+    let revenue = 0;
+    for (const o of filtered) {
+      const total = Number(o.total || 0);
+      const b = byKey.get(bucketKey(o.orderDate || o.createdAt, range));
+      if (b) {
+        b.orders += 1;
+        if (isRevenue(o)) b.revenue += total;
+      }
+      byStatus.set(o.status, (byStatus.get(o.status) || 0) + 1);
+      const ch = byChannel.get(o.channel) || { name: o.channel, orders: 0, revenue: 0 };
+      ch.orders += 1;
+      if (isRevenue(o)) {
+        ch.revenue += total;
+        revenue += total;
+      }
+      byChannel.set(o.channel, ch);
+    }
+    for (const r of rets) {
+      const b = byKey.get(bucketKey(r.returnDate || r.createdAt, range));
+      if (b) b.returns += 1;
+    }
+    const revenueOrders = filtered.filter(isRevenue).length;
+    return {
+      count: filtered.length,
+      pending: filtered.filter((o) => ['pending', 'confirmed', 'processing', 'on_hold'].includes(o.status)).length,
+      revenue,
+      aov: revenueOrders ? revenue / revenueOrders : 0,
+      returns: rets.length,
+      pendingReturns: rets.filter((r) => r.status === 'requested' || r.status === 'approved').length,
+      timeline: buckets.map((b) => ({ label: b.label, orders: b.orders, revenue: Number(b.revenue.toFixed(2)), returns: b.returns })),
+      channels: Array.from(byChannel.values()).sort((a, b) => b.revenue - a.revenue).map((c) => ({ ...c, revenue: Number(c.revenue.toFixed(2)) })),
+      statuses: Array.from(byStatus.entries()).map(([name, value]) => ({ name, value }))
+    };
+  }, [orders, returns, range, channel, status]);
 
   if (!hydrated || loading) {
     return (
@@ -120,128 +145,130 @@ export default function OrdersDashboard() {
         <Header title="Orders · Dashboard" />
         <main className="flex-1 overflow-auto p-4 md:p-6">
           <div className="space-y-6">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">Orders Overview</h1>
-              <p className="text-muted-foreground">Manage customers, orders, and returns</p>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold mb-2">Orders Overview</h1>
+                <p className="text-muted-foreground">Sales, channels and returns for the selected period</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select className="input !h-9 !w-auto text-xs" value={channel} onChange={(e) => setChannel(e.target.value)}>
+                  <option value="">All channels</option>
+                  {channels.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select className="input !h-9 !w-auto text-xs" value={status} onChange={(e) => setStatus(e.target.value)}>
+                  <option value="">All statuses</option>
+                  {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <DateRangeFilter value={range} onChange={setRange} />
+              </div>
             </div>
 
-            <motion.div 
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-              initial="hidden"
-              animate="show"
-              variants={{
-                hidden: { opacity: 0 },
-                show: { opacity: 1, transition: { staggerChildren: 0.1 } }
-              }}
-            >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <Link href="/orders/customers">
-                <StatCard
-                  title="Customers"
-                  value={stats.totalCustomers.toString()}
-                  icon={<Users className="h-5 w-5" />}
-                  hint="Total customers"
-                />
+                <StatCard title="Customers" value={customerCount.toString()} icon={<Users className="h-5 w-5" />} hint="Total customers" />
               </Link>
               <Link href="/orders/orders">
-                <StatCard
-                  title="Total Orders"
-                  value={stats.totalOrders.toString()}
-                  icon={<ShoppingCart className="h-5 w-5" />}
-                  hint="All orders"
-                />
+                <StatCard title="Orders" value={view.count.toString()} icon={<ShoppingCart className="h-5 w-5" />} hint="In selected period" />
               </Link>
               <Link href="/orders/orders?status=pending">
-                <StatCard
-                  title="Pending Orders"
-                  value={stats.pendingOrders.toString()}
-                  icon={<AlertCircle className="h-5 w-5" />}
-                  hint="Orders pending processing"
-                />
+                <StatCard title="Open Orders" value={view.pending.toString()} icon={<AlertCircle className="h-5 w-5" />} hint="Pending, confirmed, processing or on hold" />
               </Link>
+              <StatCard title="Revenue" value={gbp(view.revenue)} icon={<DollarSign className="h-5 w-5" />} hint="Excludes cancelled and refunded orders" />
+              <StatCard title="Average Order" value={gbp(view.aov)} icon={<TrendingUp className="h-5 w-5" />} hint="Revenue ÷ revenue-bearing orders" />
               <Link href="/orders/returns">
-                <StatCard
-                  title="Returns"
-                  value={stats.totalReturns.toString()}
-                  icon={<RotateCcw className="h-5 w-5" />}
-                  hint="Total returns"
-                />
+                <StatCard title="Returns" value={view.returns.toString()} icon={<RotateCcw className="h-5 w-5" />} hint={`${view.pendingReturns} awaiting action`} />
               </Link>
-              <Link href="/orders/returns?status=requested">
-                <StatCard
-                  title="Pending Returns"
-                  value={stats.pendingReturns.toString()}
-                  icon={<AlertCircle className="h-5 w-5" />}
-                  hint="Returns awaiting action"
-                />
-              </Link>
-              <StatCard
-                title="Total Revenue"
-                value={`£${stats.totalRevenue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                icon={<DollarSign className="h-5 w-5" />}
-                hint="Revenue from completed orders"
-              />
-            </motion.div>
+            </div>
 
-            {/* Recharts Area */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="mt-8 p-6 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-xl"
-            >
-              <div className="mb-6">
-                <h2 className="text-lg font-semibold tracking-tight">Sales & Returns Volume</h2>
-                <p className="text-sm text-muted-foreground">Rolling 7-day volume metrics</p>
+            <div className="p-6 rounded-2xl border border-border/50 bg-card/50">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold tracking-tight">Revenue over time</h2>
+                <p className="text-sm text-muted-foreground">{range.from} to {range.to}</p>
               </div>
-              <div className="h-[350px] w-full">
+              <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={mockChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <AreaChart data={view.timeline} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorReturns" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#D4A017" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#D4A017" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                      itemStyle={{ color: 'hsl(var(--foreground))' }}
-                    />
-                    <Area type="monotone" dataKey="sales" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
-                    <Area type="monotone" dataKey="returns" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorReturns)" />
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => gbp(Number(v))} />
+                    <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#D4A017" strokeWidth={2} fill="url(#colorRevenue)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-            </motion.div>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-              <Link
-                href="/orders/customers"
-                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="p-6 rounded-2xl border border-border/50 bg-card/50">
+                <h2 className="text-lg font-semibold tracking-tight mb-4">Orders & returns per {view.timeline[0]?.label.length === 5 ? 'day' : 'month'}</h2>
+                <div className="h-[280px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={view.timeline}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="label" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                      <YAxis allowDecimals={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                      <Tooltip contentStyle={tooltipStyle} />
+                      <Legend />
+                      <Bar dataKey="orders" name="Orders" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="returns" name="Returns" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="p-6 rounded-2xl border border-border/50 bg-card/50">
+                <h2 className="text-lg font-semibold tracking-tight mb-4">Revenue by channel</h2>
+                <div className="h-[280px]">
+                  {view.channels.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm text-muted-foreground">No orders in this period</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={view.channels} layout="vertical" margin={{ left: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                        <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                        <YAxis type="category" dataKey="name" width={100} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => (n === 'Revenue' ? gbp(Number(v)) : v)} />
+                        <Bar dataKey="revenue" name="Revenue" fill="#D4A017" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+              <div className="p-6 rounded-2xl border border-border/50 bg-card/50 xl:col-span-2">
+                <h2 className="text-lg font-semibold tracking-tight mb-4">Order status</h2>
+                <div className="h-[280px]">
+                  {view.statuses.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm text-muted-foreground">No orders in this period</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={view.statuses} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} paddingAngle={2}>
+                          {view.statuses.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Link href="/orders/customers" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
                 <h3 className="font-semibold mb-2 relative">Customers</h3>
                 <p className="text-sm text-muted-foreground relative">Manage customer information and addresses</p>
               </Link>
-              <Link
-                href="/orders/orders"
-                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:primary/50 transition-all duration-300 overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Link href="/orders/orders" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
                 <h3 className="font-semibold mb-2 relative">Orders</h3>
                 <p className="text-sm text-muted-foreground relative">View and manage sales orders from all channels</p>
               </Link>
-              <Link
-                href="/orders/returns"
-                className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Link href="/orders/returns" className="group relative p-6 bg-card rounded-2xl border border-border/50 hover:border-primary/50 transition-all duration-300 overflow-hidden">
                 <h3 className="font-semibold mb-2 relative">Returns</h3>
                 <p className="text-sm text-muted-foreground relative">Process returns and refunds</p>
               </Link>
@@ -252,4 +279,3 @@ export default function OrdersDashboard() {
     </div>
   );
 }
-

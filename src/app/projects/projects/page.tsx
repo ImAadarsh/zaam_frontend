@@ -280,7 +280,7 @@ export default function ProjectsListPage() {
             </PmField>
             <PmField label="Status">
               <select className={pmInputClass} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                {PROJECT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                {PROJECT_STATUSES.filter((s) => s.value !== 'completed' && s.value !== 'cancelled').map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </PmField>
           </div>

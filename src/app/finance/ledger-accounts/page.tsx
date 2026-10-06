@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { listLedgerAccounts, createLedgerAccount, updateLedgerAccount, deleteLedgerAccount, listChartOfAccounts } from '@/lib/api';
 import { toast } from 'sonner';
+import { listLedgerAccountTypes, DEFAULT_LEDGER_ACCOUNT_TYPES, type LedgerAccountTypeOption } from '@/lib/accounting-api';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
@@ -55,6 +56,7 @@ export default function LedgerAccountsPage() {
     isActive: true
   });
   const [confirmDel, setConfirmDel] = useState<LedgerAccount | null>(null);
+  const [accountTypes, setAccountTypes] = useState<LedgerAccountTypeOption[]>(DEFAULT_LEDGER_ACCOUNT_TYPES);
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -62,6 +64,7 @@ export default function LedgerAccountsPage() {
       router.replace('/login');
       return;
     }
+    listLedgerAccountTypes(session?.user?.organizationId).then(setAccountTypes);
     (async () => {
       try {
         const [accountsRes, coaRes] = await Promise.all([
@@ -319,16 +322,13 @@ export default function LedgerAccountsPage() {
                         <label className="block text-sm font-medium mb-1">Account Type *</label>
                         <select
                           value={form.accountType}
-                          onChange={(e) => setForm({ ...form, accountType: e.target.value as any })}
+                          onChange={(e) => setForm({ ...form, accountType: e.target.value as any, normalBalance: accountTypes.find((t) => t.value === e.target.value)?.normalBalance ?? form.normalBalance })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                           required
                         >
-                          <option value="asset">Asset</option>
-                          <option value="liability">Liability</option>
-                          <option value="equity">Equity</option>
-                          <option value="revenue">Revenue</option>
-                          <option value="expense">Expense</option>
-                          <option value="cost_of_goods_sold">Cost of Goods Sold</option>
+                          {accountTypes.map((t) => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                          ))}
                         </select>
                       </div>
                       <div>
@@ -349,9 +349,15 @@ export default function LedgerAccountsPage() {
                       <input
                         type="text"
                         value={form.accountSubtype}
+                        list="ledger-subtypes-create"
                         onChange={(e) => setForm({ ...form, accountSubtype: e.target.value })}
                         className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                       />
+                      <datalist id="ledger-subtypes-create">
+                        {(accountTypes.find((t) => t.value === form.accountType)?.subtypes || []).map((st) => (
+                          <option key={st} value={st} />
+                        ))}
+                      </datalist>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Description</label>
@@ -435,16 +441,13 @@ export default function LedgerAccountsPage() {
                         <label className="block text-sm font-medium mb-1">Account Type *</label>
                         <select
                           value={editForm.accountType}
-                          onChange={(e) => setEditForm({ ...editForm, accountType: e.target.value as any })}
+                          onChange={(e) => setEditForm({ ...editForm, accountType: e.target.value as any, normalBalance: accountTypes.find((t) => t.value === e.target.value)?.normalBalance ?? editForm.normalBalance })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                           required
                         >
-                          <option value="asset">Asset</option>
-                          <option value="liability">Liability</option>
-                          <option value="equity">Equity</option>
-                          <option value="revenue">Revenue</option>
-                          <option value="expense">Expense</option>
-                          <option value="cost_of_goods_sold">Cost of Goods Sold</option>
+                          {accountTypes.map((t) => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                          ))}
                         </select>
                       </div>
                       <div>
@@ -465,9 +468,15 @@ export default function LedgerAccountsPage() {
                       <input
                         type="text"
                         value={editForm.accountSubtype}
+                        list="ledger-subtypes-edit"
                         onChange={(e) => setEditForm({ ...editForm, accountSubtype: e.target.value })}
                         className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                       />
+                      <datalist id="ledger-subtypes-edit">
+                        {(accountTypes.find((t) => t.value === editForm.accountType)?.subtypes || []).map((st) => (
+                          <option key={st} value={st} />
+                        ))}
+                      </datalist>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Description</label>

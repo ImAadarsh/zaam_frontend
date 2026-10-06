@@ -163,18 +163,27 @@ export default function SocialAccountsPage() {
           ))}
         </div>
 
-        {!caps?.missingForPublish?.length ? null : (
+        {caps && caps.tokenValid === false && (
+          <PermissionLock
+            title="Meta is not connected"
+            message="The stored Meta login token is expired, revoked or missing, so Meta reports no granted permissions and every Facebook/Instagram feature below shows as locked. Click Reconnect Meta, log in as a Page admin, keep all Pages/Instagram accounts and permissions ticked, and finish the dialog — you will be returned here."
+            product="Facebook Login"
+            onReconnect={() => connect()}
+          />
+        )}
+
+        {!caps?.missingForPublish?.length || caps?.tokenValid === false ? null : (
           <PermissionLock
             title="Publishing is locked"
             message="Default Connect cannot ask for Pages/IG publish. Click Enable publishing — that uses classic Facebook Login (not Login for Business) and requests pages_manage_posts plus instagram_content_publish."
-            missingPermission={caps?.missingForPublish?.[0]}
+            missingPermissions={caps?.missingForPublish}
             product="Pages API + Instagram"
             onReconnect={() => connect('publish')}
             reconnectLabel="Enable publishing"
           />
         )}
 
-        {!caps?.missingForAds?.length ? null : (
+        {!caps?.missingForAds?.length || caps?.tokenValid === false ? null : (
           <PermissionLock
             title="Ads not on this token"
             message="Enable Marketing API on the Meta app, then use Connect ads_read. Do not expect Page tokens to list ad accounts."

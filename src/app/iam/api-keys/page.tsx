@@ -3,13 +3,13 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listApiKeys, createApiKey, deleteApiKey, listOrganizations } from '@/lib/api';
+import { listApiKeys, createApiKey, updateApiKey, deleteApiKey, listOrganizations } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Key, Plus, X, Copy, Trash2, Eye, EyeOff, Check } from 'lucide-react';
+import { MoreHorizontal, Key, Plus, X, Copy, Trash2, Eye, EyeOff, Check, Pencil } from 'lucide-react';
 
 type ApiKey = {
   id: string;
@@ -28,6 +28,96 @@ type ApiKey = {
   updatedAt?: string;
   [key: string]: any;
 };
+
+const DEFAULT_SCOPES = [
+  'read:users',
+  'write:users',
+  'read:orders',
+  'write:orders',
+  'read:inventory',
+  'write:inventory',
+  'read:products',
+  'write:products',
+  'read:finance',
+  'write:finance',
+  'admin:all'
+];
+
+function ScopesInput({
+  value,
+  onChange,
+  knownScopes,
+}: {
+  value: string[];
+  onChange: (scopes: string[]) => void;
+  knownScopes: string[];
+}) {
+  const [draft, setDraft] = useState('');
+  const options = Array.from(new Set([...knownScopes, ...value]));
+
+  function toggle(scope: string) {
+    onChange(value.includes(scope) ? value.filter((s) => s !== scope) : [...value, scope]);
+  }
+
+  function addDraft() {
+    const parts = draft.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+    onChange(Array.from(new Set([...value, ...parts])));
+    setDraft('');
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-2 max-h-48 overflow-y-auto border border-border rounded-lg p-3 bg-muted/30">
+        {options.map((scope) => (
+          <label key={scope} className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={value.includes(scope)}
+              onChange={() => toggle(scope)}
+              className="w-4 h-4 text-primary rounded border-border focus:ring-primary"
+            />
+            <span className="text-sm text-foreground">{scope}</span>
+          </label>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+              e.preventDefault();
+              addDraft();
+            }
+          }}
+          placeholder="Add custom scope, e.g. read:crm"
+          className="flex-1 px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+        <button
+          type="button"
+          onClick={addDraft}
+          className="px-3 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-sm flex items-center gap-1"
+        >
+          <Plus size={14} /> Add
+        </button>
+      </div>
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((scope) => (
+            <span key={scope} className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+              {scope}
+              <button type="button" onClick={() => toggle(scope)} className="hover:text-destructive" aria-label={`Remove ${scope}`}>
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type GeneratedKey = {
   id: string;
@@ -54,19 +144,16 @@ export default function ApiKeysPage() {
   const [confirmDel, setConfirmDel] = useState<ApiKey | null>(null);
   const [showFullKey, setShowFullKey] = useState(false);
 
-  const availableScopes = [
-    'read:users',
-    'write:users',
-    'read:orders',
-    'write:orders',
-    'read:inventory',
-    'write:inventory',
-    'read:products',
-    'write:products',
-    'read:finance',
-    'write:finance',
-    'admin:all'
-  ];
+  const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
+  const [editScopes, setEditScopes] = useState<string[]>([]);
+
+  const availableScopes = useMemo(
+    () =>
+      Array.from(
+        new Set([...DEFAULT_SCOPES, ...items.flatMap((k) => (Array.isArray(k.scopes) ? k.scopes : []))])
+      ),
+    [items]
+  );
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -146,13 +233,16 @@ export default function ApiKeysPage() {
     }
   }
 
-  function toggleScope(scope: string) {
-    setForm(prev => ({
-      ...prev,
-      scopes: prev.scopes.includes(scope)
-        ? prev.scopes.filter(s => s !== scope)
-        : [...prev.scopes, scope]
-    }));
+  async function onSaveScopes() {
+    if (!editingKey) return;
+    try {
+      await updateApiKey(editingKey.id, { scopes: editScopes });
+      setEditingKey(null);
+      await loadData();
+      toast.success('API key scopes updated');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error?.message || 'Failed to update API key');
+    }
   }
 
   const columns: ColumnDef<ApiKey>[] = useMemo(() => [
@@ -243,6 +333,16 @@ export default function ApiKeysPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <button
+            onClick={() => {
+              setEditingKey(row.original);
+              setEditScopes(Array.isArray(row.original.scopes) ? row.original.scopes : []);
+            }}
+            className="p-2 hover:bg-muted text-muted-foreground hover:text-primary rounded-lg transition-colors"
+            title="Edit scopes"
+          >
+            <Pencil size={16} />
+          </button>
+          <button
             onClick={() => setConfirmDel(row.original)}
             className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors"
             title="Delete"
@@ -271,7 +371,10 @@ export default function ApiKeysPage() {
               </p>
             </div>
             <button
-              onClick={() => setShowCreate(true)}
+              onClick={() => {
+                setForm(prev => ({ name: '', organizationId: prev.organizationId || session?.user?.organizationId || '', scopes: [] }));
+                setShowCreate(true);
+              }}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
             >
               <Plus size={18} />
@@ -343,21 +446,13 @@ export default function ApiKeysPage() {
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Scopes (Optional)
                     </label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto border border-border rounded-lg p-3 bg-muted/30">
-                      {availableScopes.map(scope => (
-                        <label key={scope} className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={form.scopes.includes(scope)}
-                            onChange={() => toggleScope(scope)}
-                            className="w-4 h-4 text-primary rounded border-border focus:ring-primary"
-                          />
-                          <span className="text-sm text-foreground">{scope}</span>
-                        </label>
-                      ))}
-                    </div>
+                    <ScopesInput
+                      value={form.scopes}
+                      onChange={(scopes) => setForm(prev => ({ ...prev, scopes }))}
+                      knownScopes={availableScopes}
+                    />
                     <p className="text-xs text-muted-foreground mt-2">
-                      Select the permissions this API key will have. Leave empty for no scopes.
+                      Select the permissions this API key will have, or type a custom scope and press Enter. Leave empty for no scopes.
                     </p>
                   </div>
                 </div>
@@ -456,6 +551,40 @@ export default function ApiKeysPage() {
                     className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
                   >
                     I've saved the key
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Scopes Modal */}
+          {editingKey && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="bg-card rounded-2xl border border-border shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div className="p-6 border-b border-border flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">Edit Scopes</h2>
+                    <p className="text-sm text-muted-foreground mt-1">{editingKey.name}</p>
+                  </div>
+                  <button onClick={() => setEditingKey(null)} className="p-2 hover:bg-muted rounded-lg transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-6">
+                  <ScopesInput value={editScopes} onChange={setEditScopes} knownScopes={availableScopes} />
+                </div>
+                <div className="p-6 border-t border-border flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => setEditingKey(null)}
+                    className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={onSaveScopes}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
+                  >
+                    Save Scopes
                   </button>
                 </div>
               </div>

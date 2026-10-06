@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
+import { rangeForPreset } from '@/components/date-range-filter';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listDataExports, createDataExport, deleteDataExport } from '@/lib/api';
+import { listDataExports, createDataExport, deleteDataExport, downloadDataExport } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
@@ -18,7 +19,8 @@ export default function ExportsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ exportName: '', entityType: 'orders', exportFormat: 'csv' });
+  const emptyForm = { exportName: '', entityType: 'orders', exportFormat: 'csv', from: '', to: '' };
+  const [form, setForm] = useState(emptyForm);
   const [confirmDel, setConfirmDel] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -42,14 +44,41 @@ export default function ExportsPage() {
     loadData();
   }, [hydrated, hasAccess, router, session?.accessToken]);
 
+  const pending = items.some((i) => i.status === 'queued' || i.status === 'processing');
+  useEffect(() => {
+    if (!pending) return;
+    const t = setInterval(() => { void loadData(); }, 3000);
+    return () => clearInterval(t);
+  }, [pending]);
+
+  const handleDownload = async (row: any) => {
+    const ext = row.exportFormat === 'json' ? 'json' : row.exportFormat === 'xml' ? 'xml' : 'csv';
+    try {
+      await downloadDataExport(row.id, `${String(row.exportName || 'export').replace(/[^A-Za-z0-9._-]+/g, '_')}.${ext}`);
+    } catch (error: any) {
+      let msg = 'Download failed';
+      const blob = error?.response?.data;
+      if (blob instanceof Blob) {
+        try { msg = JSON.parse(await blob.text())?.error?.message || msg; } catch { /* keep default */ }
+      }
+      toast.error(msg);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await createDataExport({ ...form, organizationId: session?.user?.organizationId });
-      toast.success('Export task enqueued');
+      const { from, to, ...rest } = form;
+      await createDataExport({
+        ...rest,
+        exportName: rest.exportName.trim(),
+        organizationId: session?.user?.organizationId,
+        ...(from || to ? { filters: { from: from || undefined, to: to || undefined } } : {}),
+      });
+      toast.success('Export started — it will be ready to download in a moment');
       setShowCreate(false);
-      setForm({ exportName: '', entityType: 'orders', exportFormat: 'csv' });
+      setForm(emptyForm);
       loadData();
     } catch (error: any) {
       toast.error(error.response?.data?.error?.message || 'Error generating export');
@@ -76,11 +105,23 @@ export default function ExportsPage() {
     { accessorKey: 'exportName', header: 'Task Name' },
     { accessorKey: 'entityType', header: 'Entity', cell: ({ row }) => <span className="capitalize">{row.original.entityType.replace('_', ' ')}</span> },
     { accessorKey: 'exportFormat', header: 'Format', cell: ({ row }) => <span className="uppercase font-bold text-xs">{row.original.exportFormat}</span> },
-    { accessorKey: 'status', header: 'Status', cell: ({ row }) => (
-      <span className={`px-2 py-1 rounded text-xs font-medium ${row.original.status === 'completed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300' : 'bg-secondary text-muted-foreground'}`}>
-        {row.original.status.toUpperCase()}
-      </span>
-    ) },
+    { accessorKey: 'status', header: 'Status', cell: ({ row }) => {
+      const st = row.original.status;
+      const cls = st === 'completed'
+        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300'
+        : st === 'failed'
+          ? 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300'
+          : 'bg-secondary text-muted-foreground';
+      return (
+        <div className="space-y-1">
+          <span className={`px-2 py-1 rounded text-xs font-medium ${cls}`}>{String(st).toUpperCase()}</span>
+          {st === 'failed' && row.original.errorMessage && (
+            <p className="text-[11px] text-rose-600 max-w-xs">{row.original.errorMessage}</p>
+          )}
+        </div>
+      );
+    } },
+    { accessorKey: 'rowCount', header: 'Rows', cell: ({ row }) => row.original.rowCount ?? '—' },
     { accessorKey: 'createdAt', header: 'Requested', cell: ({ row }) => new Date(row.original.createdAt).toLocaleString() },
     {
       id: 'actions',
@@ -89,7 +130,7 @@ export default function ExportsPage() {
         <div className="flex gap-2">
           {row.original.status === 'completed' && (
             <button
-              onClick={() => toast.info('Link expired or offline in demo')}
+              onClick={() => void handleDownload(row.original)}
               className="p-1 hover:bg-secondary rounded text-primary transition-colors"
               title="Download File"
             >
@@ -106,7 +147,7 @@ export default function ExportsPage() {
         </div>
       )
     }
-  ], []);
+  ], [items]);
 
   if (!hydrated || loading) {
     return (
@@ -151,7 +192,7 @@ export default function ExportsPage() {
             </div>
             <button
               onClick={() => {
-                setForm({ exportName: '', entityType: 'orders', exportFormat: 'csv' });
+                setForm(emptyForm);
                 setShowCreate(true);
               }}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
@@ -198,7 +239,32 @@ export default function ExportsPage() {
                       <option value="stock_movements">Stock Movements</option>
                       <option value="invoices">Invoices / Finance</option>
                       <option value="campaigns">Marketing Campaigns</option>
+                      <option value="products">Products</option>
+                      <option value="inventory">Stock Levels</option>
+                      <option value="employees">Employees</option>
+                      <option value="leads">CRM Leads</option>
+                      <option value="deals">CRM Deals</option>
                     </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Date range (optional)</label>
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={() => {
+                          const r = rangeForPreset('30d');
+                          setForm({ ...form, from: r.from ? String(r.from).slice(0, 10) : '', to: r.to ? String(r.to).slice(0, 10) : '' });
+                        }}
+                      >
+                        Last 30 days
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="date" value={form.from} onChange={e => setForm({ ...form, from: e.target.value })} className="w-full h-10 px-3 rounded-md border border-input bg-background/50 outline-none" />
+                      <input type="date" value={form.to} onChange={e => setForm({ ...form, to: e.target.value })} className="w-full h-10 px-3 rounded-md border border-input bg-background/50 outline-none" />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -209,7 +275,7 @@ export default function ExportsPage() {
                       className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none"
                     >
                       <option value="csv">CSV (Comma Separated)</option>
-                      <option value="excel">Excel (.xlsx)</option>
+                      <option value="excel">Excel (CSV, opens in Excel)</option>
                       <option value="json">JSON Array</option>
                       <option value="xml">XML Document</option>
                     </select>

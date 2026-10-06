@@ -86,6 +86,73 @@ const COUNTRY_CODES = [
   { code: 'AF', name: 'Afghanistan' },
 ].sort((a, b) => a.name.localeCompare(b.name));
 
+const BU_TYPES: { value: BusinessUnit['type']; label: string }[] = [
+  { value: 'wholesale', label: 'Wholesale' },
+  { value: 'retail', label: 'Retail' },
+  { value: 'ecommerce', label: 'E-commerce' },
+  { value: '3pl', label: '3PL' },
+  { value: 'food_beverage', label: 'Food & Beverage' },
+];
+
+function buTypeLabel(bu: Pick<BusinessUnit, 'type' | 'settings'>): string {
+  const custom = bu.settings?.customType;
+  if (bu.type === 'other' && typeof custom === 'string' && custom.trim()) return custom;
+  return BU_TYPES.find((t) => t.value === bu.type)?.label ?? bu.type;
+}
+
+function BuTypeField({
+  value,
+  onChange,
+  customTypes,
+  size,
+}: {
+  value: Partial<BusinessUnit>;
+  onChange: (patch: Partial<BusinessUnit>) => void;
+  customTypes: string[];
+  size?: 'sm';
+}) {
+  const custom = typeof value.settings?.customType === 'string' ? value.settings.customType : '';
+  const type = value.type || 'other';
+  const selected = type === 'other' && custom && customTypes.includes(custom) ? `custom:${custom}` : type;
+  const { customType: _omit, ...restSettings } = value.settings || {};
+
+  return (
+    <div className="space-y-2">
+      <select
+        className={size === 'sm' ? 'select select-sm' : 'select'}
+        value={selected}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v.startsWith('custom:')) {
+            onChange({ type: 'other', settings: { ...restSettings, customType: v.slice(7) } });
+          } else if (v === 'other') {
+            onChange({ type: 'other', settings: { ...restSettings, customType: '' } });
+          } else {
+            onChange({ type: v as BusinessUnit['type'], settings: Object.keys(restSettings).length ? restSettings : null });
+          }
+        }}
+      >
+        {BU_TYPES.map((t) => (
+          <option key={t.value} value={t.value}>{t.label}</option>
+        ))}
+        {customTypes.map((c) => (
+          <option key={c} value={`custom:${c}`}>{c}</option>
+        ))}
+        <option value="other">Other / New type…</option>
+      </select>
+      {selected === 'other' && (
+        <input
+          className={size === 'sm' ? 'input input-sm' : 'input'}
+          placeholder="Custom type name (optional, e.g. Franchise)"
+          value={custom}
+          maxLength={100}
+          onChange={(e) => onChange({ type: 'other', settings: { ...restSettings, customType: e.target.value } })}
+        />
+      )}
+    </div>
+  );
+}
+
 type Organization = {
   id: string;
   name: string;
@@ -172,9 +239,9 @@ export default function OrganizationsPage() {
         getCurrentUser().catch(() => null)
       ]);
       setOrganizations(orgsRes.data || []);
-      if (userRes?.data?.roles) {
-        setIsSuperAdmin(userRes.data.roles.includes('SUPER_ADMIN'));
-      }
+      const sessionRoles: string[] = (session?.user?.roles || []).map((r: any) => (typeof r === 'string' ? r : r?.code));
+      const assignedRoles: string[] = (userRes?.data?.roleAssignments || []).map((ra: any) => ra?.role?.code);
+      setIsSuperAdmin([...sessionRoles, ...assignedRoles].includes('SUPER_ADMIN'));
       
       // Load business units and locations
       const busRes = await listBusinessUnits();
@@ -208,6 +275,22 @@ export default function OrganizationsPage() {
       newExpanded.add(buId);
     }
     setExpandedBUs(newExpanded);
+  }
+
+  const customBuTypes = Array.from(
+    new Set(
+      businessUnits
+        .map((bu) => (bu.type === 'other' ? bu.settings?.customType : null))
+        .filter((c): c is string => typeof c === 'string' && c.trim() !== '')
+    )
+  ).sort();
+
+  function buPayloadSettings(settings: Record<string, any> | null | undefined) {
+    if (!settings) return null;
+    const customType = typeof settings.customType === 'string' ? settings.customType.trim() : '';
+    const { customType: _omit, ...rest } = settings;
+    const next = customType ? { ...rest, customType } : rest;
+    return Object.keys(next).length ? next : null;
   }
 
   function getBusinessUnitsForOrg(orgId: string): BusinessUnit[] {
@@ -270,7 +353,13 @@ export default function OrganizationsPage() {
   async function handleSaveBU(id: string | null) {
     try {
       if (id) {
-        const res = await updateBusinessUnit(id, buFormData);
+        const res = await updateBusinessUnit(id, {
+          code: buFormData.code,
+          name: buFormData.name,
+          type: buFormData.type,
+          status: buFormData.status,
+          settings: buPayloadSettings(buFormData.settings)
+        });
         toast.success('Business unit updated');
         setBusinessUnits(bus => bus.map(bu => bu.id === id ? res.data : bu));
       } else {
@@ -285,7 +374,7 @@ export default function OrganizationsPage() {
           type: buFormData.type!,
           status: buFormData.status || 'active',
           parentId: buFormData.parentId || null,
-          settings: buFormData.settings || null
+          settings: buPayloadSettings(buFormData.settings)
         });
         setBusinessUnits([res.data, ...businessUnits]);
         toast.success('Business unit created');
@@ -400,6 +489,19 @@ export default function OrganizationsPage() {
                 Manage organizations, business units, and locations
               </p>
             </div>
+            {isSuperAdmin && (
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setShowCreateOrg(true);
+                  setOrgFormData({ status: 'active' });
+                  setLogoFile(null);
+                  setLogoPreview(null);
+                }}
+              >
+                <Plus size={16} className="mr-2" /> New Organization
+              </button>
+            )}
           </div>
 
           {loading ? (
@@ -595,14 +697,7 @@ export default function OrganizationsPage() {
                                             </div>
                                             <div>
                                               <label className="block text-xs font-medium mb-1">Type *</label>
-                                              <select className="select select-sm" value={buFormData.type || 'other'} onChange={(e) => setBuFormData({ ...buFormData, type: e.target.value as any })}>
-                                                <option value="wholesale">Wholesale</option>
-                                                <option value="retail">Retail</option>
-                                                <option value="ecommerce">E-commerce</option>
-                                                <option value="3pl">3PL</option>
-                                                <option value="food_beverage">Food & Beverage</option>
-                                                <option value="other">Other</option>
-                                              </select>
+                                              <BuTypeField size="sm" value={buFormData} customTypes={customBuTypes} onChange={(patch) => setBuFormData({ ...buFormData, ...patch })} />
                                             </div>
                                             <div>
                                               <label className="block text-xs font-medium mb-1">Status</label>
@@ -622,7 +717,7 @@ export default function OrganizationsPage() {
                                         <div>
                                           <div className="flex items-center gap-2 mb-1">
                                             <span className="font-medium">{bu.code} - {bu.name}</span>
-                                            <span className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary">{bu.type}</span>
+                                            <span className="text-xs px-2 py-0.5 rounded bg-primary/20 text-primary">{buTypeLabel(bu)}</span>
                                             <span className={`text-xs px-2 py-0.5 rounded ${
                                               bu.status === 'active' ? 'bg-green-500/20 text-green-500' : 'bg-gray-500/20 text-gray-500'
                                             }`}>
@@ -829,14 +924,7 @@ export default function OrganizationsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Type *</label>
-                      <select className="select" value={buFormData.type || 'other'} onChange={(e) => setBuFormData({ ...buFormData, type: e.target.value as any })}>
-                        <option value="wholesale">Wholesale</option>
-                        <option value="retail">Retail</option>
-                        <option value="ecommerce">E-commerce</option>
-                        <option value="3pl">3PL</option>
-                        <option value="food_beverage">Food & Beverage</option>
-                        <option value="other">Other</option>
-                      </select>
+                      <BuTypeField value={buFormData} customTypes={customBuTypes} onChange={(patch) => setBuFormData({ ...buFormData, ...patch })} />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Status</label>

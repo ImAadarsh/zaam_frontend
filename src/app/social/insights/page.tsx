@@ -94,10 +94,10 @@ export default function SocialInsightsPage() {
             missingPermission={data.locked.missingPermission}
             product={data.account?.platform === 'instagram' ? 'Instagram API' : 'Pages API'}
             onReconnect={async () => {
-              const { data } = await getMetaConnectUrl('publish');
-              if (data?.authUrl) window.location.href = data.authUrl;
+              const { data: c } = await getMetaConnectUrl(data.account?.platform === 'instagram' ? 'publish' : 'default');
+              if (c?.authUrl) window.location.href = c.authUrl;
             }}
-            reconnectLabel="Enable publishing"
+            reconnectLabel="Reconnect Meta"
           />
         )}
 
@@ -133,7 +133,13 @@ export default function SocialInsightsPage() {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">{s.error || 'No points from Graph.'}</p>
+                <p className="text-xs text-muted-foreground">
+                  {s.error
+                    ? /^Meta permission not granted/.test(s.error)
+                      ? `Permission not granted${data?.locked?.missingPermission ? ` (${data.locked.missingPermission})` : ''} — see above.`
+                      : s.error
+                    : 'No points from Graph.'}
+                </p>
               )}
             </div>
           ))}

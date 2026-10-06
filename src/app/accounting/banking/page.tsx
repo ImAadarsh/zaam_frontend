@@ -11,14 +11,15 @@ import { useRoleCheck } from '@/hooks/use-role-check';
 import {
   listAccBankAccounts,
   createAccBankAccount,
+  deleteAccBankAccount,
   listAccBankTransactions,
   createAccBankTransaction,
   importBankCsv,
 } from '@/lib/accounting-api';
-import { formatMoney, formatDate, statusBadgeClass, accApiError } from '@/lib/accounting-utils';
+import { formatMoney, formatDate, statusBadgeClass, accApiError, accFieldErrors } from '@/lib/accounting-utils';
 import { AccModal, AccField, AccModalActions, AccCreateButton, accInputClass, accTextareaClass } from '@/components/accounting/acc-modal';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, Upload } from 'lucide-react';
+import { Plus, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AccountingBankingPage() {
@@ -51,6 +52,7 @@ export default function AccountingBankingPage() {
     type: 'credit' as 'credit' | 'debit',
   });
   const [csvForm, setCsvForm] = useState({ bankAccountId: '', csv: '' });
+  const [accErrors, setAccErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!orgId) return;
@@ -85,16 +87,24 @@ export default function AccountingBankingPage() {
   async function onCreateAcc(e: React.FormEvent) {
     e.preventDefault();
     if (!orgId) return;
+    const accountNumber = accForm.accountNumber.replace(/[\s-]/g, '');
+    const sortCode = accForm.sortCode.replace(/[\s-]/g, '');
+    const next: Record<string, string> = {};
+    if (!accForm.accountName.trim()) next.accountName = 'Account name is required';
+    if (!accForm.bankName.trim()) next.bankName = 'Bank name is required';
+    if (accountNumber && !/^\d{8}$/.test(accountNumber)) next.accountNumber = 'UK account number must be exactly 8 digits';
+    if (sortCode && !/^\d{6}$/.test(sortCode)) next.sortCode = 'Sort code must be exactly 6 digits (e.g. 12-34-56)';
+    setAccErrors(next);
+    if (Object.keys(next).length) return;
     setSaving(true);
     try {
       await createAccBankAccount({
         organizationId: orgId,
-        accountName: accForm.accountName,
-        accountNumber: accForm.accountNumber || undefined,
-        sortCode: accForm.sortCode || undefined,
-        bankName: accForm.bankName || undefined,
+        accountName: accForm.accountName.trim(),
+        accountNumber: accountNumber || undefined,
+        sortCode: sortCode || undefined,
+        bankName: accForm.bankName.trim(),
         currency: accForm.currency,
-        openingBalance: Number(accForm.openingBalance || 0),
         currentBalance: Number(accForm.openingBalance || 0),
         status: 'active',
       });
@@ -102,9 +112,21 @@ export default function AccountingBankingPage() {
       setOpenAcc(false);
       await load();
     } catch (err) {
+      setAccErrors(accFieldErrors(err));
       toast.error(accApiError(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onDeleteAcc(acc: any) {
+    if (!confirm(`Delete bank account "${acc.accountName || acc.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteAccBankAccount(String(acc.id));
+      toast.success('Bank account deleted');
+      await load();
+    } catch (err) {
+      toast.error(accApiError(err, 'Failed to delete bank account'));
     }
   }
 
@@ -119,8 +141,8 @@ export default function AccountingBankingPage() {
         bankAccountId: txnForm.bankAccountId,
         transactionDate: txnForm.transactionDate,
         description: txnForm.description,
-        amount: txnForm.type === 'debit' ? -Math.abs(amt) : Math.abs(amt),
-        status: 'unmatched',
+        transactionType: txnForm.type,
+        amount: Math.abs(amt),
       });
       toast.success('Transaction added');
       setOpenTxn(false);
@@ -152,7 +174,7 @@ export default function AccountingBankingPage() {
     () => [
       { accessorKey: 'accountName', header: 'Account', cell: ({ row }) => <span className="font-medium">{row.original.accountName || row.original.name}</span> },
       { accessorKey: 'bankName', header: 'Bank', cell: ({ row }) => row.original.bankName || '—' },
-      { accessorKey: 'sortCode', header: 'Sort code', cell: ({ row }) => row.original.sortCode || '—' },
+      { accessorKey: 'routingNumber', header: 'Sort code', cell: ({ row }) => row.original.sortCode || row.original.routingNumber || '—' },
       { accessorKey: 'accountNumber', header: 'Account no.', cell: ({ row }) => <span className="font-mono text-xs">{row.original.accountNumber || '—'}</span> },
       {
         accessorKey: 'currentBalance',
@@ -160,8 +182,25 @@ export default function AccountingBankingPage() {
         cell: ({ row }) => formatMoney(row.original.currentBalance ?? row.original.balance, row.original.currency || 'GBP'),
       },
       { accessorKey: 'status', header: 'Status', cell: ({ row }) => <span className={statusBadgeClass(row.original.status || 'active')}>{row.original.status || 'active'}</span> },
+      {
+        id: 'actions',
+        header: '',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={() => onDeleteAcc(row.original)}
+            className="p-1.5 rounded-lg text-red-600 hover:bg-red-500/10"
+            title="Delete account"
+            aria-label="Delete account"
+          >
+            <Trash2 size={15} />
+          </button>
+        ),
+      },
     ],
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [load]
   );
 
   const txnCols = useMemo<ColumnDef<any>[]>(
@@ -172,7 +211,8 @@ export default function AccountingBankingPage() {
         accessorKey: 'amount',
         header: 'Amount',
         cell: ({ row }) => {
-          const n = Number(row.original.amount || 0);
+          const raw = Number(row.original.amount || 0);
+          const n = ['debit', 'fee'].includes(row.original.transactionType) ? -Math.abs(raw) : raw;
           return <span className={n < 0 ? 'text-red-600' : 'text-emerald-600'}>{formatMoney(n)}</span>;
         },
       },
@@ -200,7 +240,14 @@ export default function AccountingBankingPage() {
             ))}
             <div className="flex-1" />
             {tab === 'accounts' ? (
-              <AccCreateButton label="Create Account" onClick={() => setOpenAcc(true)} />
+              <AccCreateButton
+                label="Create Account"
+                onClick={() => {
+                  setAccForm({ accountName: '', accountNumber: '', sortCode: '', bankName: '', currency: 'GBP', openingBalance: '0' });
+                  setAccErrors({});
+                  setOpenAcc(true);
+                }}
+              />
             ) : (
               <div className="flex gap-2">
                 <button
@@ -224,12 +271,30 @@ export default function AccountingBankingPage() {
       </div>
 
       <AccModal open={openAcc} onClose={() => setOpenAcc(false)} title="Create Bank Account" icon={Plus}>
-        <form onSubmit={onCreateAcc} className="space-y-3">
-          <AccField label="Account name"><input className={accInputClass} value={accForm.accountName} onChange={(e) => setAccForm({ ...accForm, accountName: e.target.value })} required /></AccField>
-          <AccField label="Bank name"><input className={accInputClass} value={accForm.bankName} onChange={(e) => setAccForm({ ...accForm, bankName: e.target.value })} /></AccField>
+        <form onSubmit={onCreateAcc} className="space-y-3" noValidate>
+          <AccField label="Account name" error={accErrors.accountName}><input className={accInputClass} value={accForm.accountName} onChange={(e) => setAccForm({ ...accForm, accountName: e.target.value })} required /></AccField>
+          <AccField label="Bank name" error={accErrors.bankName}><input className={accInputClass} value={accForm.bankName} onChange={(e) => setAccForm({ ...accForm, bankName: e.target.value })} required /></AccField>
           <div className="grid grid-cols-2 gap-3">
-            <AccField label="Sort code"><input className={accInputClass} value={accForm.sortCode} onChange={(e) => setAccForm({ ...accForm, sortCode: e.target.value })} placeholder="00-00-00" /></AccField>
-            <AccField label="Account number"><input className={accInputClass} value={accForm.accountNumber} onChange={(e) => setAccForm({ ...accForm, accountNumber: e.target.value })} /></AccField>
+            <AccField label="Sort code" error={accErrors.sortCode}>
+              <input
+                className={accInputClass}
+                value={accForm.sortCode}
+                inputMode="numeric"
+                maxLength={8}
+                onChange={(e) => setAccForm({ ...accForm, sortCode: e.target.value.replace(/[^\d-]/g, '') })}
+                placeholder="12-34-56"
+              />
+            </AccField>
+            <AccField label="Account number" error={accErrors.accountNumber} hint="8 digits">
+              <input
+                className={accInputClass}
+                value={accForm.accountNumber}
+                inputMode="numeric"
+                maxLength={8}
+                onChange={(e) => setAccForm({ ...accForm, accountNumber: e.target.value.replace(/\D/g, '') })}
+                placeholder="12345678"
+              />
+            </AccField>
           </div>
           <AccField label="Opening balance"><input type="number" step="0.01" className={accInputClass} value={accForm.openingBalance} onChange={(e) => setAccForm({ ...accForm, openingBalance: e.target.value })} /></AccField>
           <AccModalActions onCancel={() => setOpenAcc(false)} submitLabel="Create account" submitting={saving} />

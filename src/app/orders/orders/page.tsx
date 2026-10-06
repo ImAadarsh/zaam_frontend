@@ -97,7 +97,7 @@ export default function OrdersPage() {
   const [items, setItems] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({
+  const emptyOrderForm = () => ({
     orderNumber: '',
     channel: 'shopify' as 'amazon' | 'ebay' | 'tiktok' | 'etsy' | 'shopify' | 'woocommerce' | 'wix' | 'b2b_portal' | 'pos' | 'phone' | 'email' | 'other',
     customerId: '',
@@ -114,6 +114,7 @@ export default function OrdersPage() {
     fulfillmentStatus: 'pending' as 'pending' | 'processing' | 'partially_fulfilled' | 'fulfilled' | 'cancelled',
     status: 'pending' as 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded' | 'on_hold'
   });
+  const [form, setForm] = useState(emptyOrderForm);
   const [editing, setEditing] = useState<Order | null>(null);
   const [confirmDel, setConfirmDel] = useState<Order | null>(null);
 
@@ -290,23 +291,7 @@ export default function OrdersPage() {
       });
       setItems(prev => [res.data, ...prev]);
       setShowCreate(false);
-      setForm({
-        orderNumber: '',
-        channel: 'shopify',
-        customerId: '',
-        customerEmail: '',
-        customerPhone: '',
-        orderDate: new Date().toISOString().split('T')[0],
-        currency: 'GBP',
-        subtotal: 0,
-        discountAmount: 0,
-        shippingAmount: 0,
-        taxAmount: 0,
-        total: 0,
-        paymentStatus: 'pending',
-        fulfillmentStatus: 'pending',
-        status: 'pending'
-      });
+      setForm(emptyOrderForm());
       toast.success('Order created');
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message || 'Failed to create order');
@@ -579,7 +564,11 @@ export default function OrdersPage() {
                     Advanced Sync
                   </Link>
                   <button
-                    onClick={() => setShowCreate(true)}
+                    onClick={() => {
+                      setEditing(null);
+                      setForm(emptyOrderForm());
+                      setShowCreate(true);
+                    }}
                     className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded-lg hover:bg-[#B89015]"
                   >
                     <Plus className="h-4 w-4" />
@@ -589,7 +578,7 @@ export default function OrdersPage() {
               }
             />
 
-            {loading ? (
+            {loading && items.length === 0 ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-sm text-muted-foreground">Loading orders...</div>
               </div>

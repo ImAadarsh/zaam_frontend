@@ -15,7 +15,7 @@ import {
   exportVatMtdBoxes,
   submitVatMtdPlaceholder,
 } from '@/lib/accounting-api';
-import { formatMoney, formatDate, statusBadgeClass, accApiError, downloadCsv, printElement } from '@/lib/accounting-utils';
+import { formatMoney, formatDate, statusBadgeClass, accApiError, accFieldErrors, vatRateFraction, downloadCsv, printElement } from '@/lib/accounting-utils';
 import { AccModal, AccField, AccModalActions, AccCreateButton, accInputClass, MtdBanner } from '@/components/accounting/acc-modal';
 import { ColumnDef } from '@tanstack/react-table';
 import { Plus, Download } from 'lucide-react';
@@ -42,6 +42,7 @@ export default function AccountingVatPage() {
     box6: '',
     box7: '',
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!orgId) return;
@@ -66,32 +67,31 @@ export default function AccountingVatPage() {
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!orgId) return;
+    const next: Record<string, string> = {};
+    if (!form.periodStart) next.from = 'Period start is required';
+    if (!form.periodEnd) next.to = 'Period end is required';
+    if (form.periodStart && form.periodEnd && form.periodEnd < form.periodStart) next.to = 'Period end must be on or after period start';
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    const box = (v: string) => (v.trim() === '' ? undefined : Number(v));
     setSaving(true);
     try {
-      const box1 = Number(form.box1 || 0);
-      const box2 = Number(form.box2 || 0);
-      const box3 = box1 + box2;
-      const box4 = Number(form.box4 || 0);
-      const box5 = box3 - box4;
       await createAccVatReturn({
         organizationId: orgId,
-        periodStart: form.periodStart,
-        periodEnd: form.periodEnd,
+        from: form.periodStart,
+        to: form.periodEnd,
         scheme: form.scheme,
-        box1,
-        box2,
-        box3,
-        box4,
-        box5,
-        box6: Number(form.box6 || 0),
-        box7: Number(form.box7 || 0),
-        status: 'draft',
-        mtdReference: null,
+        box1: box(form.box1),
+        box2: box(form.box2),
+        box4: box(form.box4),
+        box6: box(form.box6),
+        box7: box(form.box7),
       });
       toast.success('VAT return draft created');
       setOpen(false);
       await load();
     } catch (err) {
+      setErrors(accFieldErrors(err));
       toast.error(accApiError(err));
     } finally {
       setSaving(false);
@@ -186,7 +186,14 @@ export default function AccountingVatPage() {
                 ? Array.from(new Set(codes.map((c: any) => c.scheme || 'standard'))).join(', ')
                 : 'standard / flat-rate / cash (flags in settings)'}
             </div>
-            <AccCreateButton label="Create VAT Return" onClick={() => setOpen(true)} />
+            <AccCreateButton
+              label="Create VAT Return"
+              onClick={() => {
+                setForm({ periodStart: '', periodEnd: '', scheme: 'standard', box1: '', box2: '', box4: '', box6: '', box7: '' });
+                setErrors({});
+                setOpen(true);
+              }}
+            />
           </div>
 
           <RichDataTable columns={columns} data={rows} searchPlaceholder="Search VAT returns…" />
@@ -218,7 +225,7 @@ export default function AccountingVatPage() {
             <div className="flex flex-wrap gap-2">
               {codes.map((c) => (
                 <span key={c.code} className="px-2.5 py-1 rounded-lg bg-muted text-xs font-medium">
-                  {c.code} · {c.name} · {c.rate}%
+                  {c.code} · {c.name} · {Math.round(vatRateFraction(c.rate) * 10000) / 100}%
                 </span>
               ))}
             </div>
@@ -227,16 +234,19 @@ export default function AccountingVatPage() {
       </div>
 
       <AccModal open={open} onClose={() => setOpen(false)} title="Create VAT Return (draft)" icon={Plus} wide>
-        <form onSubmit={onCreate} className="space-y-3">
+        <form onSubmit={onCreate} className="space-y-3" noValidate>
           <div className="grid grid-cols-2 gap-3">
-            <AccField label="Period start"><input type="date" className={accInputClass} value={form.periodStart} onChange={(e) => setForm({ ...form, periodStart: e.target.value })} required /></AccField>
-            <AccField label="Period end"><input type="date" className={accInputClass} value={form.periodEnd} onChange={(e) => setForm({ ...form, periodEnd: e.target.value })} required /></AccField>
+            <AccField label="Period start" error={errors.from}><input type="date" className={accInputClass} value={form.periodStart} onChange={(e) => setForm({ ...form, periodStart: e.target.value })} required /></AccField>
+            <AccField label="Period end" error={errors.to}><input type="date" className={accInputClass} value={form.periodEnd} min={form.periodStart || undefined} onChange={(e) => setForm({ ...form, periodEnd: e.target.value })} required /></AccField>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Leave any box blank to calculate it from posted sales invoices and supplier bills in the period. Box 3 and Box 5 are always calculated.
+          </p>
           <AccField label="Scheme">
             <select className={accInputClass} value={form.scheme} onChange={(e) => setForm({ ...form, scheme: e.target.value })}>
               <option value="standard">Standard</option>
               <option value="flat_rate">Flat rate</option>
-              <option value="cash">Cash accounting</option>
+              <option value="cash_accounting">Cash accounting</option>
             </select>
           </AccField>
           <div className="grid grid-cols-2 gap-3">

@@ -58,6 +58,29 @@ export const PROJECT_STATUSES = [
   { value: 'cancelled', label: 'Cancelled' },
 ] as const;
 
+/** Mirrors the API guard: cancelled/completed only move on via an explicit reopen. */
+export const PROJECT_STATUS_TRANSITIONS: Record<string, string[]> = {
+  draft: ['active', 'on_hold', 'cancelled'],
+  active: ['on_hold', 'completed', 'cancelled'],
+  on_hold: ['active', 'completed', 'cancelled'],
+  completed: ['active'],
+  cancelled: ['draft', 'active'],
+};
+
+export function allowedProjectStatuses(current?: string) {
+  const cur = current || 'draft';
+  const next = PROJECT_STATUS_TRANSITIONS[cur] || [];
+  return PROJECT_STATUSES.filter((s) => s.value === cur || next.includes(s.value));
+}
+
+export function projectStatusOptionLabel(current: string | undefined, value: string, label: string) {
+  if (value === current) return `${label} (current)`;
+  if ((current === 'cancelled' || current === 'completed') && (value === 'active' || value === 'draft')) {
+    return `Reopen → ${label}`;
+  }
+  return label;
+}
+
 export const TASK_STATUSES = [
   { value: 'todo', label: 'To Do' },
   { value: 'in_progress', label: 'In Progress' },

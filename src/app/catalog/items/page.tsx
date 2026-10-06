@@ -9,6 +9,7 @@ import {
   createCatalogItem,
   updateCatalogItem,
   deleteCatalogItem,
+  getCatalogItem,
   listOrganizations,
   listBusinessUnits,
   listTaxCodes,
@@ -21,7 +22,8 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X, Upload, Loader2, ImageIcon, Star } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Upload, Loader2, ImageIcon, Star, RefreshCw, Settings2, Tag } from 'lucide-react';
+import { MediaThumb } from '@/components/catalog/media-preview';
 import Link from 'next/link';
 
 type CatalogItem = {
@@ -47,6 +49,19 @@ type CatalogItem = {
   organization?: { id: string; name: string };
   businessUnit?: { id: string; name: string } | null;
   barcode?: string | null;
+  variants?: Array<{
+    id: string;
+    variantSku: string;
+    name?: string | null;
+    status?: string;
+    option1Name?: string | null;
+    option1Value?: string | null;
+    option2Name?: string | null;
+    option2Value?: string | null;
+    option3Name?: string | null;
+    option3Value?: string | null;
+    attributes?: Record<string, any> | null;
+  }>;
   openingQuantity?: number | null;
   reorderLevel?: number | null;
   reorderQuantity?: number | null;
@@ -122,6 +137,46 @@ const emptyForm: ProductForm = {
 /** Attribute keys that have dedicated inputs, so they stay out of the JSON box. */
 const MANAGED_ATTRIBUTE_KEYS = ['supplierName', 'warehouseName', 'binCode', 'lotNumber'];
 
+/** Stock/barcode fields are aggregated across variants in list responses, so only send them when edited. */
+const STOCK_SHEET_KEYS = ['barcode', 'openingQuantity', 'reorderLevel', 'reorderQuantity', 'expiryDate'] as const;
+
+function formFromItem(item: CatalogItem): ProductForm {
+  const shown = { ...(item.attributes ?? {}) } as Record<string, any>;
+  MANAGED_ATTRIBUTE_KEYS.forEach((k) => delete shown[k]);
+  const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+  const numStr = (v: unknown) => (v === null || v === undefined || v === '' ? '' : String(Number(v)));
+  return {
+    organizationId: item.organization?.id || '',
+    businessUnitId: item.businessUnit?.id || '',
+    sku: item.sku,
+    barcode: str(item.barcode),
+    name: item.name,
+    description: str(item.description),
+    category: str(item.category),
+    subCategory: str(item.subCategory),
+    brand: str(item.brand),
+    uom: str(item.uom),
+    packSize: str(item.packSize),
+    openingQuantity: numStr(item.openingQuantity),
+    reorderLevel: numStr(item.reorderLevel),
+    reorderQuantity: numStr(item.reorderQuantity),
+    costPrice: numStr(item.costPrice),
+    sellingPrice: numStr(item.sellingPrice),
+    currency: item.currency || 'GBP',
+    taxCodeId: item.taxCode?.id || '',
+    warehouseName: str(item.warehouseName),
+    binCode: str(item.binCode),
+    supplierName: str(item.supplierName),
+    supplierSku: str(item.supplierSku),
+    leadTimeDays: numStr(item.leadTimeDays),
+    lotNumber: str(item.lotNumber),
+    expiryDate: item.expiryDate ? String(item.expiryDate).slice(0, 10) : '',
+    status: item.status,
+    remarks: str(item.remarks),
+    attributes: Object.keys(shown).length ? JSON.stringify(shown, null, 2) : ''
+  };
+}
+
 function num(v: string) {
   return v.trim() === '' ? undefined : Number(v);
 }
@@ -142,7 +197,8 @@ function ProductFields({
   includeOrg,
   organizations,
   businessUnits,
-  taxCodes
+  taxCodes,
+  onReloadTaxCodes
 }: {
   value: ProductForm;
   onChange: (next: ProductForm) => void;
@@ -150,6 +206,7 @@ function ProductFields({
   organizations: any[];
   businessUnits: any[];
   taxCodes: any[];
+  onReloadTaxCodes?: () => void;
 }) {
   const set = (patch: Partial<ProductForm>) => onChange({ ...value, ...patch });
 
@@ -273,21 +330,38 @@ function ProductFields({
           {field('Unit Cost Price', 'costPrice', { type: 'number', step: '0.0001' })}
           {field('Unit Selling Price', 'sellingPrice', { type: 'number', step: '0.0001' })}
           {field('Currency', 'currency', { maxLength: 3 })}
-          <label className="text-sm">
-            Tax / GST %
+          <div className="text-sm">
+            <div className="flex items-center justify-between">
+              <span>Tax / VAT</span>
+              <span className="flex items-center gap-2 text-xs">
+                {onReloadTaxCodes && (
+                  <button type="button" onClick={onReloadTaxCodes} className="text-muted-foreground hover:text-foreground" title="Reload tax codes">
+                    <RefreshCw size={12} />
+                  </button>
+                )}
+                <a href="/catalog/tax-codes" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                  <Settings2 size={12} /> Manage tax codes
+                </a>
+              </span>
+            </div>
             <select
               className="mt-1 select w-full"
               value={value.taxCodeId}
               onChange={(e) => set({ taxCodeId: e.target.value })}
             >
               <option value="">None</option>
-              {taxCodes.map((tc) => (
-                <option key={tc.id} value={tc.id}>
-                  {tc.code} · {Math.round(Number(tc.rate) * 100)}%
-                </option>
-              ))}
+              {taxCodes
+                .filter((tc) => tc.status !== 'inactive' || tc.id === value.taxCodeId)
+                .map((tc) => (
+                  <option key={tc.id} value={tc.id}>
+                    {tc.code} — {tc.name} ({Number((Number(tc.rate) * 100).toFixed(2))}%)
+                  </option>
+                ))}
             </select>
-          </label>
+            {taxCodes.length === 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">No tax codes yet — add VAT/GST rates on the Tax Codes page.</p>
+            )}
+          </div>
         </div>
       </section>
 
@@ -359,6 +433,10 @@ export default function CatalogItemsPage() {
   const [editForm, setEditForm] = useState<ProductForm>(emptyForm);
   const [confirmDel, setConfirmDel] = useState<CatalogItem | null>(null);
   const [media, setMedia] = useState<any[]>([]);
+  const [editOriginal, setEditOriginal] = useState<ProductForm | null>(null);
+  const [editVariants, setEditVariants] = useState<NonNullable<CatalogItem['variants']>>([]);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const [createImages, setCreateImages] = useState<File[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -414,6 +492,16 @@ export default function CatalogItemsPage() {
       .catch(() => setBusinessUnits([]));
   }, [form.organizationId]);
 
+  async function reloadTaxCodes() {
+    try {
+      const res = await listTaxCodes({ organizationId: session?.user?.organizationId });
+      setTaxCodes(res.data || []);
+      toast.success('Tax codes refreshed');
+    } catch {
+      toast.error('Failed to load tax codes');
+    }
+  }
+
   async function loadMedia(catalogItemId: string) {
     try {
       const res = await listProductMedia({ catalogItemId, type: 'image' });
@@ -423,38 +511,50 @@ export default function CatalogItemsPage() {
     }
   }
 
-  function buildPayload(f: ProductForm) {
+  function buildPayload(f: ProductForm, original?: ProductForm | null) {
     let attributes: Record<string, any> | undefined;
     if (f.attributes.trim()) attributes = JSON.parse(f.attributes);
-    return {
+    else if (original?.attributes.trim()) attributes = {};
+    const text = (key: keyof ProductForm) => {
+      const v = (f[key] as string).trim();
+      if (v) return v;
+      return original && (original[key] as string).trim() ? '' : undefined;
+    };
+    const payload: Record<string, any> = {
       sku: f.sku,
       name: f.name,
-      description: f.description || undefined,
-      category: f.category || undefined,
-      subCategory: f.subCategory || undefined,
-      brand: f.brand || undefined,
-      manufacturer: f.brand || undefined,
-      uom: f.uom || undefined,
-      packSize: f.packSize || undefined,
+      description: text('description'),
+      category: text('category'),
+      subCategory: text('subCategory'),
+      brand: text('brand'),
+      manufacturer: text('brand'),
+      uom: text('uom'),
+      packSize: text('packSize'),
       costPrice: num(f.costPrice),
       sellingPrice: num(f.sellingPrice),
       currency: f.currency || undefined,
-      taxCodeId: f.taxCodeId || undefined,
-      supplierSku: f.supplierSku || undefined,
+      taxCodeId: text('taxCodeId'),
+      supplierSku: text('supplierSku'),
       leadTimeDays: int(f.leadTimeDays),
-      remarks: f.remarks || undefined,
+      remarks: text('remarks'),
       status: f.status,
       attributes,
       barcode: f.barcode,
       openingQuantity: num(f.openingQuantity),
       reorderLevel: num(f.reorderLevel),
       reorderQuantity: num(f.reorderQuantity),
-      warehouseName: f.warehouseName || undefined,
-      binCode: f.binCode || undefined,
-      supplierName: f.supplierName || undefined,
-      lotNumber: f.lotNumber || undefined,
+      warehouseName: text('warehouseName'),
+      binCode: text('binCode'),
+      supplierName: text('supplierName'),
+      lotNumber: text('lotNumber'),
       expiryDate: f.expiryDate || undefined
     };
+    if (original) {
+      for (const key of STOCK_SHEET_KEYS) {
+        if (f[key].trim() === original[key].trim()) delete payload[key];
+      }
+    }
+    return payload;
   }
 
   function saveErrorMessage(e: any, fallback: string) {
@@ -470,15 +570,27 @@ export default function CatalogItemsPage() {
     }
     setSaving(true);
     try {
-      await createCatalogItem({
+      const created = await createCatalogItem({
         organizationId: form.organizationId,
         businessUnitId: form.businessUnitId || undefined,
+        sku: form.sku,
+        name: form.name,
         ...buildPayload(form)
       });
+      let failedImages = 0;
+      for (const [i, file] of createImages.entries()) {
+        try {
+          await createProductMedia({ catalogItemId: created.data.id, type: 'image', position: i, isPrimary: i === 0 }, file);
+        } catch {
+          failedImages += 1;
+        }
+      }
       await refreshItems();
       setShowCreate(false);
       setForm({ ...emptyForm, organizationId: session.user.organizationId || '' });
+      setCreateImages([]);
       toast.success('Catalog item created');
+      if (failedImages) toast.error(`${failedImages} image(s) failed to upload — add them from Edit`);
     } catch (e: any) {
       toast.error(saveErrorMessage(e, 'Create failed'));
     } finally {
@@ -492,12 +604,11 @@ export default function CatalogItemsPage() {
     setSaving(true);
     try {
       await updateCatalogItem(editing.id, {
-        businessUnitId: editForm.businessUnitId || undefined,
-        ...buildPayload(editForm)
+        businessUnitId: editForm.businessUnitId || (editOriginal?.businessUnitId ? '' : undefined),
+        ...buildPayload(editForm, editOriginal)
       });
       await refreshItems();
-      setEditing(null);
-      setMedia([]);
+      closeEdit();
       toast.success('Catalog item updated');
     } catch (e: any) {
       toast.error(saveErrorMessage(e, 'Update failed'));
@@ -554,41 +665,34 @@ export default function CatalogItemsPage() {
     }
   }
 
-  function openEdit(item: CatalogItem) {
+  function closeEdit() {
+    setEditing(null);
+    setEditOriginal(null);
+    setEditVariants([]);
+    setMedia([]);
+  }
+
+  async function openEdit(item: CatalogItem) {
     setEditing(item);
-    const shown = { ...(item.attributes ?? {}) } as Record<string, any>;
-    MANAGED_ATTRIBUTE_KEYS.forEach((k) => delete shown[k]);
-    setEditForm({
-      organizationId: item.organization?.id || '',
-      businessUnitId: item.businessUnit?.id || '',
-      sku: item.sku,
-      barcode: item.barcode || '',
-      name: item.name,
-      description: item.description || '',
-      category: item.category || '',
-      subCategory: item.subCategory || '',
-      brand: item.brand || '',
-      uom: item.uom || '',
-      packSize: item.packSize || '',
-      openingQuantity: item.openingQuantity?.toString() || '',
-      reorderLevel: item.reorderLevel?.toString() || '',
-      reorderQuantity: item.reorderQuantity?.toString() || '',
-      costPrice: item.costPrice?.toString() || '',
-      sellingPrice: item.sellingPrice?.toString() || '',
-      currency: item.currency || 'GBP',
-      taxCodeId: item.taxCode?.id || '',
-      warehouseName: item.warehouseName || '',
-      binCode: item.binCode || '',
-      supplierName: item.supplierName || '',
-      supplierSku: item.supplierSku || '',
-      leadTimeDays: item.leadTimeDays?.toString() || '',
-      lotNumber: item.lotNumber || '',
-      expiryDate: item.expiryDate || '',
-      status: item.status,
-      remarks: item.remarks || '',
-      attributes: Object.keys(shown).length ? JSON.stringify(shown, null, 2) : ''
-    });
+    const initial = formFromItem(item);
+    setEditForm(initial);
+    setEditOriginal(initial);
+    setEditVariants(item.variants ?? []);
     loadMedia(item.id);
+    setLoadingEdit(true);
+    try {
+      const res = await getCatalogItem(item.id);
+      const fresh = res.data as CatalogItem;
+      const hydratedForm = formFromItem(fresh);
+      setEditing(fresh);
+      setEditForm(hydratedForm);
+      setEditOriginal(hydratedForm);
+      setEditVariants(fresh.variants ?? []);
+    } catch {
+      toast.error('Could not refresh product details; showing list values');
+    } finally {
+      setLoadingEdit(false);
+    }
   }
 
   const columns = useMemo<ColumnDef<CatalogItem>[]>(
@@ -779,7 +883,11 @@ export default function CatalogItemsPage() {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => setShowCreate(true)}
+                  onClick={() => {
+                    setForm({ ...emptyForm, organizationId: session?.user?.organizationId || '' });
+                    setCreateImages([]);
+                    setShowCreate(true);
+                  }}
                   className="btn btn-primary inline-flex items-center gap-2"
                 >
                   <Plus className="h-4 w-4" /> Add Item
@@ -810,7 +918,47 @@ export default function CatalogItemsPage() {
                       organizations={organizations}
                       businessUnits={businessUnits}
                       taxCodes={taxCodes}
+                      onReloadTaxCodes={reloadTaxCodes}
                     />
+                    <div className="border-t pt-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold inline-flex items-center gap-2">
+                          <ImageIcon size={16} /> Product images
+                        </h4>
+                        <label className="btn btn-outline text-xs inline-flex items-center gap-1 cursor-pointer">
+                          <Upload size={14} /> Add images
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files ?? []);
+                              setCreateImages((prev) => [...prev, ...files]);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+                      {createImages.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Optional — select one or more images; the first becomes the primary image.</p>
+                      ) : (
+                        <ul className="text-xs space-y-1">
+                          {createImages.map((f, i) => (
+                            <li key={`${f.name}-${i}`} className="flex items-center justify-between rounded border px-2 py-1">
+                              <span className="truncate">{i === 0 ? '★ ' : ''}{f.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setCreateImages((prev) => prev.filter((_, idx) => idx !== i))}
+                                className="text-red-600"
+                              >
+                                <X size={12} />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                     <div className="flex justify-end gap-3 pt-4 border-t">
                       <button type="button" onClick={() => setShowCreate(false)} className="btn btn-outline">
                         Cancel
@@ -828,13 +976,12 @@ export default function CatalogItemsPage() {
               <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
                 <div className="w-full max-w-3xl rounded-2xl bg-card border shadow-2xl p-6 max-h-[92vh] overflow-y-auto">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Edit Catalog Item</h3>
+                    <h3 className="text-lg font-semibold inline-flex items-center gap-2">
+                      Edit Catalog Item {loadingEdit && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+                    </h3>
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditing(null);
-                        setMedia([]);
-                      }}
+                      onClick={closeEdit}
                       className="p-1 hover:bg-muted rounded-lg"
                     >
                       <X className="h-5 w-5" />
@@ -847,7 +994,43 @@ export default function CatalogItemsPage() {
                       organizations={organizations}
                       businessUnits={businessUnits}
                       taxCodes={taxCodes}
+                      onReloadTaxCodes={reloadTaxCodes}
                     />
+
+                    <div className="border-t pt-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold inline-flex items-center gap-2">
+                          <Tag size={16} /> Variants ({editVariants.length})
+                        </h4>
+                        <Link href="/catalog/variants" className="text-xs text-primary hover:underline">
+                          Manage variants
+                        </Link>
+                      </div>
+                      {editVariants.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No variants for this product yet.</p>
+                      ) : (
+                        <div className="rounded-lg border divide-y text-xs max-h-40 overflow-y-auto">
+                          {editVariants.map((v) => {
+                            const opts = [1, 2, 3]
+                              .map((i) => {
+                                const n = (v as any)[`option${i}Name`];
+                                const val = (v as any)[`option${i}Value`];
+                                return val ? `${n || `Option ${i}`}: ${val}` : null;
+                              })
+                              .filter(Boolean)
+                              .join(', ');
+                            return (
+                              <div key={v.id} className="flex items-center justify-between px-3 py-1.5">
+                                <span className="font-mono">{v.variantSku}</span>
+                                <span className="text-muted-foreground truncate mx-2">{opts || v.name || '—'}</span>
+                                <span className="capitalize">{v.status}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">Saving this product keeps all of its variants unchanged.</p>
+                    </div>
 
                     <div className="border-t pt-4 space-y-3">
                       <div className="flex items-center justify-between">
@@ -881,8 +1064,7 @@ export default function CatalogItemsPage() {
                               key={m.id}
                               className="relative rounded-lg border overflow-hidden bg-muted/30 aspect-square"
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={m.url} alt={m.altText || ''} className="h-full w-full object-cover" />
+                              <MediaThumb url={m.url} alt={m.altText || ''} className="h-full w-full" />
                               {m.isPrimary && (
                                 <span className="absolute top-1 left-1 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5 inline-flex items-center gap-0.5">
                                   <Star size={10} /> Primary
@@ -904,10 +1086,7 @@ export default function CatalogItemsPage() {
                     <div className="flex justify-end gap-3 pt-4 border-t">
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditing(null);
-                          setMedia([]);
-                        }}
+                        onClick={closeEdit}
                         className="btn btn-outline"
                       >
                         Cancel

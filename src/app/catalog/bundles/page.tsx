@@ -175,10 +175,12 @@ export default function BundlesPage() {
       header: 'Discount',
       cell: ({ row }) => {
         const bundle = row.original;
-        if (bundle.discountPercent) {
-          return <span>{bundle.discountPercent}%</span>;
-        } else if (bundle.fixedPrice) {
-          return <span>{bundle.currency} {bundle.fixedPrice.toFixed(2)}</span>;
+        const pct = Number(bundle.discountPercent);
+        const fixed = Number(bundle.fixedPrice);
+        if (bundle.discountPercent != null && pct) {
+          return <span>{pct}%</span>;
+        } else if (bundle.fixedPrice != null && Number.isFinite(fixed)) {
+          return <span>{bundle.currency} {fixed.toFixed(2)}</span>;
         }
         return <span className="text-muted-foreground">-</span>;
       }
@@ -216,8 +218,8 @@ export default function BundlesPage() {
                 setEditForm({
                   name: item.name,
                   description: item.description || '',
-                  discountPercent: item.discountPercent?.toString() || '',
-                  fixedPrice: item.fixedPrice?.toString() || '',
+                  discountPercent: item.discountPercent != null ? String(Number(item.discountPercent)) : '',
+                  fixedPrice: item.fixedPrice != null ? String(Number(item.fixedPrice)) : '',
                   currency: item.currency,
                   status: item.status
                 });

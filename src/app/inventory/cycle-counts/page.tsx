@@ -9,6 +9,7 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
+import { FloatingDropdown } from '@/components/inventory/floating-dropdown';
 import { Trash2, Plus, X, ClipboardList, Search } from 'lucide-react';
 
 type CycleCount = {
@@ -36,6 +37,8 @@ export default function CycleCountsPage() {
   const [confirmDel, setConfirmDel] = useState<CycleCount | null>(null);
   const [stockItemSearch, setStockItemSearch] = useState('');
   const [showStockItemDropdown, setShowStockItemDropdown] = useState(false);
+  const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
+  const [stockItemAnchor, setStockItemAnchor] = useState<HTMLElement | null>(null);
   
   const [form, setForm] = useState({
     warehouseId: '',
@@ -85,8 +88,9 @@ export default function CycleCountsPage() {
     if (form.warehouseId && stockItemSearch) {
       const filtered = stockItems.filter(si => 
         si.warehouse?.id === form.warehouseId &&
-        (si.variant?.variantSku.toLowerCase().includes(stockItemSearch.toLowerCase()) ||
-         si.variant?.catalogItem?.name.toLowerCase().includes(stockItemSearch.toLowerCase()))
+        (si.variant?.variantSku?.toLowerCase().includes(stockItemSearch.toLowerCase()) ||
+         si.variant?.name?.toLowerCase().includes(stockItemSearch.toLowerCase()) ||
+         si.variant?.catalogItem?.name?.toLowerCase().includes(stockItemSearch.toLowerCase()))
       );
       setFilteredStockItems(filtered);
     } else if (form.warehouseId) {
@@ -180,6 +184,7 @@ export default function CycleCountsPage() {
     updateLine(lineIndex, 'expectedQuantity', item.quantityOnHand || 0);
     setStockItemSearch('');
     setShowStockItemDropdown(false);
+    setActiveLineIndex(null);
   }
 
   const columns = useMemo<ColumnDef<CycleCount>[]>(() => [
@@ -448,41 +453,48 @@ export default function CycleCountsPage() {
                                     <Search className="absolute left-2 h-4 w-4 text-muted-foreground" />
                                     <input
                                       type="text"
-                                      placeholder="Search stock item..."
-                                      value={stockItem ? `${stockItem.variant?.variantSku || ''} - ${stockItem.warehouse?.name || ''}` : stockItemSearch}
+                                      placeholder={form.warehouseId ? 'Search stock item...' : 'Select a warehouse first'}
+                                      disabled={!form.warehouseId}
+                                      value={stockItem ? `${stockItem.variant?.variantSku || ''} - ${stockItem.warehouse?.name || ''}` : (activeLineIndex === index ? stockItemSearch : '')}
                                       onChange={e => {
+                                        if (line.stockItemId) updateLine(index, 'stockItemId', '');
                                         setStockItemSearch(e.target.value);
                                         setShowStockItemDropdown(true);
+                                        setActiveLineIndex(index);
+                                        setStockItemAnchor(e.currentTarget);
                                       }}
-                                      onFocus={() => {
+                                      onFocus={e => {
+                                        if (activeLineIndex !== index) setStockItemSearch('');
                                         setShowStockItemDropdown(true);
+                                        setActiveLineIndex(index);
+                                        setStockItemAnchor(e.currentTarget);
                                       }}
-                                      className="w-full pl-8 pr-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                                      className="w-full pl-8 pr-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm disabled:opacity-60"
                                     />
                                   </div>
-                                  {showStockItemDropdown && form.warehouseId && filteredStockItems.length > 0 && (
-                                    <>
-                                      <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                                        {filteredStockItems.map(item => (
-                                          <button
-                                            key={item.id}
-                                            type="button"
-                                            onClick={() => selectStockItemForLine(item, index)}
-                                            className="w-full text-left px-3 py-2 hover:bg-muted transition-colors border-b border-border last:border-0 text-sm"
-                                          >
-                                            <div className="font-medium">{item.variant?.variantSku || 'N/A'}</div>
-                                            <div className="text-xs text-muted-foreground">
-                                              {item.variant?.catalogItem?.name || ''} - Qty: {item.quantityOnHand || 0}
-                                            </div>
-                                          </button>
-                                        ))}
-                                      </div>
-                                      <div 
-                                        className="fixed inset-0 z-[5]" 
-                                        onClick={() => setShowStockItemDropdown(false)}
-                                      />
-                                    </>
-                                  )}
+                                  <FloatingDropdown
+                                    anchor={stockItemAnchor}
+                                    open={showStockItemDropdown && activeLineIndex === index && !!form.warehouseId}
+                                    onClose={() => { setShowStockItemDropdown(false); setActiveLineIndex(null); }}
+                                  >
+                                    {filteredStockItems.length === 0 ? (
+                                      <div className="px-3 py-2 text-sm text-muted-foreground">No stock items in this warehouse match</div>
+                                    ) : (
+                                      filteredStockItems.slice(0, 200).map(item => (
+                                        <button
+                                          key={item.id}
+                                          type="button"
+                                          onClick={() => selectStockItemForLine(item, index)}
+                                          className="w-full text-left px-3 py-2 hover:bg-muted transition-colors border-b border-border last:border-0 text-sm"
+                                        >
+                                          <div className="font-medium">{item.variant?.variantSku || 'N/A'}</div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {item.variant?.catalogItem?.name || item.variant?.name || ''} - Qty: {item.quantityOnHand || 0}
+                                          </div>
+                                        </button>
+                                      ))
+                                    )}
+                                  </FloatingDropdown>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                   <input

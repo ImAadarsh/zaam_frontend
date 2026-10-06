@@ -155,11 +155,28 @@ export default function SocialDashboard() {
           </div>
         )}
 
-        {publishLocked && (
+        {caps && caps.tokenValid === false && (
+          <PermissionLock
+            title="Meta is not connected"
+            message="The stored Meta login token is expired, revoked or missing, so Meta reports no granted permissions and every Facebook/Instagram feature below shows as locked. Click Reconnect Meta, log in as a Page admin, keep all Pages/Instagram accounts and permissions ticked, and finish the dialog — you will be returned here."
+            product="Facebook Login"
+            onReconnect={async () => {
+              try {
+                const { data } = await getMetaConnectUrl('default');
+                if (data?.authUrl) window.location.href = data.authUrl;
+                else toast.error('Connect URL missing');
+              } catch (e: any) {
+                toast.error(e.response?.data?.error?.message || 'Failed to start Meta connect');
+              }
+            }}
+          />
+        )}
+
+        {publishLocked && caps?.tokenValid !== false && (
           <PermissionLock
             title="Publishing is locked"
             message="Default Connect cannot ask for Pages/IG publish. Click Enable publishing — classic Facebook Login requests pages_manage_posts and instagram_content_publish (and related Instagram Graph perms). Do not use a Login for Business configuration for these names."
-            missingPermission={caps?.missingForPublish?.[0]}
+            missingPermissions={caps?.missingForPublish}
             product="Pages API + Instagram"
             onReconnect={connectPublish}
             reconnectLabel="Enable publishing"

@@ -82,6 +82,18 @@ type ErpItem = { id: string; sku: string; name: string; status: string; category
 
 type ActiveTab = 'connections' | 'browse' | 'import' | 'export';
 
+const WOO_PERMISSION_HINT =
+  'WooCommerce key needs Read/Write permission — regenerate in WooCommerce > Settings > Advanced > REST API';
+
+/** Stored/legacy errors may still carry the raw WooCommerce 401 payload. */
+function friendlyWooError(message?: string | null): string {
+  if (!message) return '';
+  if (/woocommerce_rest_cannot_|woocommerce_rest_authentication_error/.test(message) && !message.includes(WOO_PERMISSION_HINT)) {
+    return WOO_PERMISSION_HINT;
+  }
+  return message;
+}
+
 function Badge({ label, ok }: { label: string; ok: boolean | null }) {
   if (ok === null) return <span className="text-xs text-muted-foreground">{label}</span>;
   return (
@@ -280,9 +292,9 @@ export default function WordPressChannelsPage() {
         c.id === id ? { ...c, lastTestOk: true, lastTestMessage: res.data.message, lastTestedAt: new Date().toISOString() } : c
       ));
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message || 'Test failed');
+      toast.error(friendlyWooError(e?.response?.data?.error?.message) || 'Test failed');
       setConnections((prev) => prev.map((c) =>
-        c.id === id ? { ...c, lastTestOk: false, lastTestMessage: e?.response?.data?.error?.message || 'Failed' } : c
+        c.id === id ? { ...c, lastTestOk: false, lastTestMessage: friendlyWooError(e?.response?.data?.error?.message) || 'Failed' } : c
       ));
     } finally {
       setTestingId(null);
@@ -326,7 +338,7 @@ export default function WordPressChannelsPage() {
       loadSyncStatus(res.data);
       loadHealth();
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message || 'Failed to fetch products');
+      toast.error(friendlyWooError(e?.response?.data?.error?.message) || 'Failed to fetch products');
     } finally {
       setBrowsing(false);
     }
@@ -384,7 +396,7 @@ export default function WordPressChannelsPage() {
       toast.success(`"${product.name}" imported`);
       setSyncStatusMap((prev) => ({ ...prev, [product.id]: { inErp: true, lastSynced: new Date().toISOString() } }));
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message || 'Quick import failed');
+      toast.error(friendlyWooError(e?.response?.data?.error?.message) || 'Quick import failed');
     } finally {
       setQuickImporting(null);
     }
@@ -401,7 +413,7 @@ export default function WordPressChannelsPage() {
       setPushResult(res.data);
       toast.success(`Pushed ${res.data.pushed} price(s) to WordPress`);
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message || 'Push failed');
+      toast.error(friendlyWooError(e?.response?.data?.error?.message) || 'Push failed');
     } finally {
       setPushingPrices(false);
     }
@@ -485,7 +497,7 @@ export default function WordPressChannelsPage() {
       if (jobsRes?.data) setJobs(jobsRes.data);
     } catch (e: any) {
       setImportPhase('');
-      toast.error(e?.response?.data?.error?.message || 'Import failed');
+      toast.error(friendlyWooError(e?.response?.data?.error?.message) || 'Import failed');
     } finally {
       stopTimer(importTimerRef);
       setImporting(false);
@@ -503,7 +515,7 @@ export default function WordPressChannelsPage() {
       });
       setExportItems(res.data.items);
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message || 'Failed to load ERP catalog');
+      toast.error(friendlyWooError(e?.response?.data?.error?.message) || 'Failed to load ERP catalog');
     } finally {
       setLoadingExportItems(false);
     }
@@ -528,9 +540,13 @@ export default function WordPressChannelsPage() {
         duplicateMode: exportDupMode
       });
       setExportResult(res.data);
-      toast.success(`Export complete — ${res.data.created} created, ${res.data.updated} updated`);
+      if (res.data.errors?.length && !res.data.created && !res.data.updated) {
+        toast.error(friendlyWooError(res.data.errors[0]?.message) || 'Export failed');
+      } else {
+        toast.success(`Export complete — ${res.data.created} created, ${res.data.updated} updated`);
+      }
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message || 'Export failed');
+      toast.error(friendlyWooError(e?.response?.data?.error?.message) || 'Export failed');
     } finally {
       stopTimer(exportTimerRef);
       setExporting(false);
@@ -694,7 +710,7 @@ export default function WordPressChannelsPage() {
                             {c.keyHint && <span className="text-xs text-muted-foreground font-mono">{c.keyHint}</span>}
                             {c.lastTestMessage && (
                               <span className={`text-xs block mt-0.5 ${c.lastTestOk ? 'text-green-600' : 'text-red-500'}`}>
-                                {c.lastTestMessage}
+                                {c.lastTestOk ? c.lastTestMessage : friendlyWooError(c.lastTestMessage)}
                               </span>
                             )}
                           </div>
@@ -1348,11 +1364,19 @@ export default function WordPressChannelsPage() {
                     </div>
                   )}
 
-                  {exportResult && (
-                    <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-5 space-y-3">
-                      <h3 className="font-semibold text-green-600 flex items-center gap-2">
-                        <CheckCircle2 size={18} /> Export complete
-                      </h3>
+                  {exportResult && (() => {
+                    const exportFailed = exportResult.errors?.length > 0 && !exportResult.created && !exportResult.updated;
+                    return (
+                    <div className={`rounded-2xl border p-5 space-y-3 ${exportFailed ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'}`}>
+                      {exportFailed ? (
+                        <h3 className="font-semibold text-red-600 flex items-center gap-2">
+                          <AlertTriangle size={18} /> Export failed
+                        </h3>
+                      ) : (
+                        <h3 className="font-semibold text-green-600 flex items-center gap-2">
+                          <CheckCircle2 size={18} /> Export complete
+                        </h3>
+                      )}
                       <div className="grid grid-cols-3 gap-3">
                         {[
                           ['Created', exportResult.created, true],
@@ -1360,7 +1384,7 @@ export default function WordPressChannelsPage() {
                           ['Skipped', exportResult.skipped, false]
                         ].map(([label, value, accent]) => (
                           <div key={label as string} className={`rounded-lg border p-3 text-center ${accent ? 'border-[#D4A017]/30 bg-[#D4A017]/5' : 'border-border bg-background/50'}`}>
-                            <div className={`text-xl font-bold tabular-nums ${accent ? 'text-[#D4A017]' : 'text-white'}`}>{value}</div>
+                            <div className={`text-xl font-bold tabular-nums ${accent ? 'text-[#D4A017]' : 'text-foreground'}`}>{value}</div>
                             <div className="text-xs text-muted-foreground mt-1">{label}</div>
                           </div>
                         ))}
@@ -1370,13 +1394,14 @@ export default function WordPressChannelsPage() {
                           <p className="text-sm font-medium text-red-600 mb-2">{exportResult.errors.length} error(s)</p>
                           <ul className="text-xs text-red-500 space-y-1">
                             {exportResult.errors.slice(0, 5).map((e: any, i: number) => (
-                              <li key={i}><span className="font-mono">{e.sku}</span>: {e.message}</li>
+                              <li key={i}><span className="font-mono">{e.sku}</span>: {friendlyWooError(e.message)}</li>
                             ))}
                           </ul>
                         </div>
                       )}
                     </div>
-                  )}
+                    );
+                  })()}
                 </section>
               )}
             </>

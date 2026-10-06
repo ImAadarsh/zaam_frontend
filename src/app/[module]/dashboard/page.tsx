@@ -1,7 +1,8 @@
 'use client';
 import { useParams, useRouter } from 'next/navigation';
 import { modules } from '@/data/modules';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { DateRangeFilter, rangeForPreset, inRange, bucketsForRange, bucketKey, type DateRange } from '@/components/date-range-filter';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { getSession } from '@/lib/auth';
@@ -44,6 +45,36 @@ export default function ModuleDashboardPage() {
     statusDistribution: [] as any[]
   });
   const [loading, setLoading] = useState(true);
+  const [catalogItemsRaw, setCatalogItemsRaw] = useState<any[]>([]);
+  const [catalogRange, setCatalogRange] = useState<DateRange>(() => rangeForPreset('12m'));
+
+  const catalogCharts = useMemo(() => {
+    const inWindow = catalogItemsRaw.filter((item: any) => inRange(item.createdAt || item.created_at, catalogRange));
+    const growth = bucketsForRange(catalogRange).map((b) => ({ month: b.label, key: b.key, users: 0, active: 0 }));
+    const byKey = new Map(growth.map((g) => [g.key, g]));
+    inWindow.forEach((item: any) => {
+      const g = byKey.get(bucketKey(item.createdAt || item.created_at, catalogRange));
+      if (!g) return;
+      g.users += 1;
+      if (item.status === 'active') g.active += 1;
+    });
+    const count = (keyOf: (item: any) => string) => {
+      const acc: Record<string, number> = {};
+      inWindow.forEach((item: any) => { const k = keyOf(item); acc[k] = (acc[k] || 0) + 1; });
+      return Object.entries(acc).map(([name, value]) => ({ name, value }));
+    };
+    const byCategory = count((item) => item.category || 'Uncategorized').sort((a, b) => b.value - a.value).slice(0, 5);
+    const byStatus = count((item) => {
+      const st = item.status || 'unknown';
+      return st.charAt(0).toUpperCase() + st.slice(1);
+    });
+    return {
+      total: inWindow.length,
+      growth,
+      byCategory: byCategory.length > 0 ? byCategory : [{ name: 'No Data', value: 0 }],
+      byStatus: byStatus.length > 0 ? byStatus : [{ name: 'No Data', value: 0 }],
+    };
+  }, [catalogItemsRaw, catalogRange]);
 
   useEffect(() => {
     const s = getSession();
@@ -93,93 +124,7 @@ export default function ModuleDashboardPage() {
             activeLocations: 0
           });
 
-          // Generate catalog growth data (last 6 months)
-          const now = new Date();
-          const last6Months = Array.from({ length: 6 }, (_, i) => {
-            const date = new Date(now);
-            date.setMonth(date.getMonth() - (5 - i));
-            date.setDate(1);
-            date.setHours(0, 0, 0, 0);
-            return date;
-          });
-
-          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          const catalogGrowth = last6Months.map(date => {
-            const monthName = monthNames[date.getMonth()];
-            const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
-            monthStart.setHours(0, 0, 0, 0);
-            const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-            monthEnd.setHours(23, 59, 59, 999);
-
-            const itemsInMonth = items.filter((item: any) => {
-              const dateValue = item.createdAt || item.created_at;
-              if (!dateValue) return false;
-              try {
-                const itemDate = new Date(dateValue);
-                if (isNaN(itemDate.getTime())) return false;
-                const normalizedItemDate = new Date(itemDate);
-                normalizedItemDate.setHours(0, 0, 0, 0);
-                return normalizedItemDate >= monthStart && normalizedItemDate <= monthEnd;
-              } catch {
-                return false;
-              }
-            }).length;
-
-            const activeInMonth = items.filter((item: any) => {
-              const dateValue = item.createdAt || item.created_at;
-              if (!dateValue) return false;
-              try {
-                const itemDate = new Date(dateValue);
-                if (isNaN(itemDate.getTime())) return false;
-                const normalizedItemDate = new Date(itemDate);
-                normalizedItemDate.setHours(0, 0, 0, 0);
-                return normalizedItemDate >= monthStart && 
-                       normalizedItemDate <= monthEnd && 
-                       item.status === 'active';
-              } catch {
-                return false;
-              }
-            }).length;
-
-            return {
-              month: monthName,
-              users: itemsInMonth,
-              active: activeInMonth
-            };
-          });
-
-          // Status distribution
-          const statusCount: any = {};
-          items.forEach((item: any) => {
-            const status = item.status || 'unknown';
-            statusCount[status] = (statusCount[status] || 0) + 1;
-          });
-          const statusDistribution = Object.entries(statusCount).map(([name, value]) => ({
-            name: name.charAt(0).toUpperCase() + name.slice(1),
-            value
-          }));
-
-          // Category distribution
-          const categoryCount: any = {};
-          items.forEach((item: any) => {
-            const category = item.category || 'Uncategorized';
-            categoryCount[category] = (categoryCount[category] || 0) + 1;
-          });
-          const categoryDistribution = Object.entries(categoryCount).slice(0, 5).map(([name, value]) => ({
-            name,
-            value
-          }));
-
-          setChartData({
-            userGrowth: catalogGrowth.length > 0 ? catalogGrowth : last6Months.map((date) => ({
-              month: monthNames[date.getMonth()],
-              users: 0,
-              active: 0
-            })),
-            usersByRole: categoryDistribution.length > 0 ? categoryDistribution : [{ name: 'No Data', value: 0 }],
-            activityByDay: [],
-            statusDistribution: statusDistribution.length > 0 ? statusDistribution : [{ name: 'No Data', value: 0 }]
-          });
+          setCatalogItemsRaw(items);
 
         } catch (error) {
           console.error('Failed to load catalog stats:', error);
@@ -708,6 +653,14 @@ export default function ModuleDashboardPage() {
                 </div>
               </section>
 
+              <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4">
+                <div className="text-sm text-muted-foreground">
+                  Charts show products created between <span className="font-medium text-foreground">{catalogRange.from}</span> and{' '}
+                  <span className="font-medium text-foreground">{catalogRange.to}</span> ({catalogCharts.total})
+                </div>
+                <DateRangeFilter value={catalogRange} onChange={setCatalogRange} />
+              </section>
+
               {/* Charts Section */}
               <section className="grid gap-4 grid-cols-1 lg:grid-cols-2">
                 {/* Catalog Growth Chart */}
@@ -717,7 +670,7 @@ export default function ModuleDashboardPage() {
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">Product Growth</h3>
                   </div>
                   <ResponsiveContainer width="100%" height={250}>
-                    <AreaChart data={chartData.userGrowth}>
+                    <AreaChart data={catalogCharts.growth}>
                       <defs>
                         <linearGradient id="colorCatalog" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#D4A017" stopOpacity={0.3} />
@@ -734,8 +687,8 @@ export default function ModuleDashboardPage() {
                           borderRadius: '8px'
                         }}
                       />
-                      <Area type="monotone" dataKey="users" stroke="#D4A017" fillOpacity={1} fill="url(#colorCatalog)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="active" stroke="#E5B84A" fillOpacity={0.5} fill="#E5B84A" strokeWidth={2} />
+                      <Area type="monotone" dataKey="users" name="Created" stroke="#D4A017" fillOpacity={1} fill="url(#colorCatalog)" strokeWidth={2} />
+                      <Area type="monotone" dataKey="active" name="Active" stroke="#E5B84A" fillOpacity={0.5} fill="#E5B84A" strokeWidth={2} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -749,7 +702,7 @@ export default function ModuleDashboardPage() {
                   <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
                       <Pie
-                        data={chartData.usersByRole}
+                        data={catalogCharts.byCategory}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
@@ -758,7 +711,7 @@ export default function ModuleDashboardPage() {
                         fill="#8884d8"
                         dataKey="value"
                       >
-                        {chartData.usersByRole.map((entry, index) => (
+                        {catalogCharts.byCategory.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -780,7 +733,7 @@ export default function ModuleDashboardPage() {
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">Product Status</h3>
                   </div>
                   <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={chartData.statusDistribution} layout="vertical">
+                    <BarChart data={catalogCharts.byStatus} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
                       <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                       <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" fontSize={12} width={80} />

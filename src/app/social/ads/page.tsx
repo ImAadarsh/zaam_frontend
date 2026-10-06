@@ -116,12 +116,12 @@ export default function SocialAdsPage() {
             </div>
 
             {campaignError && (
-              <PermissionLock title="Campaigns unavailable" message={campaignError} missingPermission="ads_read" onReconnect={connectAds} />
+              <PermissionLock title="Campaigns unavailable" message={campaignError} missingPermission="ads_read" product="Marketing API" onReconnect={connectAds} reconnectLabel="Reconnect with ads_read" />
             )}
 
             {loadingCampaigns ? (
               <div className="text-muted-foreground animate-pulse">Loading campaigns…</div>
-            ) : (
+            ) : campaignError ? null : (
               <div className="overflow-x-auto bg-card border rounded-lg">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50 text-left">

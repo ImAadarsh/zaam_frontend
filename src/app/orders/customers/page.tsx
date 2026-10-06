@@ -33,7 +33,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Customer[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({
+  const emptyForm = () => ({
     email: '',
     phone: '',
     firstName: '',
@@ -43,6 +43,7 @@ export default function CustomersPage() {
     tier: 'standard' as 'standard' | 'silver' | 'gold' | 'platinum',
     status: 'active' as 'active' | 'inactive' | 'blocked'
   });
+  const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [confirmDel, setConfirmDel] = useState<Customer | null>(null);
 
@@ -153,7 +154,7 @@ export default function CustomersPage() {
       });
       setItems(prev => [res.data, ...prev]);
       setShowCreate(false);
-      setForm({ email: '', phone: '', firstName: '', lastName: '', companyName: '', customerType: 'individual', tier: 'standard', status: 'active' });
+      setForm(emptyForm());
       toast.success('Customer created');
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message || 'Failed to create customer');
@@ -167,6 +168,7 @@ export default function CustomersPage() {
       const res = await updateCustomer(editing.id, form);
       setItems(prev => prev.map(item => item.id === editing.id ? res.data : item));
       setEditing(null);
+      setForm(emptyForm());
       toast.success('Customer updated');
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message || 'Failed to update customer');
@@ -312,7 +314,11 @@ export default function CustomersPage() {
                   </button>
                   {hasAccess && (
                     <button
-                      onClick={() => setShowCreate(true)}
+                      onClick={() => {
+                        setEditing(null);
+                        setForm(emptyForm());
+                        setShowCreate(true);
+                      }}
                       className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded-lg hover:bg-[#B89015]"
                     >
                       <Plus className="h-4 w-4" />
@@ -323,7 +329,7 @@ export default function CustomersPage() {
               }
             />
 
-            {loading ? (
+            {loading && items.length === 0 ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-sm text-muted-foreground">Loading customers...</div>
               </div>

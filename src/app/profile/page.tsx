@@ -85,7 +85,7 @@ export default function ProfilePage() {
             await loadProfile();
         } catch (error: any) {
             console.error('Failed to update profile:', error);
-            toast.error(error.response?.data?.message || 'Failed to update profile');
+            toast.error(error.response?.data?.error?.message || error.response?.data?.message || 'Failed to update profile');
         } finally {
             setSaving(false);
         }
@@ -134,6 +134,16 @@ export default function ProfilePage() {
             setSaving(false);
         }
     };
+
+    const session = getSession();
+    const roleNames: string[] = Array.from(
+        new Set<string>(
+            (profile?.roleAssignments?.length
+                ? profile.roleAssignments.map((ra: any) => ra?.role?.name || ra?.role?.code)
+                : session?.user?.roles || []
+            ).filter(Boolean)
+        )
+    );
 
     if (loading) {
         return (
@@ -306,7 +316,12 @@ export default function ProfilePage() {
                                 <Building size={18} className="text-primary mt-0.5" />
                                 <div>
                                     <div className="text-xs text-muted-foreground mb-1">Organization ID</div>
-                                    <div className="text-sm font-mono text-foreground">{profile?.organizationId}</div>
+                                    <div className="text-sm font-mono text-foreground">
+                                        {profile?.organization?.id ?? profile?.organizationId ?? session?.user?.organizationId ?? '-'}
+                                        {profile?.organization?.name && (
+                                            <span className="ml-2 font-sans text-muted-foreground">({profile.organization.name})</span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -315,7 +330,7 @@ export default function ProfilePage() {
                                 <div>
                                     <div className="text-xs text-muted-foreground mb-1">Roles</div>
                                     <div className="text-sm text-foreground">
-                                        {profile?.roles?.map((r: any) => r.name).join(', ') || 'No roles assigned'}
+                                        {roleNames.join(', ') || 'No roles assigned'}
                                     </div>
                                 </div>
                             </div>

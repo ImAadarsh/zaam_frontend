@@ -68,6 +68,13 @@ export default function CrmIntegrationsPage() {
   const orgId = session?.user?.organizationId;
   const webhookUrl = CRM_LEAD_INGEST_WEBHOOK_URL || `${API_BASE}/api/integrations/leads`;
 
+  function curlExample(key: string) {
+    return `curl -X POST '${webhookUrl}' \\
+  -H 'Content-Type: application/json' \\
+  -H 'X-Zaam-Api-Key: ${key}' \\
+  -d '{"email":"buyer@shop.com","name":"Aisha Khan","company":"Khan Convenience","externalId":"test_1"}'`;
+  }
+
   const load = useCallback(async () => {
     if (!orgId) return;
     setLoading(true);
@@ -277,9 +284,14 @@ export default function CrmIntegrationsPage() {
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-bold tracking-tight">Inbound lead webhook</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Salesforce Outbound Messages, Zapier, HubSpot, or any HTTP client can POST leads here.
-                  Authenticate with header <code className="font-mono text-xs">X-Zaam-Api-Key</code> or{' '}
-                  <code className="font-mono text-xs">Authorization: Bearer &lt;key&gt;</code>.
+                  Zapier, HubSpot, Salesforce Outbound Messages, or any HTTP client can POST leads here.
+                  Authenticate with the <strong>full key</strong> (shown once at creation, format{' '}
+                  <code className="font-mono text-xs">zaam_&lt;source&gt;_&lt;id&gt;.&lt;secret&gt;</code>) in header{' '}
+                  <code className="font-mono text-xs">X-Zaam-Api-Key</code>,{' '}
+                  <code className="font-mono text-xs">Authorization: Bearer &lt;key&gt;</code>, or — for tools that
+                  cannot set headers, such as Salesforce Outbound Messages — append{' '}
+                  <code className="font-mono text-xs">?api_key=&lt;key&gt;</code> to the URL. The prefix in the table
+                  below is only an identifier and will not authenticate.
                 </p>
               </div>
             </div>
@@ -326,6 +338,10 @@ export default function CrmIntegrationsPage() {
   "Id": "00Q…"
 }`}</pre>
               </div>
+            </div>
+            <div className="space-y-2">
+              <p className="font-semibold text-foreground text-sm">Test with curl</p>
+              <pre className="text-[11px] leading-relaxed rounded-xl bg-muted/50 border border-border/60 p-3 overflow-x-auto">{curlExample('<your-full-key>')}</pre>
             </div>
             <p className="text-xs text-muted-foreground">
               Upserts are idempotent on <code className="font-mono">(organization, source, externalId)</code> when
@@ -431,6 +447,36 @@ export default function CrmIntegrationsPage() {
             </div>
           </div>
         </CrmField>
+        {generated?.key ? (
+          <>
+            <CrmField label="Test request">
+              <pre className="text-[11px] leading-relaxed rounded-xl bg-muted/50 border border-border/60 p-3 overflow-x-auto whitespace-pre">
+                {curlExample(showFullKey ? generated.key : `${generated.keyPrefix || ''}.…`)}
+              </pre>
+            </CrmField>
+            <CrmField label="URL for Salesforce Outbound Message (no custom headers)">
+              <code className="block text-[11px] font-mono break-all rounded-xl border border-border/80 bg-muted/40 px-3.5 py-3">
+                {`${webhookUrl}?api_key=${showFullKey ? generated.key : `${generated.keyPrefix || ''}.…`}`}
+              </code>
+            </CrmField>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void copyText(curlExample(generated.key!), 'key')}
+                className="flex-1 h-9 rounded-lg border border-border text-xs font-semibold hover:bg-muted"
+              >
+                Copy curl
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyText(`${webhookUrl}?api_key=${generated.key}`, 'key')}
+                className="flex-1 h-9 rounded-lg border border-border text-xs font-semibold hover:bg-muted"
+              >
+                Copy Salesforce URL
+              </button>
+            </div>
+          </>
+        ) : null}
         <button
           type="button"
           onClick={() => {

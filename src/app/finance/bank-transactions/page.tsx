@@ -88,14 +88,40 @@ export default function BankTransactionsPage() {
     })();
   }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
 
+  function txnErrors(f: { transactionDate: string; postDate: string; amount: number | string; currency: string }) {
+    const errs: string[] = [];
+    if (!f.transactionDate) errs.push('Transaction date is required');
+    if (!Number(f.amount)) errs.push('Amount is required and must not be 0');
+    if (!/^[A-Z]{3}$/.test(f.currency || '')) errs.push('Currency must be a 3-letter code (e.g. GBP)');
+    if (f.postDate && f.transactionDate && f.postDate.slice(0, 10) < f.transactionDate.slice(0, 10)) {
+      errs.push('Post date cannot be before the transaction date');
+    }
+    return errs;
+  }
+
+  function apiErrorMessage(e: any, fallback: string) {
+    const details = e?.response?.data?.error?.details;
+    if (Array.isArray(details) && details.length) {
+      return details.map((d: any) => d.message).join('; ');
+    }
+    return e?.response?.data?.error?.message || fallback;
+  }
+
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.bankAccountId || !form.transactionDate || !form.amount) {
-      toast.error('Please fill in required fields');
+    const errs = [...(form.bankAccountId ? [] : ['Bank account is required']), ...txnErrors(form)];
+    if (errs.length) {
+      toast.error(errs.join('; '));
       return;
     }
     try {
-      await createBankTransaction(form);
+      await createBankTransaction({
+        ...form,
+        postDate: form.postDate || undefined,
+        amount: Number(form.amount),
+        balance: Number(form.balance) || undefined,
+        journalEntryId: form.journalEntryId || undefined,
+      });
       toast.success('Bank Transaction created');
       setShowCreate(false);
       setForm({
@@ -115,24 +141,32 @@ export default function BankTransactionsPage() {
       const res = await listBankTransactions({});
       setItems(res.data || []);
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message || 'Failed to create bank transaction');
+      toast.error(apiErrorMessage(e, 'Failed to create bank transaction'));
     }
   }
 
   async function onUpdate(e: React.FormEvent) {
     e.preventDefault();
-    if (!editing || !editForm.transactionDate || !editForm.amount) {
-      toast.error('Please fill in required fields');
+    if (!editing) return;
+    const errs = txnErrors(editForm);
+    if (errs.length) {
+      toast.error(errs.join('; '));
       return;
     }
     try {
-      await updateBankTransaction(editing.id, editForm);
+      await updateBankTransaction(editing.id, {
+        ...editForm,
+        transactionDate: editForm.transactionDate.slice(0, 10),
+        postDate: editForm.postDate ? editForm.postDate.slice(0, 10) : '',
+        amount: Number(editForm.amount),
+        balance: Number(editForm.balance) || 0,
+      });
       toast.success('Bank Transaction updated');
       setEditing(null);
       const res = await listBankTransactions({});
       setItems(res.data || []);
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message || 'Failed to update bank transaction');
+      toast.error(apiErrorMessage(e, 'Failed to update bank transaction'));
     }
   }
 
@@ -188,8 +222,8 @@ export default function BankTransactionsPage() {
             const item = row.original;
             setEditing(item);
             setEditForm({
-              transactionDate: item.transactionDate,
-              postDate: (item as any).postDate || '',
+              transactionDate: String(item.transactionDate || '').slice(0, 10),
+              postDate: String((item as any).postDate || '').slice(0, 10),
               transactionType: item.transactionType,
               amount: item.amount,
               currency: item.currency,

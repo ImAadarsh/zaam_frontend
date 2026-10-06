@@ -63,6 +63,23 @@ function DebouncedInput({
     );
 }
 
+// `.btn` is declared outside @layer components, so its px-4/h-10 beat plain utilities; force sizing.
+const pagerBtn =
+    'btn btn-outline !h-8 !w-8 !p-0 !rounded-lg shrink-0 disabled:opacity-30';
+
+/** Page indices to render, with -1 marking an ellipsis gap. */
+function pageWindow(current: number, count: number): number[] {
+    if (count <= 7) return Array.from({ length: count }, (_, i) => i);
+    const pages = new Set<number>([0, count - 1, current - 1, current, current + 1]);
+    const sorted = Array.from(pages).filter((p) => p >= 0 && p < count).sort((a, b) => a - b);
+    const out: number[] = [];
+    sorted.forEach((p, i) => {
+        if (i > 0 && p - sorted[i - 1] > 1) out.push(-1);
+        out.push(p);
+    });
+    return out;
+}
+
 interface RichDataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
@@ -107,7 +124,21 @@ export function RichDataTable<TData, TValue>({
         getSortedRowModel: getSortedRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
         globalFilterFn: fuzzyFilter,
+        autoResetPageIndex: false,
     });
+
+    const pageCount = table.getPageCount();
+    const pageIndex = table.getState().pagination.pageIndex;
+    const totalRows = table.getFilteredRowModel().rows.length;
+    const pageSize = table.getState().pagination.pageSize;
+
+    React.useEffect(() => {
+        if (pageCount > 0 && pageIndex > pageCount - 1) table.setPageIndex(pageCount - 1);
+    }, [pageCount, pageIndex, table]);
+
+    React.useEffect(() => {
+        table.setPageIndex(0);
+    }, [globalFilter, columnFilters, table]);
 
     return (
         <div className="space-y-4 w-full animate-in fade-in duration-500">
@@ -246,7 +277,7 @@ export function RichDataTable<TData, TValue>({
             {/* Pagination */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground px-1">
                 <div className="flex-1 text-xs text-muted-foreground">
-                    Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to {Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, table.getFilteredRowModel().rows.length)} of {table.getFilteredRowModel().rows.length} entries
+                    Showing {totalRows === 0 ? 0 : pageIndex * pageSize + 1} to {Math.min((pageIndex + 1) * pageSize, totalRows)} of {totalRows} entries
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -266,36 +297,60 @@ export function RichDataTable<TData, TValue>({
                         </select>
                     </div>
                     <div className="flex items-center gap-1">
-                        <span className="text-xs mr-2">
-                            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                        <span className="text-xs mr-2 whitespace-nowrap">
+                            Page {pageCount === 0 ? 0 : pageIndex + 1} of {pageCount}
                         </span>
                         <button
-                            className="btn btn-outline h-8 w-8 p-0 disabled:opacity-30"
+                            type="button"
+                            aria-label="First page"
+                            className={pagerBtn}
                             onClick={() => table.setPageIndex(0)}
                             disabled={!table.getCanPreviousPage()}
                         >
-                            <ChevronsLeft className="h-4 w-4" />
+                            <ChevronsLeft className="h-4 w-4 shrink-0" />
                         </button>
                         <button
-                            className="btn btn-outline h-8 w-8 p-0 disabled:opacity-30"
+                            type="button"
+                            aria-label="Previous page"
+                            className={pagerBtn}
                             onClick={() => table.previousPage()}
                             disabled={!table.getCanPreviousPage()}
                         >
-                            <ChevronLeft className="h-4 w-4" />
+                            <ChevronLeft className="h-4 w-4 shrink-0" />
                         </button>
+                        {pageWindow(pageIndex, pageCount).map((p, i) =>
+                            p === -1 ? (
+                                <span key={`gap-${i}`} className="px-1 text-xs">…</span>
+                            ) : (
+                                <button
+                                    type="button"
+                                    key={p}
+                                    aria-label={`Page ${p + 1}`}
+                                    aria-current={p === pageIndex ? 'page' : undefined}
+                                    className={`${pagerBtn} !w-auto min-w-[2rem] !px-2 text-xs ${p === pageIndex ? '!bg-primary !text-primary-foreground !border-primary' : ''}`}
+                                    onClick={() => table.setPageIndex(p)}
+                                >
+                                    {p + 1}
+                                </button>
+                            )
+                        )}
                         <button
-                            className="btn btn-outline h-8 w-8 p-0 disabled:opacity-30"
+                            type="button"
+                            aria-label="Next page"
+                            className={pagerBtn}
                             onClick={() => table.nextPage()}
                             disabled={!table.getCanNextPage()}
                         >
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-4 w-4 shrink-0" />
                         </button>
                         <button
-                            className="btn btn-outline h-8 w-8 p-0 disabled:opacity-30"
-                            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                            type="button"
+                            aria-label="Last page"
+                            className={pagerBtn}
+                            onClick={() => table.setPageIndex(pageCount - 1)}
                             disabled={!table.getCanNextPage()}
                         >
-                            <ChevronsRight className="h-4 w-4" />
+                            <ChevronsRight className="h-4 w-4 shrink-0" />
                         </button>
                     </div>
                 </div>

@@ -127,6 +127,24 @@ function authHeaders() {
   return { Authorization: `Bearer ${s.accessToken}` };
 }
 
+export type UploadedFile = { url: string; key: string; fileName: string; size: number; mimeType: string };
+
+/** Upload one file to API storage (VPS disk or S3). Returns a public URL. */
+export async function uploadFileToStorage(file: File, folder = 'uploads', maxSizeInMB = 20) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const { data } = await axios.post(
+    `${API_BASE}/api/iam/upload?folder=${encodeURIComponent(folder)}&maxSizeInMB=${maxSizeInMB}`,
+    fd,
+    { headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' } }
+  );
+  return data.data as UploadedFile;
+}
+
+export async function uploadFilesToStorage(files: File[], folder = 'uploads', maxSizeInMB = 20) {
+  return Promise.all(files.map((f) => uploadFileToStorage(f, folder, maxSizeInMB)));
+}
+
 type PaginatedListResult<T = any> = {
   data: T[];
   pagination?: { page?: number; limit?: number; total?: number; totalPages?: number };
@@ -271,6 +289,11 @@ export async function listApiKeys() {
 export async function createApiKey(payload: { organizationId: string; name: string; scopes?: string[] }) {
   const { data } = await axios.post(`${API_BASE}/api/iam/api-keys`, payload, { headers: authHeaders() });
   return data as { data: { id: string; name: string; key: string; keyPrefix: string } };
+}
+
+export async function updateApiKey(id: string, payload: { name?: string; scopes?: string[] | null }) {
+  const { data } = await axios.patch(`${API_BASE}/api/iam/api-keys/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
 }
 
 export async function deleteApiKey(id: string) {
@@ -1629,6 +1652,17 @@ export async function listOrderSyncConnections(params?: { organizationId?: strin
     headers: authHeaders()
   });
   return data as { data: OrderSyncConnection[] };
+}
+
+export async function getOrderSyncStatus(params?: { organizationId?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/orders/channel-sync/status`, { params, headers: authHeaders() });
+  return data as {
+    data: {
+      cronEnabled: boolean;
+      intervalMinutes: number;
+      connections: Record<string, { lastSyncedAt?: string; lastTrigger?: 'manual' | 'cron'; lastCronError?: string | null }>;
+    };
+  };
 }
 
 export async function previewOrderSync(payload: OrderSyncRequest) {
@@ -5110,6 +5144,7 @@ export async function listUninvoicedOrders(organizationId: string) {
 export async function generateInvoices(payload: {
   organizationId: string;
   orderIds?: string[];
+  orderNumbers?: string[];
   limit?: number;
 }) {
   const { data } = await axios.post(`${API_BASE}/api/finance/invoices/generate`, payload, {
@@ -5119,7 +5154,7 @@ export async function generateInvoices(payload: {
   return data as {
     data: {
       created: number;
-      skipped: Array<{ orderId: string; reason: string }>;
+      skipped: Array<{ orderId: string; orderNumber?: string; reason: string }>;
       invoices: Array<{ id: string; invoiceNumber: string; orderId: string | null; total: number }>;
     };
   };
@@ -5600,6 +5635,23 @@ export async function deleteReportDefinition(id: string) {
   const { data } = await axios.delete(`${API_BASE}/api/analytics/reports/${id}`, { headers: authHeaders() });
   return data;
 }
+export async function listReportDatasets() {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/reports/datasets`, { headers: authHeaders() });
+  return data as { data: Array<{ key: string; label: string; category: string; supportsDateRange: boolean }> };
+}
+export async function runReportDefinition(id: string, payload: { from?: string | null; to?: string | null } = {}) {
+  const { data } = await axios.post(`${API_BASE}/api/analytics/reports/${id}/run`, payload, { headers: authHeaders() });
+  return data as {
+    data: {
+      report: { id: string; reportName: string; reportCode: string; outputFormat: string };
+      dataset: string;
+      label: string;
+      columns: string[];
+      rows: Record<string, unknown>[];
+      ranAt: string;
+    };
+  };
+}
 
 export async function listScheduledReports(params?: any) {
   const { data } = await axios.get(`${API_BASE}/api/analytics/scheduled-reports`, { params, headers: authHeaders() });
@@ -5662,6 +5714,23 @@ export async function updateDataExport(id: string, payload: any) {
 export async function deleteDataExport(id: string) {
   const { data } = await axios.delete(`${API_BASE}/api/analytics/exports/${id}`, { headers: authHeaders() });
   return data;
+}
+export async function downloadDataExport(id: string, fallbackName = `export-${id}`) {
+  const res = await axios.get(`${API_BASE}/api/analytics/exports/${id}/download`, {
+    headers: authHeaders(),
+    responseType: 'blob',
+  });
+  const disposition = String(res.headers['content-disposition'] || '');
+  const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  const name = match ? decodeURIComponent(match[1]) : fallbackName;
+  const url = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // B2B SALE CHANNEL
@@ -5753,6 +5822,79 @@ export async function listB2bShipments(params?: { organizationId?: string }) {
 }
 export async function updateB2bShipment(id: string, payload: any) {
   const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/shipments/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function getB2bRetailer(id: string, organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/retailers/${id}`, { params: { organizationId }, headers: authHeaders() });
+  return data as { data: any };
+}
+export async function listB2bRetailerCatalog(id: string, organizationId: string, search?: string) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/retailers/${id}/catalog`, {
+    params: { organizationId, search },
+    headers: authHeaders()
+  });
+  return data as { data: any[] };
+}
+export async function createB2bAdminOrder(payload: {
+  organizationId: string;
+  retailerId: string;
+  lines: { variantId: string; quantity: number; unitPrice?: number }[];
+  shippingMethodCode?: string;
+  addressId?: string;
+  customerNotes?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/b2b/admin/orders`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function getB2bOrder(id: string, organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/orders/${id}`, { params: { organizationId }, headers: authHeaders() });
+  return data as { data: any };
+}
+
+/** Fulfillment — pick/pack queue, carrier-agnostic shipments */
+export async function listFulfillmentCarriers() {
+  const { data } = await axios.get(`${API_BASE}/api/fulfillment/carriers`, { headers: authHeaders() });
+  return data as { data: { code: string; name: string; api: boolean }[] };
+}
+export async function listPickPackQueue(organizationId?: string) {
+  const { data } = await axios.get(`${API_BASE}/api/fulfillment/pick-pack`, { params: { organizationId }, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function markPickPackStage(orderId: string, stage: 'picked' | 'packed', organizationId?: string) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/fulfillment/pick-pack/${orderId}/${stage}`,
+    { organizationId },
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+export async function listFulfillmentShipments(params?: { organizationId?: string; from?: string; to?: string; carrier?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/fulfillment/shipments`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+export async function createManualShipment(payload: {
+  organizationId?: string;
+  orderId: string;
+  carrier: string;
+  trackingNumber: string;
+  serviceCode?: string | null;
+  weightKg?: number | null;
+  pieces?: number | null;
+  notes?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/fulfillment/shipments/manual`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+export async function updateFulfillmentShipmentStatus(
+  id: string,
+  status: 'in_transit' | 'delivered' | 'cancelled',
+  organizationId?: string
+) {
+  const { data } = await axios.patch(
+    `${API_BASE}/api/fulfillment/shipments/${id}/status`,
+    { status, organizationId },
+    { headers: authHeaders() }
+  );
   return data as { data: any };
 }
 
@@ -5896,6 +6038,34 @@ export async function syncCrmLeadToMarketing(id: string) {
     { headers: authHeaders() }
   );
   return data as { data: { segmentId: string; customerId: string | null; added: boolean; skipped?: string } };
+}
+
+export async function listCrmMarketingSegments(params?: { organizationId?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/crm/leads/marketing-segments`, {
+    params,
+    headers: authHeaders(),
+  });
+  return data as { data: Array<{ id: string; name: string; segmentCode: string; totalMembers: number }> };
+}
+
+export async function bulkSyncCrmLeadsToMarketing(payload: {
+  leadIds: string[];
+  segmentId?: string;
+  newSegmentName?: string;
+  organizationId?: string;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/crm/leads/bulk-sync-to-marketing`, payload, {
+    headers: authHeaders(),
+  });
+  return data as {
+    data: {
+      segment: { id: string; name: string; totalMembers: number };
+      added: number;
+      alreadyMember: number;
+      skippedNoEmail: number;
+      failed: { leadId: string; message: string }[];
+    };
+  };
 }
 
 export async function listMarketingEmailCampaigns(params?: {
@@ -6784,6 +6954,11 @@ export async function createJobPosting(payload: Record<string, any>) {
 
 export async function updateJobPosting(id: string, payload: Record<string, any>) {
   const { data } = await axios.patch(`${API_BASE}/api/hr/job-postings/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function getJobPosting(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/job-postings/${id}`, { headers: authHeaders() });
   return data as { data: any };
 }
 

@@ -104,10 +104,23 @@ export default function BankAccountsPage() {
     })();
   }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
 
+  function accountNumberError(accountNumber: string, currency: string) {
+    if (!accountNumber) return null;
+    if (!/^\d+$/.test(accountNumber)) return 'Account number must contain digits only';
+    if ((currency || 'GBP').toUpperCase() === 'GBP' && accountNumber.length !== 8) return 'UK account number must be exactly 8 digits';
+    if (accountNumber.length < 4 || accountNumber.length > 17) return 'Account number must be 4–17 digits';
+    return null;
+  }
+
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.organizationId || !form.accountName || !form.bankName) {
       toast.error('Please fill in required fields');
+      return;
+    }
+    const numErr = accountNumberError(form.accountNumber, form.currency);
+    if (numErr) {
+      toast.error(numErr);
       return;
     }
     try {
@@ -140,6 +153,11 @@ export default function BankAccountsPage() {
     e.preventDefault();
     if (!editing || !editForm.accountName || !editForm.bankName) {
       toast.error('Please fill in required fields');
+      return;
+    }
+    const numErr = accountNumberError(editForm.accountNumber, editForm.currency);
+    if (numErr) {
+      toast.error(numErr);
       return;
     }
     try {
@@ -314,7 +332,7 @@ export default function BankAccountsPage() {
                         <input
                           type="text"
                           value={form.accountNumber}
-                          onChange={(e) => setForm({ ...form, accountNumber: e.target.value })}
+                          onChange={(e) => setForm({ ...form, accountNumber: e.target.value.replace(/\D/g, '') })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                         />
                       </div>
@@ -455,7 +473,7 @@ export default function BankAccountsPage() {
                         <input
                           type="text"
                           value={editForm.accountNumber}
-                          onChange={(e) => setEditForm({ ...editForm, accountNumber: e.target.value })}
+                          onChange={(e) => setEditForm({ ...editForm, accountNumber: e.target.value.replace(/\D/g, '') })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                         />
                       </div>

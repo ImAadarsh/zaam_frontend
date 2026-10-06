@@ -9,7 +9,8 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { RichDataTable } from '@/components/rich-data-table';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, UserPlus, Settings, Check } from 'lucide-react';
+import { Plus, UserPlus, Settings } from 'lucide-react';
+import { NAV_MODULES, type NavModule } from '@/lib/nav-pages.generated';
 
 type Role = {
   id: string;
@@ -35,6 +36,7 @@ export default function RolesPage() {
   const [businessUnits, setBusinessUnits] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [pagePermissions, setPagePermissions] = useState<Record<string, boolean>>({});
+  const [permissionFilter, setPermissionFilter] = useState('');
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -142,25 +144,22 @@ export default function RolesPage() {
     }
   }, [assignForm.businessUnitId]);
 
-  // IAM Pages configuration
-  const iamPages = [
-    { path: '/iam/dashboard', label: 'Dashboard (Overview)', key: 'iam.dashboard' },
-    { path: '/iam/users', label: 'Users', key: 'iam.users' },
-    { path: '/iam/roles', label: 'Roles', key: 'iam.roles' },
-    { path: '/iam/audit-logs', label: 'Audit Logs', key: 'iam.audit-logs' },
-    { path: '/iam/api-keys', label: 'API Keys', key: 'iam.api-keys' },
-  ];
-
   function openPermissionsEditor(role: Role) {
     setSelectedRole(role);
-    // Load existing permissions from role.permissions
-    const permissions = role.permissions || {};
+    const granted: string[] = Array.isArray(role.permissions?.pages) ? role.permissions.pages : [];
     const pages: Record<string, boolean> = {};
-    iamPages.forEach(page => {
-      pages[page.key] = permissions.pages?.includes(page.key) || false;
-    });
+    granted.forEach((key) => { pages[key] = true; });
     setPagePermissions(pages);
+    setPermissionFilter('');
     setShowPermissions(true);
+  }
+
+  function setModulePages(mod: NavModule, enabled: boolean) {
+    setPagePermissions((prev) => {
+      const next = { ...prev };
+      mod.pages.forEach((page) => { next[page.key] = enabled; });
+      return next;
+    });
   }
 
   async function savePermissions() {
@@ -352,7 +351,7 @@ export default function RolesPage() {
 
           {showPermissions && selectedRole && (
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="w-full max-w-2xl rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+              <div className="w-full max-w-4xl rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-lg font-semibold">Edit Page Permissions</h3>
@@ -370,35 +369,65 @@ export default function RolesPage() {
                   </button>
                 </div>
                 
-                <div className="space-y-3 mb-6">
-                  <p className="text-sm text-muted-foreground mb-4">Select which pages this role can access:</p>
-                  {iamPages.map((page) => (
-                    <label
-                      key={page.key}
-                      className="flex items-center gap-3 p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group"
-                    >
-                      <div className="relative flex items-center justify-center w-5 h-5">
-                        <input
-                          type="checkbox"
-                          checked={pagePermissions[page.key] || false}
-                          onChange={(e) => {
-                            setPagePermissions({
-                              ...pagePermissions,
-                              [page.key]: e.target.checked
-                            });
-                          }}
-                          className="w-5 h-5 rounded border-2 border-border checked:bg-primary checked:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer"
-                        />
-                        {pagePermissions[page.key] && (
-                          <Check size={14} className="absolute text-white pointer-events-none" strokeWidth={3} />
-                        )}
+                <div className="space-y-4 mb-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      Select which pages this role can access ({Object.values(pagePermissions).filter(Boolean).length} selected):
+                    </p>
+                    <input
+                      className="input sm:max-w-[220px]"
+                      placeholder="Filter pages..."
+                      value={permissionFilter}
+                      onChange={(e) => setPermissionFilter(e.target.value)}
+                    />
+                  </div>
+                  {NAV_MODULES.map((mod) => {
+                    const q = permissionFilter.trim().toLowerCase();
+                    const visible = q
+                      ? mod.pages.filter((p) => `${mod.module} ${p.label} ${p.path}`.toLowerCase().includes(q))
+                      : mod.pages;
+                    if (visible.length === 0) return null;
+                    const selectedCount = mod.pages.filter((p) => pagePermissions[p.key]).length;
+                    const allSelected = selectedCount === mod.pages.length;
+                    return (
+                      <div key={mod.module} className="rounded-xl border border-border">
+                        <label className="flex items-center justify-between gap-3 px-4 py-3 bg-muted/40 rounded-t-xl cursor-pointer">
+                          <span className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 cursor-pointer accent-[#D4A017]"
+                              checked={allSelected}
+                              ref={(el) => { if (el) el.indeterminate = selectedCount > 0 && !allSelected; }}
+                              onChange={(e) => setModulePages(mod, e.target.checked)}
+                            />
+                            <span className="font-semibold text-sm">{mod.module}</span>
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {selectedCount}/{mod.pages.length} · Select all
+                          </span>
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 p-2">
+                          {visible.map((page) => (
+                            <label
+                              key={`${mod.module}-${page.key}`}
+                              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-primary/5 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 cursor-pointer accent-[#D4A017]"
+                                checked={pagePermissions[page.key] || false}
+                                onChange={(e) => setPagePermissions((prev) => ({ ...prev, [page.key]: e.target.checked }))}
+                              />
+                              <div className="min-w-0">
+                                <div className="font-medium text-sm truncate">{page.label}</div>
+                                <div className="text-xs text-muted-foreground font-mono truncate">{page.path}</div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">{page.label}</div>
-                        <div className="text-xs text-muted-foreground font-mono">{page.path}</div>
-                      </div>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-border">

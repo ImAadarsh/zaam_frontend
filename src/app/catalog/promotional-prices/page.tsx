@@ -33,6 +33,14 @@ type PromotionalPrice = {
   [key: string]: any;
 };
 
+function toLocalInput(value?: string | null) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function PromotionalPricesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
@@ -186,9 +194,9 @@ export default function PromotionalPricesPage() {
       cell: ({ row }) => {
         const price = row.original;
         if (price.discountType === 'percentage') {
-          return <span>{price.discountValue}%</span>;
+          return <span>{Number(price.discountValue)}%</span>;
         } else {
-          return <span>{price.discountValue.toFixed(2)}</span>;
+          return <span>{Number(price.discountValue || 0).toFixed(2)}</span>;
         }
       }
     },
@@ -233,9 +241,9 @@ export default function PromotionalPricesPage() {
                   priceListId: item.priceList?.id || '',
                   name: item.name,
                   discountType: item.discountType,
-                  discountValue: item.discountValue.toString(),
-                  validFrom: new Date(item.validFrom).toISOString().slice(0, 16),
-                  validUntil: new Date(item.validUntil).toISOString().slice(0, 16),
+                  discountValue: String(Number(item.discountValue ?? 0)),
+                  validFrom: toLocalInput(item.validFrom),
+                  validUntil: toLocalInput(item.validUntil),
                   status: item.status
                 });
               }}

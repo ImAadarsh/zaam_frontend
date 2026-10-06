@@ -36,11 +36,37 @@ export default function SocialPostsPage() {
     platform: '',
     mediaType: '',
     since: '',
-    until: ''
+    until: '',
+    status: ''
   });
   const [q, setQ] = useState('');
 
   const organic = useMemo(() => accounts.filter(isOrganic), [accounts]);
+  const accountOptions = useMemo(
+    () => organic.filter((a) => !filters.platform || a.platform === filters.platform),
+    [organic, filters.platform]
+  );
+
+  const onFiltersChange = (next: Record<string, string>) => {
+    if (next.platform && next.platform !== filters.platform) {
+      const current = organic.find((a) => String(a.id) === String(next.accountId));
+      if (!current || current.platform !== next.platform) {
+        const first = organic.find((a) => a.platform === next.platform);
+        next = { ...next, accountId: first ? String(first.id) : '' };
+        if (!first) setLive([]);
+      }
+    }
+    setFilters(next);
+  };
+
+  const inDateRange = (iso?: string | null) => {
+    if (!filters.since && !filters.until) return true;
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    if (filters.since && t < new Date(`${filters.since}T00:00:00`).getTime()) return false;
+    if (filters.until && t > new Date(`${filters.until}T23:59:59`).getTime()) return false;
+    return true;
+  };
 
   const loadAccounts = async () => {
     const acc = await listSocialAccounts();
@@ -111,6 +137,8 @@ export default function SocialPostsPage() {
 
   const filteredLive = live.filter((p) => {
     if (filters.platform && p.platform !== filters.platform) return false;
+    if (tab !== 'reels' && filters.mediaType && p.mediaType && p.mediaType !== filters.mediaType) return false;
+    if (!inDateRange(p.createdTime)) return false;
     if (q && !String(p.message || '').toLowerCase().includes(q.toLowerCase())) return false;
     return true;
   });
@@ -120,6 +148,9 @@ export default function SocialPostsPage() {
     if (filters.platform && p.socialAccount?.platform !== filters.platform) return false;
     if (q && !String(p.content || '').toLowerCase().includes(q.toLowerCase())) return false;
     if (tab === 'reels' && p.postType !== 'reel') return false;
+    if (tab !== 'reels' && filters.mediaType && p.postType && p.postType !== filters.mediaType) return false;
+    if (filters.status && p.status !== filters.status) return false;
+    if (!inDateRange(p.publishedAt || p.scheduledAt || p.createdAt)) return false;
     return true;
   });
 
@@ -163,14 +194,14 @@ export default function SocialPostsPage() {
           onSearchChange={setQ}
           searchPlaceholder="Search captions…"
           values={filters}
-          onChange={setFilters}
+          onChange={onFiltersChange}
           fields={[
             {
               key: 'accountId',
               label: 'Account',
               type: 'select',
               primary: true,
-              options: organic.map((a) => ({
+              options: accountOptions.map((a) => ({
                 value: String(a.id),
                 label: `${a.accountName} (${a.platform})`
               }))
@@ -198,7 +229,19 @@ export default function SocialPostsPage() {
               ]
             },
             { key: 'since', label: 'From', type: 'date' },
-            { key: 'until', label: 'To', type: 'date' }
+            { key: 'until', label: 'To', type: 'date' },
+            ...(tab === 'drafts'
+              ? [{
+                  key: 'status',
+                  label: 'Status',
+                  type: 'select' as const,
+                  primary: true,
+                  options: Array.from(new Set(drafts.map((d) => String(d.status || '')).filter(Boolean))).map((st) => ({
+                    value: st,
+                    label: st.replace(/_/g, ' ')
+                  }))
+                }]
+              : [])
           ]}
           actions={
             <button

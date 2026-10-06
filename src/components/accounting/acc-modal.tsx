@@ -59,10 +59,12 @@ export function AccField({
   label,
   children,
   hint,
+  error,
 }: {
   label: string;
   children: ReactNode;
   hint?: string;
+  error?: string;
 }) {
   return (
     <div className="space-y-1.5">
@@ -70,7 +72,7 @@ export function AccField({
         {label}
       </label>
       {children}
-      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+      {error ? <p className="text-[11px] font-medium text-red-600">{error}</p> : hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

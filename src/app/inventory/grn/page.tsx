@@ -9,6 +9,7 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
+import { FloatingDropdown } from '@/components/inventory/floating-dropdown';
 import { Pencil, Trash2, Plus, X, Receipt, Search } from 'lucide-react';
 
 type GRN = {
@@ -64,6 +65,7 @@ export default function GRNPage() {
   const [variantSearch, setVariantSearch] = useState('');
   const [showVariantDropdown, setShowVariantDropdown] = useState(false);
   const [currentLineIndex, setCurrentLineIndex] = useState<number | null>(null);
+  const [variantAnchor, setVariantAnchor] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -176,15 +178,16 @@ export default function GRNPage() {
     });
   }
 
-  const filteredVariants = variants.filter(v => 
-    v.variantSku.toLowerCase().includes(variantSearch.toLowerCase()) ||
-    v.name?.toLowerCase().includes(variantSearch.toLowerCase()) ||
-    v.catalogItem?.name.toLowerCase().includes(variantSearch.toLowerCase())
+  const variantQuery = variantSearch.trim().toLowerCase();
+  const filteredVariants = variants.filter(v =>
+    !variantQuery ||
+    v.variantSku?.toLowerCase().includes(variantQuery) ||
+    v.name?.toLowerCase().includes(variantQuery) ||
+    v.catalogItem?.name?.toLowerCase().includes(variantQuery)
   );
 
   function selectVariantForLine(variant: any, lineIndex: number) {
     updateLine(lineIndex, 'variantId', variant.id);
-    updateLine(lineIndex, 'quantityExpected', variant.quantityExpected || 0);
     setVariantSearch('');
     setShowVariantDropdown(false);
     setCurrentLineIndex(null);
@@ -423,40 +426,44 @@ export default function GRNPage() {
                                   <input
                                     type="text"
                                     placeholder="Search variant..."
-                                    value={line.variantId ? variants.find(v => v.id === line.variantId)?.variantSku || '' : variantSearch}
+                                    value={line.variantId ? variants.find(v => v.id === line.variantId)?.variantSku || '' : (currentLineIndex === index ? variantSearch : '')}
                                     onChange={e => {
+                                      if (line.variantId) updateLine(index, 'variantId', '');
                                       setVariantSearch(e.target.value);
                                       setShowVariantDropdown(true);
                                       setCurrentLineIndex(index);
+                                      setVariantAnchor(e.currentTarget);
                                     }}
-                                    onFocus={() => {
+                                    onFocus={e => {
+                                      if (currentLineIndex !== index) setVariantSearch('');
                                       setShowVariantDropdown(true);
                                       setCurrentLineIndex(index);
+                                      setVariantAnchor(e.currentTarget);
                                     }}
                                     className="w-full pl-8 pr-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                                   />
                                 </div>
-                                {showVariantDropdown && currentLineIndex === index && filteredVariants.length > 0 && (
-                                  <>
-                                    <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                                      {filteredVariants.map(variant => (
-                                        <button
-                                          key={variant.id}
-                                          type="button"
-                                          onClick={() => selectVariantForLine(variant, index)}
-                                          className="w-full text-left px-3 py-2 hover:bg-muted transition-colors border-b border-border last:border-0 text-sm"
-                                        >
-                                          <div className="font-medium">{variant.variantSku}</div>
-                                          <div className="text-xs text-muted-foreground">{variant.catalogItem?.name || variant.name || ''}</div>
-                                        </button>
-                                      ))}
-                                    </div>
-                                    <div 
-                                      className="fixed inset-0 z-[5]" 
-                                      onClick={() => { setShowVariantDropdown(false); setCurrentLineIndex(null); }}
-                                    />
-                                  </>
-                                )}
+                                <FloatingDropdown
+                                  anchor={variantAnchor}
+                                  open={showVariantDropdown && currentLineIndex === index}
+                                  onClose={() => { setShowVariantDropdown(false); setCurrentLineIndex(null); }}
+                                >
+                                  {filteredVariants.length === 0 ? (
+                                    <div className="px-3 py-2 text-sm text-muted-foreground">No matching variants</div>
+                                  ) : (
+                                    filteredVariants.slice(0, 200).map(variant => (
+                                      <button
+                                        key={variant.id}
+                                        type="button"
+                                        onClick={() => selectVariantForLine(variant, index)}
+                                        className="w-full text-left px-3 py-2 hover:bg-muted transition-colors border-b border-border last:border-0 text-sm"
+                                      >
+                                        <div className="font-medium">{variant.variantSku}</div>
+                                        <div className="text-xs text-muted-foreground">{variant.catalogItem?.name || variant.name || ''}</div>
+                                      </button>
+                                    ))
+                                  )}
+                                </FloatingDropdown>
                               </div>
                               <input
                                 type="number"

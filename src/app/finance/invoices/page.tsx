@@ -92,6 +92,8 @@ export default function InvoicesPage() {
   const [data, setData] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [orderNumber, setOrderNumber] = useState('');
+  const [invoicingOrder, setInvoicingOrder] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
   const [summary, setSummary] = useState({
@@ -157,13 +159,39 @@ export default function InvoicesPage() {
         toast.success(`Created ${res.data.created} invoice(s) in unified format`);
       }
       if (res.data.skipped?.length) {
-        toast.message(`Skipped ${res.data.skipped.length} (already invoiced)`);
+        toast.message(`Skipped ${res.data.skipped.length} (already invoiced or not found)`);
       }
       await loadData();
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message || e?.message || 'Failed to generate invoices');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function onInvoiceOrder(e: React.FormEvent) {
+    e.preventDefault();
+    const num = orderNumber.trim().replace(/^#/, '');
+    if (!orgId || invoicingOrder) return;
+    if (!num) {
+      toast.error('Enter an order number');
+      return;
+    }
+    try {
+      setInvoicingOrder(true);
+      const res = await generateInvoices({ organizationId: orgId, orderNumbers: [num] });
+      const inv = res.data.invoices?.[0];
+      if (inv) {
+        toast.success(`Invoice ${inv.invoiceNumber} created for order ${num}`);
+        setOrderNumber('');
+        await loadData();
+      } else {
+        toast.error(res.data.skipped?.[0]?.reason || `No invoice created for order ${num}`);
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || e?.message || 'Failed to generate invoice');
+    } finally {
+      setInvoicingOrder(false);
     }
   }
 
@@ -461,6 +489,24 @@ export default function InvoicesPage() {
               ]}
               actions={
                 <>
+                  <form onSubmit={onInvoiceOrder} className="flex items-center gap-2" autoComplete="off">
+                    <input
+                      value={orderNumber}
+                      onChange={(e) => setOrderNumber(e.target.value)}
+                      placeholder="Order #"
+                      autoComplete="off"
+                      aria-label="Order number to invoice"
+                      className="w-32 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="submit"
+                      disabled={invoicingOrder || !orderNumber.trim()}
+                      className="inline-flex items-center gap-2 rounded-lg border border-[#D4A017] px-3 py-2 text-sm font-medium text-[#8a6a0a] hover:bg-[#D4A017]/10 disabled:opacity-50"
+                    >
+                      <FilePlus2 className={`h-4 w-4 ${invoicingOrder ? 'animate-pulse' : ''}`} />
+                      {invoicingOrder ? 'Generating…' : 'Invoice order'}
+                    </button>
+                  </form>
                   <button
                     onClick={() => void loadData()}
                     disabled={loading || generating}

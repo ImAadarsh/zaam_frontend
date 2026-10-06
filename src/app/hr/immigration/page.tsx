@@ -9,14 +9,15 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import {
   listVisaExpiring, listComplianceAlerts, listImmigration, createImmigration,
-  listEmployees, listRtwDocuments, uploadRtwDocument, createRtwDocument,
-  createEmployeeDocument, listEmployeeDocuments,
+  listEmployees, listRtwDocuments, createRtwDocument, createHrDocument,
+  listEmployeeDocuments,
 } from '@/lib/api';
 import {
   daysUntil, employeeName, formatDate, hrApiError, isApiMissing,
-  statusBadgeClass, visaRiskClass, VISA_TYPES,
+  resolveDocUrl, RTW_DOC_TYPES, statusBadgeClass, visaRiskClass, VISA_TYPES,
 } from '@/lib/hr-utils';
 import { HrModal, HrField, HrModalActions, hrInputClass, hrTextareaClass } from '@/components/hr/hr-modal';
+import { FileUploadField } from '@/components/file-upload-field';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, Eye, Plus, ShieldCheck, Upload } from 'lucide-react';
@@ -43,14 +44,8 @@ export default function ImmigrationRtwPage() {
     shareCode: '',
     notes: '',
   });
-  const [uploadForm, setUploadForm] = useState({
-    employeeId: '',
-    docType: 'passport',
-    documentName: '',
-    expiresAt: '',
-    documentUrl: '',
-  });
-  const [file, setFile] = useState<File | null>(null);
+  const emptyUploadForm = { employeeId: '', docType: 'passport', documentName: '', expiresAt: '', documentUrl: '' };
+  const [uploadForm, setUploadForm] = useState(emptyUploadForm);
 
   const orgId = session?.user?.organizationId;
 
@@ -63,8 +58,8 @@ export default function ImmigrationRtwPage() {
       try {
         const [v, a, r] = await Promise.all([
           listVisaExpiring({ organizationId: orgId, withinDays, limit: 100 }),
-          listComplianceAlerts({ organizationId: orgId, limit: 50 }),
-          listRtwDocuments({ limit: 50 }),
+          listComplianceAlerts({ organizationId: orgId, limit: 200 }),
+          listRtwDocuments({ limit: 200 }),
         ]);
         setBoard(Array.isArray(v.data) ? v.data : []);
         setAlerts(a.data || []);
@@ -134,56 +129,34 @@ export default function ImmigrationRtwPage() {
       toast.error('Select an employee');
       return;
     }
+    if (!uploadForm.documentUrl) {
+      toast.error('File: please upload the document first');
+      return;
+    }
     setSaving(true);
     try {
-      if (file) {
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('employeeId', uploadForm.employeeId);
-        fd.append('docType', uploadForm.docType);
-        fd.append('documentName', uploadForm.documentName || file.name);
-        if (uploadForm.expiresAt) fd.append('expiresAt', uploadForm.expiresAt);
-        try {
-          await uploadRtwDocument(fd);
-        } catch (err) {
-          if (!isApiMissing(err)) throw err;
-          // Fallback: metadata via employee-documents if upload endpoint missing
-          if (!uploadForm.documentUrl) throw err;
-          await createEmployeeDocument({
-            employeeId: uploadForm.employeeId,
-            documentType: uploadForm.docType === 'passport' ? 'passport' : uploadForm.docType === 'id' ? 'id' : 'other',
-            documentName: uploadForm.documentName || file.name,
-            documentUrl: uploadForm.documentUrl,
-            expiryDate: uploadForm.expiresAt || undefined,
-          });
-        }
-      } else if (uploadForm.documentUrl) {
-        try {
-          await createRtwDocument({
-            employeeId: uploadForm.employeeId,
-            docType: uploadForm.docType,
-            documentName: uploadForm.documentName || 'RTW document',
-            documentUrl: uploadForm.documentUrl,
-            expiresAt: uploadForm.expiresAt || undefined,
-          });
-        } catch (err) {
-          if (!isApiMissing(err)) throw err;
-          await createEmployeeDocument({
-            employeeId: uploadForm.employeeId,
-            documentType: uploadForm.docType === 'passport' ? 'passport' : uploadForm.docType === 'id' ? 'id' : 'other',
-            documentName: uploadForm.documentName || 'RTW document',
-            documentUrl: uploadForm.documentUrl,
-            expiryDate: uploadForm.expiresAt || undefined,
-          });
-        }
+      const documentName = uploadForm.documentName.trim()
+        || decodeURIComponent(uploadForm.documentUrl.split('/').pop() || '')
+        || 'RTW document';
+      if (uploadForm.docType === 'contract') {
+        await createHrDocument({
+          employeeId: uploadForm.employeeId,
+          docCategory: 'contract',
+          documentName,
+          documentUrl: uploadForm.documentUrl,
+          expiryDate: uploadForm.expiresAt || null,
+        });
       } else {
-        toast.error('Attach a file or paste a document URL');
-        setSaving(false);
-        return;
+        await createRtwDocument({
+          employeeId: uploadForm.employeeId,
+          docType: uploadForm.docType,
+          documentName,
+          documentUrl: uploadForm.documentUrl,
+          expiresAt: uploadForm.expiresAt || null,
+        });
       }
-      toast.success('RTW document saved');
+      toast.success(uploadForm.docType === 'contract' ? 'Contract saved to Documents' : 'RTW document saved');
       setUploadOpen(false);
-      setFile(null);
       void load();
     } catch (err) {
       toast.error(hrApiError(err, 'Upload failed'));
@@ -239,6 +212,88 @@ export default function ImmigrationRtwPage() {
     },
   ], []);
 
+  const alertColumns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      id: 'title',
+      accessorFn: (a) => a.title || a.message || a.alertType || '',
+      header: 'Reminder',
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium">{row.original.title || row.original.alertType}</div>
+          {row.original.message && <div className="text-xs text-muted-foreground mt-0.5">{row.original.message}</div>}
+        </div>
+      ),
+    },
+    {
+      id: 'dueDate',
+      accessorFn: (a) => a.dueDate || a.createdAt || '',
+      header: 'Due',
+      cell: ({ row }) => formatDate(row.original.dueDate || row.original.createdAt),
+    },
+    {
+      id: 'severity',
+      accessorFn: (a) => a.severity || '',
+      header: 'Severity',
+      cell: ({ row }) => (
+        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${row.original.severity === 'critical' ? 'bg-red-500/10 text-red-600' : 'bg-amber-500/10 text-amber-700'}`}>
+          {row.original.severity || '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'status',
+      accessorFn: (a) => a.status || 'open',
+      header: 'Status',
+      cell: ({ row }) => (
+        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${statusBadgeClass(row.original.status)}`}>
+          {row.original.status || 'open'}
+        </span>
+      ),
+    },
+  ], []);
+
+  const rtwColumns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      id: 'employee',
+      accessorFn: (d) => employeeName(d.employee),
+      header: 'Employee',
+      cell: ({ row }) => {
+        const eid = row.original.employeeId || row.original.employee?.id;
+        return eid ? (
+          <Link href={`/hr/employees/${eid}`} className="text-[#D4A017] hover:underline">{employeeName(row.original.employee)}</Link>
+        ) : employeeName(row.original.employee);
+      },
+    },
+    {
+      id: 'documentName',
+      accessorFn: (d) => d.documentName || '',
+      header: 'Document',
+    },
+    {
+      id: 'docType',
+      accessorFn: (d) => (d.docType || d.documentType || '').replace(/_/g, ' '),
+      header: 'Type',
+      cell: ({ getValue }) => <span className="capitalize">{String(getValue() || '—')}</span>,
+    },
+    {
+      id: 'expiresAt',
+      accessorFn: (d) => d.expiresAt || d.expiryDate || '',
+      header: 'Expiry',
+      cell: ({ row }) => formatDate(row.original.expiresAt || row.original.expiryDate),
+    },
+    {
+      id: 'link',
+      header: '',
+      enableSorting: false,
+      cell: ({ row }) => {
+        const href = resolveDocUrl(row.original.documentUrl);
+        return href ? (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-xs text-[#D4A017] hover:underline">Open</a>
+        ) : null;
+      },
+    },
+  ], []);
+
   if (!hydrated || !hasAccess) {
     return (
       <div className="min-h-screen app-surface">
@@ -279,7 +334,7 @@ export default function ImmigrationRtwPage() {
               </select>
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setUploadOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium hover:border-[#D4A017]/40">
+              <button type="button" onClick={() => { setUploadForm(emptyUploadForm); setUploadOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium hover:border-[#D4A017]/40">
                 <Upload size={14} /> Upload RTW
               </button>
               <button type="button" onClick={() => setImmOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
@@ -297,31 +352,18 @@ export default function ImmigrationRtwPage() {
             </div>
           </section>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-              <div className="px-5 py-4 border-b border-border/50 font-semibold text-sm">Renewal reminders</div>
-              {alerts.length === 0 && <div className="p-6 text-sm text-muted-foreground">No alerts.</div>}
-              {alerts.map((a: any) => (
-                <div key={a.id} className="px-5 py-3 border-b border-border/30 last:border-0 text-sm">
-                  <div className="font-medium">{a.title || a.message || a.type}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{formatDate(a.dueAt || a.createdAt)} · <span className={statusBadgeClass(a.severity || a.status)}>{a.severity || a.status || 'open'}</span></div>
-                </div>
-              ))}
-            </section>
-            <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-              <div className="px-5 py-4 border-b border-border/50 font-semibold text-sm">Recent RTW / ID documents</div>
-              {rtw.length === 0 && <div className="p-6 text-sm text-muted-foreground">No documents.</div>}
-              {rtw.slice(0, 12).map((d: any) => (
-                <div key={d.id} className="px-5 py-3 border-b border-border/30 last:border-0 text-sm flex justify-between gap-2">
-                  <div>
-                    <div className="font-medium">{d.documentName || d.docType || d.documentType}</div>
-                    <div className="text-xs text-muted-foreground">{employeeName(d.employee)}</div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">{formatDate(d.expiresAt || d.expiryDate)}</div>
-                </div>
-              ))}
-            </section>
-          </div>
+          <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
+            <div className="px-5 py-4 border-b border-border/50 font-semibold text-sm">Renewal reminders</div>
+            <div className="p-4">
+              <RichDataTable columns={alertColumns} data={alerts} searchPlaceholder="Search reminders…" />
+            </div>
+          </section>
+          <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
+            <div className="px-5 py-4 border-b border-border/50 font-semibold text-sm">Recent RTW / ID documents</div>
+            <div className="p-4">
+              <RichDataTable columns={rtwColumns} data={rtw} searchPlaceholder="Search RTW documents…" />
+            </div>
+          </section>
         </main>
       </div>
 
@@ -356,19 +398,20 @@ export default function ImmigrationRtwPage() {
           </HrField>
           <HrField label="Document type">
             <select className={hrInputClass} value={uploadForm.docType} onChange={(e) => setUploadForm({ ...uploadForm, docType: e.target.value })}>
-              <option value="passport">Passport</option>
-              <option value="visa">Visa vignette / BRP</option>
-              <option value="share_code">Share code evidence</option>
-              <option value="id">Photo ID</option>
-              <option value="contract">Contract</option>
-              <option value="other">Other</option>
+              {RTW_DOC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              <option value="contract">Contract (saved to Documents)</option>
             </select>
           </HrField>
           <HrField label="Name"><input className={hrInputClass} value={uploadForm.documentName} onChange={(e) => setUploadForm({ ...uploadForm, documentName: e.target.value })} /></HrField>
           <HrField label="Expiry"><input type="date" className={hrInputClass} value={uploadForm.expiresAt} onChange={(e) => setUploadForm({ ...uploadForm, expiresAt: e.target.value })} /></HrField>
-          <HrField label="File"><input type="file" className="text-sm" onChange={(e) => setFile(e.target.files?.[0] || null)} /></HrField>
-          <HrField label="Or document URL" hint="Used when multipart upload is unavailable">
-            <input className={hrInputClass} value={uploadForm.documentUrl} onChange={(e) => setUploadForm({ ...uploadForm, documentUrl: e.target.value })} placeholder="https://…" />
+          <HrField label="File">
+            <FileUploadField
+              value={uploadForm.documentUrl ? [uploadForm.documentUrl] : []}
+              onChange={(urls) => setUploadForm((f) => ({ ...f, documentUrl: urls[0] || '' }))}
+              folder="hr/rtw"
+              accept="image/*,.pdf"
+              label="Upload document"
+            />
           </HrField>
           <HrModalActions onCancel={() => setUploadOpen(false)} submitLabel="Upload" submitting={saving} />
         </form>

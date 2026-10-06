@@ -16,10 +16,47 @@ type JournalLine = {
   costCenterId?: string;
   lineNumber: number;
   description?: string;
-  debitAmount: number;
-  creditAmount: number;
+  debitAmount: number | string;
+  creditAmount: number | string;
   currency?: string;
 };
+
+const amt = (v: number | string | undefined) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+function journalLinesError(lines: JournalLine[]): string | null {
+  if (lines.length < 2) return 'Add at least 2 journal lines';
+  for (const line of lines) {
+    const d = amt(line.debitAmount);
+    const c = amt(line.creditAmount);
+    if (!line.ledgerAccountId) return `Line ${line.lineNumber}: choose a ledger account`;
+    if (d < 0 || c < 0) return `Line ${line.lineNumber}: amounts cannot be negative`;
+    if (d > 0 && c > 0) return `Line ${line.lineNumber}: enter either a debit or a credit, not both`;
+    if (d === 0 && c === 0) return `Line ${line.lineNumber}: enter a debit or credit amount greater than 0`;
+  }
+  const debits = lines.reduce((s, l) => s + amt(l.debitAmount), 0);
+  const credits = lines.reduce((s, l) => s + amt(l.creditAmount), 0);
+  if (!lines.some((l) => amt(l.debitAmount) > 0) || !lines.some((l) => amt(l.creditAmount) > 0)) {
+    return 'A journal needs at least one debit line and one credit line';
+  }
+  if (Math.abs(debits - credits) > 0.005) {
+    return `Journal entry must balance. Debits: £${debits.toFixed(2)}, Credits: £${credits.toFixed(2)}`;
+  }
+  return null;
+}
+
+function toApiLines(lines: JournalLine[]) {
+  return lines.map((line) => ({
+    ...line,
+    ledgerAccountId: line.ledgerAccountId,
+    costCenterId: line.costCenterId || undefined,
+    debitAmount: Math.round(amt(line.debitAmount) * 100) / 100,
+    creditAmount: Math.round(amt(line.creditAmount) * 100) / 100,
+    currency: line.currency || 'GBP'
+  }));
+}
 
 type JournalEntry = {
   id: string;
@@ -131,9 +168,14 @@ export default function JournalEntriesPage() {
   }
 
   function updateJournalLine(index: number, field: keyof JournalLine, value: any) {
-    const updated = [...journalLines];
-    updated[index] = { ...updated[index], [field]: value };
-    setJournalLines(updated);
+    setJournalLines((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value } : l)));
+  }
+
+  function setLineAmount(index: number, side: 'debitAmount' | 'creditAmount', raw: string) {
+    const other = side === 'debitAmount' ? 'creditAmount' : 'debitAmount';
+    setJournalLines((prev) =>
+      prev.map((l, i) => (i === index ? { ...l, [side]: raw, [other]: amt(raw) > 0 ? 0 : l[other] } : l))
+    );
   }
 
   function addEditJournalLine() {
@@ -154,23 +196,25 @@ export default function JournalEntriesPage() {
   }
 
   function updateEditJournalLine(index: number, field: keyof JournalLine, value: any) {
-    const updated = [...editJournalLines];
-    updated[index] = { ...updated[index], [field]: value };
-    setEditJournalLines(updated);
+    setEditJournalLines((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value } : l)));
+  }
+
+  function setEditLineAmount(index: number, side: 'debitAmount' | 'creditAmount', raw: string) {
+    const other = side === 'debitAmount' ? 'creditAmount' : 'debitAmount';
+    setEditJournalLines((prev) =>
+      prev.map((l, i) => (i === index ? { ...l, [side]: raw, [other]: amt(raw) > 0 ? 0 : l[other] } : l))
+    );
   }
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.fiscalPeriodId || !form.journalNumber || journalLines.length < 2) {
-      toast.error('Please fill in required fields and add at least 2 journal lines');
+    if (!form.fiscalPeriodId || !form.journalNumber.trim() || !form.entryDate) {
+      toast.error('Please fill in the journal number, entry date and fiscal period');
       return;
     }
-
-    const totalDebits = journalLines.reduce((sum, line) => sum + (line.debitAmount || 0), 0);
-    const totalCredits = journalLines.reduce((sum, line) => sum + (line.creditAmount || 0), 0);
-    
-    if (Math.abs(totalDebits - totalCredits) > 0.01) {
-      toast.error(`Journal entry must balance. Debits: £${totalDebits.toFixed(2)}, Credits: £${totalCredits.toFixed(2)}`);
+    const linesErr = journalLinesError(journalLines);
+    if (linesErr) {
+      toast.error(linesErr);
       return;
     }
 
@@ -178,12 +222,7 @@ export default function JournalEntriesPage() {
       await createJournalEntry({
         ...form,
         organizationId: session?.user?.organizationId || form.organizationId,
-        journalLines: journalLines.map(line => ({
-          ...line,
-          ledgerAccountId: line.ledgerAccountId,
-          costCenterId: line.costCenterId || undefined,
-          currency: line.currency || 'GBP'
-        }))
+        journalLines: toApiLines(journalLines)
       });
       toast.success('Journal Entry created');
       setShowCreate(false);
@@ -209,28 +248,22 @@ export default function JournalEntriesPage() {
 
   async function onUpdate(e: React.FormEvent) {
     e.preventDefault();
-    if (!editing || !editForm.fiscalPeriodId || !editForm.journalNumber || editJournalLines.length < 2) {
-      toast.error('Please fill in required fields and add at least 2 journal lines');
+    if (!editing) return;
+    if (!editForm.fiscalPeriodId || !editForm.journalNumber.trim() || !editForm.entryDate) {
+      toast.error('Please fill in the journal number, entry date and fiscal period');
       return;
     }
-
-    const totalDebits = editJournalLines.reduce((sum, line) => sum + (line.debitAmount || 0), 0);
-    const totalCredits = editJournalLines.reduce((sum, line) => sum + (line.creditAmount || 0), 0);
-    
-    if (Math.abs(totalDebits - totalCredits) > 0.01) {
-      toast.error(`Journal entry must balance. Debits: £${totalDebits.toFixed(2)}, Credits: £${totalCredits.toFixed(2)}`);
+    const linesErr = journalLinesError(editJournalLines);
+    if (linesErr) {
+      toast.error(linesErr);
       return;
     }
 
     try {
       await updateJournalEntry(editing.id, {
         ...editForm,
-        journalLines: editJournalLines.map(line => ({
-          ...line,
-          ledgerAccountId: line.ledgerAccountId,
-          costCenterId: line.costCenterId || undefined,
-          currency: line.currency || 'GBP'
-        }))
+        entryDate: String(editForm.entryDate || '').slice(0, 10),
+        journalLines: toApiLines(editJournalLines)
       });
       toast.success('Journal Entry updated');
       setEditing(null);
@@ -296,7 +329,7 @@ export default function JournalEntriesPage() {
                   businessUnitId: (item as any).businessUnit?.id || '',
                   fiscalPeriodId: item.fiscalPeriod?.id || '',
                   journalNumber: item.journalNumber,
-                  entryDate: item.entryDate,
+                  entryDate: String(item.entryDate || '').slice(0, 10),
                   entryType: item.entryType,
                   sourceType: item.sourceType,
                   description: item.description || '',
@@ -308,8 +341,8 @@ export default function JournalEntriesPage() {
                   costCenterId: (line as any).costCenter?.id || line.costCenterId || '',
                   lineNumber: line.lineNumber,
                   description: line.description || '',
-                  debitAmount: line.debitAmount,
-                  creditAmount: line.creditAmount,
+                  debitAmount: amt(line.debitAmount),
+                  creditAmount: amt(line.creditAmount),
                   currency: line.currency || 'GBP'
                 })));
               }} className="p-1.5 hover:bg-muted rounded">
@@ -363,8 +396,8 @@ export default function JournalEntriesPage() {
   }
 
   const calculateBalance = (lines: JournalLine[]) => {
-    const debits = lines.reduce((sum, line) => sum + (line.debitAmount || 0), 0);
-    const credits = lines.reduce((sum, line) => sum + (line.creditAmount || 0), 0);
+    const debits = lines.reduce((sum, line) => sum + amt(line.debitAmount), 0);
+    const credits = lines.reduce((sum, line) => sum + amt(line.creditAmount), 0);
     return { debits, credits, difference: debits - credits };
   };
 
@@ -554,11 +587,11 @@ export default function JournalEntriesPage() {
                                 <input
                                   type="number"
                                   step="0.01"
-                                  value={line.debitAmount || 0}
-                                  onChange={(e) => {
-                                    updateJournalLine(index, 'debitAmount', parseFloat(e.target.value) || 0);
-                                    updateJournalLine(index, 'creditAmount', 0);
-                                  }}
+                                  min="0"
+                                  inputMode="decimal"
+                                  placeholder="0.00"
+                                  value={line.debitAmount === 0 ? '' : line.debitAmount}
+                                  onChange={(e) => setLineAmount(index, 'debitAmount', e.target.value)}
                                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm"
                                 />
                               </div>
@@ -567,11 +600,11 @@ export default function JournalEntriesPage() {
                                 <input
                                   type="number"
                                   step="0.01"
-                                  value={line.creditAmount || 0}
-                                  onChange={(e) => {
-                                    updateJournalLine(index, 'creditAmount', parseFloat(e.target.value) || 0);
-                                    updateJournalLine(index, 'debitAmount', 0);
-                                  }}
+                                  min="0"
+                                  inputMode="decimal"
+                                  placeholder="0.00"
+                                  value={line.creditAmount === 0 ? '' : line.creditAmount}
+                                  onChange={(e) => setLineAmount(index, 'creditAmount', e.target.value)}
                                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm"
                                 />
                               </div>
@@ -771,11 +804,11 @@ export default function JournalEntriesPage() {
                                 <input
                                   type="number"
                                   step="0.01"
-                                  value={line.debitAmount || 0}
-                                  onChange={(e) => {
-                                    updateEditJournalLine(index, 'debitAmount', parseFloat(e.target.value) || 0);
-                                    updateEditJournalLine(index, 'creditAmount', 0);
-                                  }}
+                                  min="0"
+                                  inputMode="decimal"
+                                  placeholder="0.00"
+                                  value={line.debitAmount === 0 ? '' : line.debitAmount}
+                                  onChange={(e) => setEditLineAmount(index, 'debitAmount', e.target.value)}
                                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm"
                                 />
                               </div>
@@ -784,11 +817,11 @@ export default function JournalEntriesPage() {
                                 <input
                                   type="number"
                                   step="0.01"
-                                  value={line.creditAmount || 0}
-                                  onChange={(e) => {
-                                    updateEditJournalLine(index, 'creditAmount', parseFloat(e.target.value) || 0);
-                                    updateEditJournalLine(index, 'debitAmount', 0);
-                                  }}
+                                  min="0"
+                                  inputMode="decimal"
+                                  placeholder="0.00"
+                                  value={line.creditAmount === 0 ? '' : line.creditAmount}
+                                  onChange={(e) => setEditLineAmount(index, 'creditAmount', e.target.value)}
                                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm"
                                 />
                               </div>

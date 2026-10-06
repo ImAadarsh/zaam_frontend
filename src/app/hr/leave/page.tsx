@@ -13,9 +13,10 @@ import {
 } from '@/lib/api';
 import { employeeName, formatDate, hrApiError, isApiMissing, LEAVE_TYPES, statusBadgeClass } from '@/lib/hr-utils';
 import { HrModal, HrField, HrModalActions, hrInputClass, hrTextareaClass } from '@/components/hr/hr-modal';
+import { LeaveRequestDetail } from '@/components/hr/leave-request-detail';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Check, Plus, Thermometer, X } from 'lucide-react';
+import { Check, Eye, Plus, Thermometer, X } from 'lucide-react';
 
 export default function LeavePage() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function LeavePage() {
   const [sick, setSick] = useState<any[]>([]);
   const [balances, setBalances] = useState<any[]>([]);
   const [view, setView] = useState<'leave' | 'ssp'>('leave');
+  const [detail, setDetail] = useState<any | null>(null);
   const [open, setOpen] = useState(false);
   const [sickOpen, setSickOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -153,9 +155,14 @@ export default function LeavePage() {
 
   const columns = useMemo<ColumnDef<any>[]>(() => [
     {
-      accessorKey: 'employee',
+      id: 'employee',
+      accessorFn: (r) => employeeName(r.employee),
       header: 'Employee',
-      cell: ({ row }) => employeeName(row.original.employee),
+      cell: ({ row }) => (
+        <button type="button" onClick={() => setDetail(row.original)} className="text-[#D4A017] hover:underline font-medium text-left">
+          {employeeName(row.original.employee)}
+        </button>
+      ),
     },
     {
       accessorKey: 'leaveType',
@@ -181,9 +188,15 @@ export default function LeavePage() {
       id: 'actions',
       header: '',
       cell: ({ row }) => {
-        if (row.original.status !== 'pending') return null;
+        const viewBtn = (
+          <button type="button" onClick={() => setDetail(row.original)} className="p-1.5 rounded-lg text-muted-foreground hover:text-[#D4A017] hover:bg-muted" title="View details">
+            <Eye size={16} />
+          </button>
+        );
+        if (row.original.status !== 'pending') return viewBtn;
         return (
           <div className="flex gap-1">
+            {viewBtn}
             <button type="button" onClick={() => onApprove(row.original.id)} className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-500/10" title="Approve">
               <Check size={16} />
             </button>
@@ -213,7 +226,7 @@ export default function LeavePage() {
                   <Thermometer size={14} /> Record sick episode
                 </button>
               ) : (
-                <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+                <button type="button" onClick={() => { setForm({ employeeId: '', leaveType: 'vacation', startDate: '', endDate: '', totalDays: 1, reason: '', notes: '' }); setOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
                   <Plus size={14} /> Create leave request
                 </button>
               )}
@@ -221,14 +234,16 @@ export default function LeavePage() {
           </div>
 
           {view === 'leave' && balances.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-3">
-              {balances.slice(0, 6).map((b: any) => (
+            <div className="grid gap-3 sm:grid-cols-3 max-h-[260px] overflow-y-auto pr-1">
+              {balances.map((b: any) => (
                 <div key={b.id} className="glass-panel rounded-xl border border-border/40 p-4">
                   <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-                    {employeeName(b.employee)} · {(b.leaveType || 'leave').replace(/_/g, ' ')}
+                    {employeeName(b.employee)} · {b.policyName || (b.leaveType || 'leave').replace(/_/g, ' ')} {b.year}
                   </div>
-                  <div className="mt-1 text-xl font-bold text-[#D4A017]">{b.remainingDays ?? b.balance ?? '—'}</div>
-                  <div className="text-xs text-muted-foreground">remaining of {b.entitledDays ?? '—'}</div>
+                  <div className="mt-1 text-xl font-bold text-[#D4A017]">{b.remainingDays ?? '—'} days</div>
+                  <div className="text-xs text-muted-foreground">
+                    remaining of {Number(b.entitledDays ?? 0) + Number(b.carriedDays ?? 0)} · {b.usedDays ?? 0} taken{Number(b.pendingDays) > 0 ? ` · ${b.pendingDays} pending` : ''}
+                  </div>
                 </div>
               ))}
             </div>
@@ -263,6 +278,13 @@ export default function LeavePage() {
           )}
         </main>
       </div>
+
+      <LeaveRequestDetail
+        request={detail}
+        onClose={() => setDetail(null)}
+        onChanged={() => void load()}
+        canApprove={hasAccess}
+      />
 
       <HrModal open={open} onClose={() => setOpen(false)} title="Request leave" icon={Plus}>
         <form onSubmit={onCreate} className="space-y-4">

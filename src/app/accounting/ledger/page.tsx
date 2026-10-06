@@ -20,6 +20,9 @@ import {
   getGeneralLedger,
   getTrialBalance,
   listAccFiscalPeriods,
+  listLedgerAccountTypes,
+  DEFAULT_LEDGER_ACCOUNT_TYPES,
+  type LedgerAccountTypeOption,
 } from '@/lib/accounting-api';
 import { formatMoney, formatDate, statusBadgeClass, accApiError, printElement, downloadCsv } from '@/lib/accounting-utils';
 import { AccModal, AccField, AccModalActions, AccCreateButton, accInputClass } from '@/components/accounting/acc-modal';
@@ -46,6 +49,8 @@ export default function AccountingLedgerPage() {
   const [journals, setJournals] = useState<any[]>([]);
   const [glLines, setGlLines] = useState<any[]>([]);
   const [tbRows, setTbRows] = useState<any[]>([]);
+  const [accountTypes, setAccountTypes] = useState<LedgerAccountTypeOption[]>(DEFAULT_LEDGER_ACCOUNT_TYPES);
+  const [tbTotals, setTbTotals] = useState<{ debit: number; credit: number; from?: string; to?: string }>({ debit: 0, credit: 0 });
   const [periods, setPeriods] = useState<any[]>([]);
   const [openAcc, setOpenAcc] = useState(false);
   const [openJe, setOpenJe] = useState(false);
@@ -74,6 +79,7 @@ export default function AccountingLedgerPage() {
     if (!orgId) return;
     setLoading(true);
     try {
+      listLedgerAccountTypes(orgId).then(setAccountTypes);
       const [coa, led, jes, gl, tb, fp] = await Promise.all([
         listAccChartOfAccounts(orgId),
         listAccLedgerAccounts(orgId),
@@ -85,8 +91,34 @@ export default function AccountingLedgerPage() {
       setCharts(coa.data || []);
       setAccounts(led.data || []);
       setJournals(jes.data || []);
-      setGlLines((gl.data as any)?.lines || []);
-      setTbRows((tb.data as any)?.rows || []);
+      const glRaw: any[] = Array.isArray(gl.data) ? gl.data : (gl.data as any)?.lines || [];
+      setGlLines(
+        glRaw.map((l) => ({
+          entryDate: l.entryDate ?? l.entry_date,
+          journalNumber: l.journalNumber ?? l.journal_number,
+          accountCode: l.accountCode ?? l.account_code,
+          accountName: l.accountName ?? l.account_name,
+          description: l.description ?? l.line_desc ?? l.je_desc,
+          debit: Number(l.debit ?? l.debit_amount ?? 0),
+          credit: Number(l.credit ?? l.credit_amount ?? 0),
+        }))
+      );
+      const tbData = (tb.data as any) || {};
+      const tbList: any[] = tbData.accounts || tbData.rows || [];
+      setTbRows(
+        tbList.map((r) => ({
+          ...r,
+          debit: Number(r.debit || 0),
+          credit: Number(r.credit || 0),
+          net: Number(r.debit || 0) - Number(r.credit || 0),
+        }))
+      );
+      setTbTotals({
+        debit: Number(tbData.totalDebit ?? tbList.reduce((s, r) => s + Number(r.debit || 0), 0)),
+        credit: Number(tbData.totalCredit ?? tbList.reduce((s, r) => s + Number(r.credit || 0), 0)),
+        from: tbData.from,
+        to: tbData.to,
+      });
       setPeriods(fp.data || []);
       if ((coa.data || [])[0]) setAccForm((f) => ({ ...f, chartOfAccountsId: f.chartOfAccountsId || coa.data[0].id }));
       if ((fp.data || [])[0]) setJeForm((f) => ({ ...f, fiscalPeriodId: f.fiscalPeriodId || fp.data[0].id }));
@@ -254,9 +286,17 @@ export default function AccountingLedgerPage() {
     () => [
       { accessorKey: 'accountCode', header: 'Code', cell: ({ row }) => <span className="font-mono text-xs">{row.original.accountCode}</span> },
       { accessorKey: 'accountName', header: 'Account' },
-      { accessorKey: 'debit', header: 'Debit', cell: ({ row }) => formatMoney(row.original.debit) },
-      { accessorKey: 'credit', header: 'Credit', cell: ({ row }) => formatMoney(row.original.credit) },
-      { accessorKey: 'balance', header: 'Balance', cell: ({ row }) => formatMoney(row.original.balance) },
+      { accessorKey: 'accountType', header: 'Type', cell: ({ row }) => <span className="capitalize">{String(row.original.accountType || '').replace(/_/g, ' ')}</span> },
+      { accessorKey: 'debit', header: 'Debit', cell: ({ row }) => (row.original.debit ? formatMoney(row.original.debit) : '—') },
+      { accessorKey: 'credit', header: 'Credit', cell: ({ row }) => (row.original.credit ? formatMoney(row.original.credit) : '—') },
+      {
+        accessorKey: 'net',
+        header: 'Balance',
+        cell: ({ row }) => {
+          const n = Number(row.original.net || 0);
+          return n === 0 ? '—' : `${formatMoney(Math.abs(n))} ${n > 0 ? 'Dr' : 'Cr'}`;
+        },
+      },
     ],
     []
   );
@@ -265,19 +305,20 @@ export default function AccountingLedgerPage() {
     const rows = tbRows
       .map(
         (r) =>
-          `<tr><td>${r.accountCode || ''}</td><td>${r.accountName || ''}</td><td class="num">${formatMoney(r.debit)}</td><td class="num">${formatMoney(r.credit)}</td><td class="num">${formatMoney(r.balance)}</td></tr>`
+          `<tr><td>${r.accountCode || ''}</td><td>${r.accountName || ''}</td><td class="num">${formatMoney(r.debit)}</td><td class="num">${formatMoney(r.credit)}</td><td class="num">${formatMoney(r.net)}</td></tr>`
       )
       .join('');
     printElement(
       'Trial Balance',
-      `<table><thead><tr><th>Code</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead><tbody>${rows}</tbody></table>`
+      `<table><thead><tr><th>Code</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance (Dr − Cr)</th></tr></thead><tbody>${rows}<tr class="total"><td></td><td>Total</td><td class="num">${formatMoney(tbTotals.debit)}</td><td class="num">${formatMoney(tbTotals.credit)}</td><td class="num">${formatMoney(tbTotals.debit - tbTotals.credit)}</td></tr></tbody></table>`
     );
   }
 
   function csvTb() {
     downloadCsv('trial-balance.csv', [
-      ['Code', 'Account', 'Debit', 'Credit', 'Balance'],
-      ...tbRows.map((r) => [r.accountCode, r.accountName, r.debit, r.credit, r.balance]),
+      ['Code', 'Account', 'Debit', 'Credit', 'Balance (Dr - Cr)'],
+      ...tbRows.map((r) => [r.accountCode, r.accountName, r.debit, r.credit, r.net]),
+      ['', 'Total', tbTotals.debit, tbTotals.credit, tbTotals.debit - tbTotals.credit],
     ]);
   }
 
@@ -331,7 +372,23 @@ export default function AccountingLedgerPage() {
           {tab === 'coa' && <RichDataTable columns={coaCols} data={accounts} />}
           {tab === 'journals' && <RichDataTable columns={jeCols} data={journals} />}
           {tab === 'gl' && <RichDataTable columns={glCols} data={glLines} />}
-          {tab === 'tb' && <RichDataTable columns={tbCols} data={tbRows} />}
+          {tab === 'tb' && (
+            <>
+              <RichDataTable columns={tbCols} data={tbRows} />
+              <div className="flex flex-wrap items-center justify-end gap-6 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm">
+                {tbTotals.from && tbTotals.to ? (
+                  <span className="mr-auto text-muted-foreground">
+                    Period {formatDate(tbTotals.from)} – {formatDate(tbTotals.to)} · posted journals only
+                  </span>
+                ) : null}
+                <span>Total debit <strong className="tabular-nums">{formatMoney(tbTotals.debit)}</strong></span>
+                <span>Total credit <strong className="tabular-nums">{formatMoney(tbTotals.credit)}</strong></span>
+                <span className={statusBadgeClass(Math.abs(tbTotals.debit - tbTotals.credit) < 0.01 ? 'posted' : 'overdue')}>
+                  {Math.abs(tbTotals.debit - tbTotals.credit) < 0.01 ? 'Balanced' : `Out by ${formatMoney(Math.abs(tbTotals.debit - tbTotals.credit))}`}
+                </span>
+              </div>
+            </>
+          )}
         </main>
       </div>
 
@@ -340,9 +397,16 @@ export default function AccountingLedgerPage() {
           <AccField label="Account code"><input className={accInputClass} value={accForm.accountCode} onChange={(e) => setAccForm({ ...accForm, accountCode: e.target.value })} required /></AccField>
           <AccField label="Account name"><input className={accInputClass} value={accForm.accountName} onChange={(e) => setAccForm({ ...accForm, accountName: e.target.value })} required /></AccField>
           <AccField label="Type">
-            <select className={accInputClass} value={accForm.accountType} onChange={(e) => setAccForm({ ...accForm, accountType: e.target.value })}>
-              {['asset', 'liability', 'equity', 'revenue', 'expense', 'cost_of_goods_sold'].map((t) => (
-                <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+            <select
+              className={accInputClass}
+              value={accForm.accountType}
+              onChange={(e) => {
+                const t = accountTypes.find((x) => x.value === e.target.value);
+                setAccForm({ ...accForm, accountType: e.target.value, normalBalance: t?.normalBalance || accForm.normalBalance });
+              }}
+            >
+              {accountTypes.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
           </AccField>

@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { getTicket, addTicketMessage, assignTicket, listCannedResponses } from '@/lib/api';
+import { getTicket, addTicketMessage, assignTicket, listCannedResponses, incrementCannedResponseUsage } from '@/lib/api';
 import { toast } from 'sonner';
 import {
     MessageSquare,
@@ -56,6 +56,25 @@ export default function TicketDetailPage() {
 
         if (id) loadData();
     }, [id, router]);
+
+    const activeCanned = useMemo(() => cannedResponses.filter((r) => r.isActive !== false), [cannedResponses]);
+
+    function applyCanned(res: any, base: string) {
+        setMessage(base.trim() ? `${base.trimEnd()}\n${res.content}` : res.content);
+        void incrementCannedResponseUsage(res.id).catch(() => undefined);
+    }
+
+    function handleMessageChange(value: string) {
+        const m = value.match(/(^|\s)\/([\w-]+)\s$/);
+        if (m) {
+            const hit = activeCanned.find((r) => r.shortcut && r.shortcut.toLowerCase() === m[2].toLowerCase());
+            if (hit) {
+                applyCanned(hit, value.slice(0, value.length - m[2].length - 2));
+                return;
+            }
+        }
+        setMessage(value);
+    }
 
     async function handleSendMessage(e: React.FormEvent) {
         e.preventDefault();
@@ -192,7 +211,7 @@ export default function TicketDetailPage() {
                                     <div className="relative group">
                                         <textarea
                                             value={message}
-                                            onChange={(e) => setMessage(e.target.value)}
+                                            onChange={(e) => handleMessageChange(e.target.value)}
                                             placeholder={isInternal ? "Write internal note (only visible to team)..." : "Type your reply..."}
                                             className={`w-full bg-background border p-4 rounded-2xl focus:outline-none focus:ring-2 transition-all min-h-[120px] resize-none ${isInternal
                                                 ? 'border-amber-500/20 focus:ring-amber-500/20 text-amber-900 dark:text-amber-100 placeholder:text-amber-500/40'
@@ -214,11 +233,12 @@ export default function TicketDetailPage() {
 
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                                            {cannedResponses.slice(0, 3).map(res => (
+                                            {activeCanned.map(res => (
                                                 <button
                                                     key={res.id}
                                                     type="button"
-                                                    onClick={() => setMessage(res.content)}
+                                                    title={res.shortcut ? `/${res.shortcut}` : undefined}
+                                                    onClick={() => applyCanned(res, message)}
                                                     className="px-3 py-1.5 rounded-lg bg-muted border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted/80 transition whitespace-nowrap"
                                                 >
                                                     {res.title}

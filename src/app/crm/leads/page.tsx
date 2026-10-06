@@ -15,11 +15,13 @@ import {
   syncCrmLeadToMarketing,
   listCrmAssignableUsers,
   bulkAssignCrmLeads,
+  listCrmMarketingSegments,
+  bulkSyncCrmLeadsToMarketing,
 } from '@/lib/api';
 import { crmApiError, displayName, LEAD_SOURCES, LEAD_STATUSES, LEAD_PRIORITIES } from '@/lib/crm-utils';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, Pencil, ArrowRightLeft, AlertCircle, Target, Send, Megaphone, UserPlus, Users } from 'lucide-react';
+import { Plus, Pencil, ArrowRightLeft, AlertCircle, Target, Send, Megaphone, UserPlus, Users, Search, Check } from 'lucide-react';
 import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 
 type AssignableUser = {
@@ -102,7 +104,7 @@ function CrmLeadsPageInner() {
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [apiMissing, setApiMissing] = useState(false);
-  const [modal, setModal] = useState<'create' | 'edit' | 'convert' | 'assign' | null>(
+  const [modal, setModal] = useState<'create' | 'edit' | 'convert' | 'assign' | 'segment' | null>(
     searchParams.get('new') === 'true' ? 'create' : null
   );
   const [editing, setEditing] = useState<any>(null);
@@ -122,6 +124,10 @@ function CrmLeadsPageInner() {
   const [assignSearch, setAssignSearch] = useState('');
   const [assignTargets, setAssignTargets] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [segments, setSegments] = useState<Array<{ id: string; name: string; totalMembers: number }>>([]);
+  const [segmentMode, setSegmentMode] = useState<'existing' | 'new'>('existing');
+  const [segmentId, setSegmentId] = useState('');
+  const [newSegmentName, setNewSegmentName] = useState('');
 
   const orgId = session?.user?.organizationId;
 
@@ -361,6 +367,57 @@ function CrmLeadsPageInner() {
       const res = await syncCrmLeadToMarketing(lead.id);
       if (res.data?.added) toast.success('Synced to Marketing · CRM Leads segment');
       else toast.success('Already in Marketing · CRM Leads segment');
+    } catch (err) {
+      toast.error(crmApiError(err, 'Sync to Marketing failed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function openSegmentSync() {
+    setSegmentId('');
+    setNewSegmentName('');
+    setSegmentMode('existing');
+    setModal('segment');
+    try {
+      const res = await listCrmMarketingSegments({ organizationId: orgId });
+      const list = res.data || [];
+      setSegments(list);
+      if (!list.length) setSegmentMode('new');
+    } catch (err) {
+      setSegments([]);
+      setSegmentMode('new');
+      toast.error(crmApiError(err, 'Failed to load marketing segments'));
+    }
+  }
+
+  async function handleBulkSync(e: React.FormEvent) {
+    e.preventDefault();
+    const leadIds = selectedLeads.map((l) => String(l.id));
+    if (!leadIds.length) return;
+    if (segmentMode === 'existing' && !segmentId) {
+      toast.error('Choose a marketing segment');
+      return;
+    }
+    if (segmentMode === 'new' && !newSegmentName.trim()) {
+      toast.error('Enter a name for the new segment');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await bulkSyncCrmLeadsToMarketing({
+        leadIds,
+        organizationId: orgId,
+        ...(segmentMode === 'existing' ? { segmentId } : { newSegmentName: newSegmentName.trim() }),
+      });
+      const r = res.data;
+      const parts = [`${r.added} added`];
+      if (r.alreadyMember) parts.push(`${r.alreadyMember} already in segment`);
+      if (r.skippedNoEmail) parts.push(`${r.skippedNoEmail} skipped (no email)`);
+      if (r.failed?.length) parts.push(`${r.failed.length} failed`);
+      toast.success(`Synced to "${r.segment.name}": ${parts.join(', ')}`);
+      setModal(null);
+      setSelectedIds(new Set());
     } catch (err) {
       toast.error(crmApiError(err, 'Sync to Marketing failed'));
     } finally {
@@ -612,6 +669,13 @@ function CrmLeadsPageInner() {
               </button>
               <button
                 type="button"
+                onClick={() => void openSegmentSync()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#D4A017]/40 text-[#D4A017] text-xs font-semibold hover:bg-[#D4A017]/10"
+              >
+                <Megaphone size={14} /> Sync to Marketing segment…
+              </button>
+              <button
+                type="button"
                 onClick={() => setSelectedIds(new Set())}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
@@ -750,30 +814,53 @@ function CrmLeadsPageInner() {
           <p className="text-xs text-muted-foreground">
             Choose who owns {assignTargets.length > 1 ? 'these leads' : 'this lead'}. A follow-up task is created when auto follow-up is enabled.
           </p>
-          <CrmField label="Search staff">
-            <input
-              value={assignSearch}
-              onChange={(e) => setAssignSearch(e.target.value)}
-              className={crmInputClass}
-              placeholder="Name, email, or role…"
-              autoFocus
-            />
-          </CrmField>
           <CrmField label="Assign to">
-            <select
-              required
-              value={assignUserId}
-              onChange={(e) => setAssignUserId(e.target.value)}
-              className={crmInputClass}
-              size={Math.min(8, Math.max(4, filteredAssignable.length + 1))}
-            >
-              <option value="">Select person…</option>
-              {filteredAssignable.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {ownerLabel(u)}{u.role ? ` · ${u.role}` : ''} — {u.email}
-                </option>
-              ))}
-            </select>
+            <div className="rounded-xl border border-border/80 bg-background shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-3.5 h-11 border-b border-border/60">
+                <Search size={15} className="text-muted-foreground shrink-0" />
+                <input
+                  value={assignSearch}
+                  onChange={(e) => setAssignSearch(e.target.value)}
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/80"
+                  placeholder="Search by name, email, or role…"
+                  autoFocus
+                />
+              </div>
+              <ul className="max-h-64 overflow-y-auto py-1" role="listbox" aria-label="Staff">
+                {filteredAssignable.length === 0 ? (
+                  <li className="px-3 py-6 text-xs text-muted-foreground text-center">No matching staff</li>
+                ) : (
+                  filteredAssignable.map((u) => {
+                    const active = String(assignUserId) === String(u.id);
+                    const label = ownerLabel(u);
+                    return (
+                      <li key={u.id}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          onClick={() => setAssignUserId(String(u.id))}
+                          className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition ${
+                            active ? 'bg-[#D4A017]/10' : 'hover:bg-muted'
+                          }`}
+                        >
+                          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#D4A017]/15 text-[#D4A017] text-xs font-bold uppercase">
+                            {label.slice(0, 2)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-foreground">{label}</span>
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {u.email}{u.role ? ` · ${u.role.replace(/_/g, ' ')}` : ''}
+                            </span>
+                          </span>
+                          {active ? <Check size={16} className="text-[#D4A017] shrink-0" /> : null}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </div>
             {!assignableUsers.length && (
               <p className="text-[11px] text-amber-600 mt-1">
                 No assignable users. Ensure staff have SALES_REP, ADMIN, or CS_AGENT roles.
@@ -785,6 +872,67 @@ function CrmLeadsPageInner() {
             submitLabel={assignTargets.length > 1 ? 'Assign all' : 'Assign'}
             submitting={saving}
             submitIcon={<UserPlus size={16} />}
+          />
+        </form>
+      </CrmModal>
+
+      <CrmModal
+        open={modal === 'segment'}
+        onClose={() => setModal(null)}
+        title={`Sync ${selectedLeads.length} lead${selectedLeads.length === 1 ? '' : 's'} to Marketing`}
+        icon={Megaphone}
+      >
+        <form onSubmit={handleBulkSync} className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Each lead with an email is matched to (or created as) a marketing contact and added to the chosen static segment.
+            {selectedLeads.some((l) => !l.email)
+              ? ` ${selectedLeads.filter((l) => !l.email).length} selected lead(s) have no email and will be skipped.`
+              : ''}
+          </p>
+          <div className="flex gap-2">
+            {(['existing', 'new'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                disabled={m === 'existing' && !segments.length}
+                onClick={() => setSegmentMode(m)}
+                className={`flex-1 h-9 rounded-lg text-xs font-semibold border transition disabled:opacity-40 ${
+                  segmentMode === m
+                    ? 'bg-[#D4A017] text-white border-[#D4A017]'
+                    : 'border-border text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {m === 'existing' ? 'Existing segment' : 'Create new segment'}
+              </button>
+            ))}
+          </div>
+          {segmentMode === 'existing' ? (
+            <CrmField label="Marketing segment" hint="Only static segments accept manually added members.">
+              <select value={segmentId} onChange={(e) => setSegmentId(e.target.value)} className={crmInputClass}>
+                <option value="">Select segment…</option>
+                {segments.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.totalMembers ?? 0} members)
+                  </option>
+                ))}
+              </select>
+            </CrmField>
+          ) : (
+            <CrmField label="New segment name">
+              <input
+                value={newSegmentName}
+                onChange={(e) => setNewSegmentName(e.target.value)}
+                className={crmInputClass}
+                placeholder="e.g. Trade show leads Oct 2026"
+                maxLength={255}
+              />
+            </CrmField>
+          )}
+          <CrmModalActions
+            onCancel={() => setModal(null)}
+            submitLabel="Sync leads"
+            submitting={saving}
+            submitIcon={<Megaphone size={16} />}
           />
         </form>
       </CrmModal>

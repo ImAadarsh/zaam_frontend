@@ -1,8 +1,11 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { ColumnDef } from '@tanstack/react-table';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
+import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import {
@@ -12,7 +15,26 @@ import {
 import { APPLICANT_STAGES, formatDate, hrApiError, isApiMissing, statusBadgeClass } from '@/lib/hr-utils';
 import { HrModal, HrField, HrModalActions, hrInputClass, hrTextareaClass } from '@/components/hr/hr-modal';
 import { toast } from 'sonner';
-import { AlertTriangle, Briefcase, Plus, Users } from 'lucide-react';
+import { AlertTriangle, Briefcase, Eye, Plus, Users, X } from 'lucide-react';
+
+const EMPTY_JOB = {
+  title: '',
+  department: '',
+  location: 'UK',
+  employmentType: 'full_time',
+  status: 'open',
+  description: '',
+};
+
+const EMPTY_APPLICANT = {
+  jobPostingId: '',
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  stage: 'applied',
+  notes: '',
+};
 
 export default function RecruitmentPage() {
   const router = useRouter();
@@ -26,38 +48,21 @@ export default function RecruitmentPage() {
   const [jobOpen, setJobOpen] = useState(false);
   const [appOpen, setAppOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [jobForm, setJobForm] = useState({
-    title: '',
-    department: '',
-    location: 'UK',
-    employmentType: 'full_time',
-    status: 'open',
-    description: '',
-  });
-  const [appForm, setAppForm] = useState({
-    jobPostingId: '',
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    stage: 'applied',
-    notes: '',
-  });
+  const [jobForm, setJobForm] = useState(EMPTY_JOB);
+  const [appForm, setAppForm] = useState(EMPTY_APPLICANT);
 
   const orgId = session?.user?.organizationId;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const j = await listJobPostings({ organizationId: orgId });
+      const [j, a] = await Promise.all([
+        listJobPostings({ organizationId: orgId, limit: 200 }),
+        listApplicants({ organizationId: orgId, limit: 200 }),
+      ]);
       setJobs(j.data || []);
-      setApiMissing(false);
-      const a = await listApplicants({
-        organizationId: orgId,
-        jobPostingId: selectedJob || undefined,
-        limit: 100,
-      });
       setApplicants(a.data || []);
+      setApiMissing(false);
     } catch (err) {
       if (isApiMissing(err)) {
         setApiMissing(true);
@@ -69,7 +74,7 @@ export default function RecruitmentPage() {
     } finally {
       setLoading(false);
     }
-  }, [orgId, selectedJob]);
+  }, [orgId]);
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -80,11 +85,27 @@ export default function RecruitmentPage() {
     void load();
   }, [hydrated, hasAccess, session?.accessToken, router, load]);
 
+  function openApplicant(jobPostingId?: string | null) {
+    setAppForm({ ...EMPTY_APPLICANT, jobPostingId: jobPostingId || '' });
+    setAppOpen(true);
+  }
+
+  function openJob() {
+    setJobForm(EMPTY_JOB);
+    setJobOpen(true);
+  }
+
   async function saveJob(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      await createJobPosting({ ...jobForm, organizationId: orgId });
+      await createJobPosting({
+        ...jobForm,
+        department: jobForm.department || null,
+        location: jobForm.location || null,
+        description: jobForm.description || null,
+        organizationId: orgId,
+      });
       toast.success('Job posting created');
       setJobOpen(false);
       void load();
@@ -99,7 +120,12 @@ export default function RecruitmentPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await createApplicant({ ...appForm, organizationId: orgId });
+      await createApplicant({
+        ...appForm,
+        email: appForm.email || null,
+        phone: appForm.phone || null,
+        notes: appForm.notes || null,
+      });
       toast.success('Applicant added');
       setAppOpen(false);
       void load();
@@ -110,25 +136,138 @@ export default function RecruitmentPage() {
     }
   }
 
-  async function moveStage(id: string, stage: string) {
+  const moveStage = useCallback(async (id: string, stage: string) => {
     try {
       await updateApplicant(id, { stage });
       toast.success('Stage updated');
-      void load();
+      setApplicants((list) => list.map((a) => (a.id === id ? { ...a, stage } : a)));
     } catch (err) {
       toast.error(hrApiError(err, 'Update failed'));
     }
-  }
+  }, []);
 
-  async function closeJob(id: string) {
+  const closeJob = useCallback(async (id: string) => {
     try {
       await updateJobPosting(id, { status: 'closed' });
       toast.success('Job closed');
-      void load();
+      setJobs((list) => list.map((j) => (j.id === id ? { ...j, status: 'closed' } : j)));
     } catch (err) {
       toast.error(hrApiError(err, 'Update failed'));
     }
-  }
+  }, []);
+
+  const applicantCount = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const a of applicants) {
+      const k = String(a.jobPostingId || a.jobPosting?.id || '');
+      m[k] = (m[k] || 0) + 1;
+    }
+    return m;
+  }, [applicants]);
+
+  const visibleApplicants = useMemo(
+    () => (selectedJob ? applicants.filter((a) => String(a.jobPostingId || a.jobPosting?.id) === selectedJob) : applicants),
+    [applicants, selectedJob],
+  );
+
+  const jobColumns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      id: 'title',
+      accessorFn: (j) => j.title || '',
+      header: 'Title',
+      cell: ({ row }) => (
+        <Link href={`/hr/recruitment/jobs/${row.original.id}`} className="text-[#D4A017] hover:underline font-medium">
+          {row.original.title}
+        </Link>
+      ),
+    },
+    { id: 'department', accessorFn: (j) => j.department || '', header: 'Department', cell: ({ getValue }) => String(getValue() || '—') },
+    { id: 'location', accessorFn: (j) => j.location || '', header: 'Location', cell: ({ getValue }) => String(getValue() || '—') },
+    {
+      id: 'employmentType',
+      accessorFn: (j) => (j.employmentType || '').replace(/_/g, ' '),
+      header: 'Type',
+      cell: ({ getValue }) => <span className="capitalize">{String(getValue() || '—')}</span>,
+    },
+    {
+      id: 'applicants',
+      accessorFn: (j) => applicantCount[String(j.id)] || 0,
+      header: 'Applicants',
+    },
+    {
+      id: 'status',
+      accessorFn: (j) => j.status || '',
+      header: 'Status',
+      cell: ({ row }) => (
+        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${statusBadgeClass(row.original.status)}`}>{row.original.status}</span>
+      ),
+    },
+    { id: 'createdAt', accessorFn: (j) => j.postedAt || j.createdAt || '', header: 'Posted', cell: ({ row }) => formatDate(row.original.postedAt || row.original.createdAt) },
+    {
+      id: 'actions',
+      header: '',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <Link href={`/hr/recruitment/jobs/${row.original.id}`} className="p-1.5 rounded-lg text-muted-foreground hover:text-[#D4A017] hover:bg-muted" title="Open job">
+            <Eye size={16} />
+          </Link>
+          <button
+            type="button"
+            onClick={() => setSelectedJob(String(row.original.id) === selectedJob ? null : String(row.original.id))}
+            className="text-xs text-muted-foreground hover:text-[#D4A017]"
+          >
+            {String(row.original.id) === selectedJob ? 'Show all applicants' : 'Filter applicants'}
+          </button>
+          {row.original.status === 'open' && (
+            <button type="button" className="text-xs text-muted-foreground hover:text-red-600" onClick={() => void closeJob(row.original.id)}>
+              Close
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ], [applicantCount, selectedJob, closeJob]);
+
+  const applicantColumns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      id: 'name',
+      accessorFn: (a) => [a.firstName, a.lastName].filter(Boolean).join(' ') || a.name || '',
+      header: 'Name',
+      cell: ({ getValue }) => <span className="font-medium">{String(getValue() || '—')}</span>,
+    },
+    { id: 'email', accessorFn: (a) => a.email || '', header: 'Email', cell: ({ getValue }) => String(getValue() || '—') },
+    { id: 'phone', accessorFn: (a) => a.phone || '', header: 'Phone', cell: ({ getValue }) => String(getValue() || '—') },
+    {
+      id: 'job',
+      accessorFn: (a) => a.jobPosting?.title || '',
+      header: 'Job',
+      cell: ({ row }) => {
+        const jid = row.original.jobPostingId || row.original.jobPosting?.id;
+        return jid ? (
+          <Link href={`/hr/recruitment/jobs/${jid}`} className="text-[#D4A017] hover:underline">{row.original.jobPosting?.title || `Job #${jid}`}</Link>
+        ) : '—';
+      },
+    },
+    {
+      id: 'stage',
+      accessorFn: (a) => a.stage || '',
+      header: 'Stage',
+      cell: ({ row }) => (
+        <select
+          className="h-8 rounded-lg border border-border/80 bg-background px-2 text-xs"
+          value={row.original.stage || 'applied'}
+          onChange={(e) => void moveStage(row.original.id, e.target.value)}
+        >
+          {APPLICANT_STAGES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          {row.original.stage === 'withdrawn' && <option value="withdrawn">Withdrawn</option>}
+        </select>
+      ),
+    },
+    { id: 'createdAt', accessorFn: (a) => a.createdAt || '', header: 'Applied', cell: ({ row }) => formatDate(row.original.createdAt) },
+  ], [moveStage]);
+
+  const selectedJobTitle = selectedJob ? jobs.find((j) => String(j.id) === selectedJob)?.title : null;
 
   return (
     <div className="min-h-screen app-surface">
@@ -147,91 +286,44 @@ export default function RecruitmentPage() {
           )}
 
           <div className="flex flex-wrap gap-2 justify-end">
-            <button type="button" onClick={() => { setAppForm((f) => ({ ...f, jobPostingId: selectedJob || '' })); setAppOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium">
+            <button type="button" onClick={() => openApplicant(selectedJob)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium">
               <Users size={14} /> Add applicant
             </button>
-            <button type="button" onClick={() => setJobOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+            <button type="button" onClick={openJob} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
               <Plus size={14} /> Create job
             </button>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-              <div className="px-5 py-4 border-b border-border/50 font-semibold flex items-center gap-2">
-                <Briefcase size={16} className="text-[#D4A017]" /> Jobs
-              </div>
-              {loading && <div className="p-6 text-sm text-muted-foreground">Loading…</div>}
-              {!loading && jobs.length === 0 && (
-                <div className="p-8 text-sm text-muted-foreground text-center">
-                  <p className="mb-3">No job postings.</p>
-                  <button type="button" onClick={() => setJobOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] text-white text-sm font-medium">
-                    <Plus size={14} /> Post job
-                  </button>
-                </div>
+          <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
+            <div className="px-5 py-4 border-b border-border/50 font-semibold flex items-center gap-2">
+              <Briefcase size={16} className="text-[#D4A017]" /> Jobs
+            </div>
+            <div className="p-4">
+              {loading ? (
+                <div className="text-sm text-muted-foreground">Loading…</div>
+              ) : (
+                <RichDataTable columns={jobColumns} data={jobs} searchPlaceholder="Search jobs…" />
               )}
-              {jobs.map((j) => (
-                <button
-                  key={j.id}
-                  type="button"
-                  onClick={() => setSelectedJob(j.id === selectedJob ? null : j.id)}
-                  className={`w-full text-left px-5 py-3 border-b border-border/30 last:border-0 hover:bg-muted/40 ${selectedJob === j.id ? 'bg-[#D4A017]/5' : ''}`}
-                >
-                  <div className="flex justify-between gap-2">
-                    <div>
-                      <div className="font-medium text-sm">{j.title}</div>
-                      <div className="text-xs text-muted-foreground">{j.department || '—'} · {j.location || '—'}</div>
-                    </div>
-                    <span className={`text-[10px] font-bold uppercase self-start px-2 py-0.5 rounded-full ${statusBadgeClass(j.status)}`}>{j.status}</span>
-                  </div>
-                  {j.status === 'open' && (
-                    <button type="button" className="mt-2 text-xs text-muted-foreground hover:text-red-600" onClick={(e) => { e.stopPropagation(); void closeJob(j.id); }}>
-                      Close posting
-                    </button>
-                  )}
-                </button>
-              ))}
-            </section>
+            </div>
+          </section>
 
-            <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-              <div className="px-5 py-4 border-b border-border/50 font-semibold flex items-center gap-2">
-                <Users size={16} className="text-[#D4A017]" /> Applicants {selectedJob ? '(filtered)' : ''}
-              </div>
-              {applicants.length === 0 && (
-                <div className="p-8 text-sm text-muted-foreground text-center">
-                  <p className="mb-3">No applicants.</p>
-                  <button type="button" onClick={() => { setAppForm((f) => ({ ...f, jobPostingId: selectedJob || '' })); setAppOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border text-sm font-medium">
-                    <Users size={14} /> Add applicant
-                  </button>
-                </div>
+          <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
+            <div className="px-5 py-4 border-b border-border/50 font-semibold flex flex-wrap items-center gap-2">
+              <Users size={16} className="text-[#D4A017]" /> Applicants
+              {selectedJobTitle && (
+                <button type="button" onClick={() => setSelectedJob(null)} className="ml-2 inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[#D4A017]/15 text-foreground">
+                  {selectedJobTitle} <X size={12} />
+                </button>
               )}
-              {applicants.map((a) => (
-                <div key={a.id} className="px-5 py-3 border-b border-border/30 last:border-0 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <div>
-                      <div className="font-medium">{[a.firstName, a.lastName].filter(Boolean).join(' ') || a.name}</div>
-                      <div className="text-xs text-muted-foreground">{a.email} · {a.jobPosting?.title || '—'}</div>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {APPLICANT_STAGES.map((s) => (
-                      <button
-                        key={s.value}
-                        type="button"
-                        onClick={() => moveStage(a.id, s.value)}
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full transition ${
-                          (a.stage || a.status) === s.value
-                            ? 'bg-[#D4A017] text-white'
-                            : 'bg-muted text-muted-foreground hover:bg-[#D4A017]/15'
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </section>
-          </div>
+            </div>
+            <div className="p-4">
+              {loading ? (
+                <div className="text-sm text-muted-foreground">Loading…</div>
+              ) : (
+                <RichDataTable columns={applicantColumns} data={visibleApplicants} searchPlaceholder="Search applicants…" />
+              )}
+            </div>
+          </section>
         </main>
       </div>
 
@@ -267,7 +359,7 @@ export default function RecruitmentPage() {
             <HrField label="First name"><input className={hrInputClass} required value={appForm.firstName} onChange={(e) => setAppForm({ ...appForm, firstName: e.target.value })} /></HrField>
             <HrField label="Last name"><input className={hrInputClass} required value={appForm.lastName} onChange={(e) => setAppForm({ ...appForm, lastName: e.target.value })} /></HrField>
           </div>
-          <HrField label="Email"><input type="email" className={hrInputClass} required value={appForm.email} onChange={(e) => setAppForm({ ...appForm, email: e.target.value })} /></HrField>
+          <HrField label="Email"><input type="email" autoComplete="off" className={hrInputClass} required value={appForm.email} onChange={(e) => setAppForm({ ...appForm, email: e.target.value })} /></HrField>
           <HrField label="Phone"><input className={hrInputClass} value={appForm.phone} onChange={(e) => setAppForm({ ...appForm, phone: e.target.value })} /></HrField>
           <HrField label="Stage">
             <select className={hrInputClass} value={appForm.stage} onChange={(e) => setAppForm({ ...appForm, stage: e.target.value })}>

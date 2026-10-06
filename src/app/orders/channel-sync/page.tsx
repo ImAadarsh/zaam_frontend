@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
+import { RichDataTable } from '@/components/rich-data-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import {
+  getOrderSyncStatus,
   listOrderSyncConnections,
   previewOrderSync,
   runOrderSync,
@@ -71,6 +74,8 @@ export default function ChannelOrderSyncPage() {
   const [importing, setImporting] = useState(false);
   const [preview, setPreview] = useState<OrderSyncPreview | null>(null);
   const [result, setResult] = useState<OrderSyncResult | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<Awaited<ReturnType<typeof getOrderSyncStatus>>['data'] | null>(null);
 
   const selectedConn = useMemo(
     () => connections.find((c) => c.id === connectionId) ?? null,
@@ -103,9 +108,52 @@ export default function ChannelOrderSyncPage() {
     }
   }, [organizationId]);
 
+  const loadSyncStatus = useCallback(async () => {
+    if (!organizationId) return;
+    try {
+      const res = await getOrderSyncStatus({ organizationId });
+      setSyncStatus(res.data);
+    } catch {
+      setSyncStatus(null);
+    }
+  }, [organizationId]);
+
   useEffect(() => {
     void loadConnections();
-  }, [loadConnections]);
+    void loadSyncStatus();
+  }, [loadConnections, loadSyncStatus]);
+
+  const connState = connectionId ? syncStatus?.connections?.[connectionId] : undefined;
+
+  const previewColumns = useMemo<ColumnDef<OrderSyncPreview['orders'][number]>[]>(() => [
+    {
+      id: 'ref',
+      header: 'Channel ref',
+      accessorFn: (o) => `${o.externalNumber ?? o.externalId} ${o.orderNumber}`,
+      cell: ({ row }) => (
+        <div>
+          <span className="font-medium">{row.original.externalNumber ?? row.original.externalId}</span>
+          <span className="block text-xs text-muted-foreground">{row.original.orderNumber}</span>
+        </div>
+      )
+    },
+    {
+      id: 'date',
+      header: 'Date',
+      accessorFn: (o) => o.orderDate,
+      cell: ({ row }) => new Date(row.original.orderDate).toLocaleDateString('en-GB')
+    },
+    { id: 'customer', header: 'Customer', accessorFn: (o) => o.customerEmail ?? '—' },
+    {
+      id: 'total',
+      header: 'Total',
+      accessorFn: (o) => o.total,
+      cell: ({ row }) => money(row.original.total, row.original.currency)
+    },
+    { id: 'status', header: 'Status', accessorFn: (o) => o.status.replace(/_/g, ' ') },
+    { id: 'payment', header: 'Payment', accessorFn: (o) => o.paymentStatus.replace(/_/g, ' ') },
+    { id: 'lines', header: 'Lines', accessorFn: (o) => o.lineCount }
+  ], []);
 
   const buildPayload = () => ({
     organizationId,
@@ -122,12 +170,16 @@ export default function ChannelOrderSyncPage() {
     if (!connectionId) return toast.error('Select a channel first');
     setPreviewing(true);
     setResult(null);
+    setSyncError(null);
     try {
       const res = await previewOrderSync(buildPayload());
       setPreview(res.data);
       toast.success(`Found ${res.data.totalOrders} orders`);
     } catch (err: any) {
-      toast.error(err?.response?.data?.error?.message ?? 'Preview failed');
+      const message = err?.response?.data?.error?.message ?? 'Preview failed';
+      setPreview(null);
+      setSyncError(message);
+      toast.error(message);
     } finally {
       setPreviewing(false);
     }
@@ -136,15 +188,19 @@ export default function ChannelOrderSyncPage() {
   const handleImport = async () => {
     if (!connectionId) return toast.error('Select a channel first');
     setImporting(true);
+    setSyncError(null);
     try {
       const res = await runOrderSync(buildPayload());
       setResult(res.data);
+      void loadSyncStatus();
       const r = res.data;
       toast.success(
         `Sync complete: ${r.ordersCreated} new, ${r.ordersUpdated} updated, ${r.paymentsCreated} payments`
       );
     } catch (err: any) {
-      toast.error(err?.response?.data?.error?.message ?? 'Import failed');
+      const message = err?.response?.data?.error?.message ?? 'Import failed';
+      setSyncError(message);
+      toast.error(message);
     } finally {
       setImporting(false);
     }
@@ -237,6 +293,30 @@ export default function ChannelOrderSyncPage() {
                 {selectedConn.kind === 'pos' ? 'Good Till EPOS' : 'WooCommerce store'}
                 {selectedConn.storeUrl ? ` · ${selectedConn.storeUrl}` : ''}
               </span>
+              <span>
+                · Last synced{' '}
+                {connState?.lastSyncedAt
+                  ? `${new Date(connState.lastSyncedAt).toLocaleString('en-GB')} (${connState.lastTrigger === 'cron' ? 'automatic' : 'manual'})`
+                  : 'never recorded'}
+              </span>
+            </div>
+          )}
+
+          {syncStatus && (
+            <div className={`rounded-lg border p-3 text-sm max-w-3xl ${syncStatus.cronEnabled ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30' : 'bg-muted/40'}`}>
+              {syncStatus.cronEnabled
+                ? `Automatic incremental sync is ON — every ${syncStatus.intervalMinutes} minutes, new and changed orders since the last run are pulled from all active channels.`
+                : 'Automatic incremental sync is OFF. Set CHANNEL_SYNC_CRON=on on the API server to pull new orders every 15 minutes; manual sync below always works.'}
+              {connState?.lastCronError && (
+                <p className="mt-1 text-red-700 dark:text-red-300">Last automatic run for this channel failed: {connState.lastCronError}</p>
+              )}
+            </div>
+          )}
+
+          {syncError && (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300 max-w-4xl">
+              <p className="inline-flex items-center gap-2 font-medium"><AlertTriangle size={16} /> Sync failed</p>
+              <p className="mt-1 break-words">{syncError}</p>
             </div>
           )}
 
@@ -335,38 +415,8 @@ export default function ChannelOrderSyncPage() {
                 </div>
               )}
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-left">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Channel ref</th>
-                      <th className="px-4 py-3 font-medium">Date</th>
-                      <th className="px-4 py-3 font-medium">Customer</th>
-                      <th className="px-4 py-3 font-medium text-right">Total</th>
-                      <th className="px-4 py-3 font-medium">Status</th>
-                      <th className="px-4 py-3 font-medium">Payment</th>
-                      <th className="px-4 py-3 font-medium text-right">Lines</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {preview.orders.map((o) => (
-                      <tr key={o.externalId}>
-                        <td className="px-4 py-3">
-                          <span className="font-medium">{o.externalNumber ?? o.externalId}</span>
-                          <span className="block text-xs text-muted-foreground">{o.orderNumber}</span>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {new Date(o.orderDate).toLocaleDateString('en-GB')}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">{o.customerEmail ?? '—'}</td>
-                        <td className="px-4 py-3 text-right">{money(o.total, o.currency)}</td>
-                        <td className="px-4 py-3">{o.status.replace(/_/g, ' ')}</td>
-                        <td className="px-4 py-3">{o.paymentStatus.replace(/_/g, ' ')}</td>
-                        <td className="px-4 py-3 text-right text-muted-foreground">{o.lineCount}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="p-2">
+                <RichDataTable columns={previewColumns} data={preview.orders} searchPlaceholder="Search ref, customer, status…" />
               </div>
               {preview.totalOrders > preview.orders.length && (
                 <p className="border-t p-4 text-xs text-muted-foreground">

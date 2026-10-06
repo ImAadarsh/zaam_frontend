@@ -19,7 +19,7 @@ export default function SocialMessagesPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
   const [igLocked, setIgLocked] = useState<any>(null);
-  const [filters, setFilters] = useState<Record<string, string>>({ platform: '', accountId: '' });
+  const [filters, setFilters] = useState<Record<string, string>>({ platform: '', accountId: '', status: '', since: '', until: '' });
   const [q, setQ] = useState('');
   const [active, setActive] = useState<any>(null);
   const [thread, setThread] = useState<any[] | null>(null);
@@ -55,18 +55,29 @@ export default function SocialMessagesPage() {
     (a) =>
       (a.platform === 'facebook' || a.platform === 'instagram') &&
       a.accountHandle !== 'ads' &&
-      a.accountHandle !== '__meta_user__'
+      a.accountHandle !== '__meta_user__' &&
+      (!filters.platform || a.platform === filters.platform)
   );
 
+  const lockedAccounts = useMemo(() => conversations.filter((c) => c.locked), [conversations]);
+
   const filtered = useMemo(() => {
+    const since = filters.since ? new Date(`${filters.since}T00:00:00`).getTime() : null;
+    const until = filters.until ? new Date(`${filters.until}T23:59:59`).getTime() : null;
     return conversations.filter((c) => {
+      if (c.locked) return false;
+      if (filters.status === 'unread' && !(c.unreadCount > 0)) return false;
+      if (filters.status === 'read' && c.unreadCount > 0) return false;
+      const t = c.updatedTime ? new Date(c.updatedTime).getTime() : null;
+      if (since && (t == null || t < since)) return false;
+      if (until && (t == null || t > until)) return false;
       if (q) {
         const blob = `${c.accountName} ${c.snippet || ''} ${(c.participants || []).map((p: any) => p.name).join(' ')}`.toLowerCase();
         if (!blob.includes(q.toLowerCase())) return false;
       }
       return true;
     });
-  }, [conversations, q]);
+  }, [conversations, q, filters.status, filters.since, filters.until]);
 
   const openThread = async (c: any) => {
     setActive(c);
@@ -132,12 +143,29 @@ export default function SocialMessagesPage() {
           />
         )}
 
+        {lockedAccounts.length > 0 && (
+          <PermissionLock
+            title="Some Page inboxes are not readable"
+            message={`${lockedAccounts.map((c) => c.accountName).filter(Boolean).join(', ')}: ${lockedAccounts[0].locked?.message || 'Meta permission not granted.'}`}
+            missingPermissions={Array.from(new Set(lockedAccounts.map((c) => c.locked?.missingPermission).filter(Boolean)))}
+            product="Messenger API"
+            onReconnect={async () => {
+              const { data } = await getMetaConnectUrl('default');
+              if (data?.authUrl) window.location.href = data.authUrl;
+            }}
+          />
+        )}
+
         <FilterBar
           searchValue={q}
           onSearchChange={setQ}
           searchPlaceholder="Search name or snippet…"
           values={filters}
-          onChange={setFilters}
+          onChange={(next) => {
+            const acc = accounts.find((a) => String(a.id) === String(next.accountId));
+            if (next.platform && acc && acc.platform !== next.platform) next = { ...next, accountId: '' };
+            setFilters(next);
+          }}
           fields={[
             {
               key: 'platform',
@@ -154,8 +182,20 @@ export default function SocialMessagesPage() {
               label: 'Account',
               type: 'select',
               primary: true,
-              options: organic.map((a) => ({ value: String(a.id), label: a.accountName }))
-            }
+              options: organic.map((a) => ({ value: String(a.id), label: `${a.accountName} (${a.platform})` }))
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              type: 'select',
+              primary: true,
+              options: [
+                { value: 'unread', label: 'Unread' },
+                { value: 'read', label: 'Read' }
+              ]
+            },
+            { key: 'since', label: 'From', type: 'date' },
+            { key: 'until', label: 'To', type: 'date' }
           ]}
           stats={[{ label: 'Threads', value: String(filtered.length) }]}
         />
