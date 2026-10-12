@@ -6,7 +6,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
 import { useSession } from '@/hooks/use-session';
 import { useUI } from '@/lib/ui';
-import { useEffect } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
+import { allowedPagesFromSession, canAccessPath, type AllowedPages } from '@/lib/page-access';
+
+// Role page permissions for the rendered nav; null = unrestricted.
+const AllowedPagesContext = createContext<AllowedPages>(null);
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -30,6 +34,7 @@ export function Sidebar() {
   const { sidebarOpen, toggleSidebar } = useUI();
   const { session, hydrated } = useSession();
   const userRoles = session?.user?.roles || [];
+  const allowedPages = useMemo(() => (hydrated ? allowedPagesFromSession(session) : null), [hydrated, session]);
 
   // Helper to check if user has required roles
   const hasRole = (requiredRoles: string[]) => {
@@ -66,7 +71,7 @@ export function Sidebar() {
   }, [pathname, toggleSidebar]);
 
   return (
-    <>
+    <AllowedPagesContext.Provider value={allowedPages}>
       {/* Desktop */}
       <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-[280px] bg-[#0f0f0f]/95 backdrop-blur-2xl text-white p-5 border-r border-white/5 flex-col shadow-[4px_0_24px_rgba(0,0,0,0.4)] z-50">
         <div className="flex items-center gap-3 px-2 mb-6 mt-2">
@@ -801,7 +806,7 @@ export function Sidebar() {
           </aside>
         </div>
       )}
-    </>
+    </AllowedPagesContext.Provider>
   );
 }
 
@@ -825,6 +830,8 @@ function SocialNav({ pathname }: { pathname: string | null }) {
 }
 
 function Item({ href, icon, label, active }: { href: string; icon: React.ReactNode; label: string; active?: boolean }) {
+  const allowedPages = useContext(AllowedPagesContext);
+  if (!canAccessPath(href.split('?')[0], allowedPages)) return null;
   return (
     <Link
       href={href}

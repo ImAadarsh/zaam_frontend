@@ -9,7 +9,9 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { FileText } from 'lucide-react';
+import { FileText, Plus, Info, Eye } from 'lucide-react';
+import { PurchaseOrderForm } from '@/components/inventory/purchase-order-form';
+import { PurchaseOrderStatusBadge } from '@/components/inventory/purchase-order-status-badge';
 
 type PurchaseOrder = {
   id: string;
@@ -27,9 +29,11 @@ type PurchaseOrder = {
 export default function PurchaseOrdersPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PURCHASING']);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<PurchaseOrder[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const orgId = session?.user?.organizationId;
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -38,12 +42,12 @@ export default function PurchaseOrdersPage() {
       return;
     }
     loadData();
-  }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
+  }, [hydrated, hasAccess, router, session?.accessToken, orgId]);
 
   async function loadData() {
     try {
       setLoading(true);
-      const poRes = await listPurchaseOrders();
+      const poRes = await listPurchaseOrders({ organizationId: orgId });
       setItems(poRes.data || []);
     } catch (e: any) {
       toast.error('Failed to load purchase orders');
@@ -57,10 +61,13 @@ export default function PurchaseOrdersPage() {
       accessorKey: 'poNumber',
       header: 'PO Number',
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
+        <button
+          onClick={() => router.push(`/inventory/purchase-orders/${row.original.id}`)}
+          className="flex items-center gap-2 text-left hover:underline"
+        >
           <FileText size={16} className="text-muted-foreground" />
           <span className="font-medium">{row.original.poNumber}</span>
-        </div>
+        </button>
       )
     },
     {
@@ -95,14 +102,32 @@ export default function PurchaseOrdersPage() {
       accessorKey: 'total',
       header: 'Total',
       cell: ({ row }) => {
-        const total = row.original.total;
+        const total = Number(row.original.total ?? 0);
         const currency = row.original.currency || 'GBP';
         if (!total) return <span className="text-sm text-muted-foreground">—</span>;
         return <span className="font-medium">{currency} {total.toFixed(2)}</span>;
       }
     },
-    { accessorKey: 'status', header: 'Status' }
-  ], []);
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => <PurchaseOrderStatusBadge status={row.original.status} />
+    },
+    {
+      id: 'actions',
+      header: '',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <button
+          onClick={() => router.push(`/inventory/purchase-orders/${row.original.id}`)}
+          className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          title="View purchase order"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
+      )
+    }
+  ], [router]);
 
   if (!hydrated || loading) {
     return (
@@ -151,6 +176,25 @@ export default function PurchaseOrdersPage() {
                 <h1 className="text-3xl font-bold">Purchase Orders</h1>
                 <p className="text-muted-foreground mt-1">View and manage purchase orders</p>
               </div>
+              <button
+                onClick={() => setShowCreate(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
+              >
+                <Plus className="h-4 w-4" />
+                New Purchase Order
+              </button>
+            </div>
+
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div>
+                Purchase orders are created here manually with <b>New Purchase Order</b> (supplier, delivery warehouse
+                and product lines). The flow is: <b>Draft</b> → <b>Submit</b> to the supplier → <b>Approve</b> (confirmed) →
+                goods arrive. Receiving is done in <b>ASN</b> (expected delivery — choose the PO there, or use “Create ASN” on the
+                PO) and then <b>GRN</b> against that ASN, which books the stock in. There is no automatic reorder
+                suggestion — every PO here was created manually. Open a PO to see its lines, status actions and
+                linked ASN / GRN documents.
+              </div>
             </div>
 
             {loading ? (
@@ -165,6 +209,17 @@ export default function PurchaseOrdersPage() {
           </div>
         </main>
       </div>
+      {showCreate && orgId && (
+        <PurchaseOrderForm
+          organizationId={orgId}
+          onClose={() => setShowCreate(false)}
+          onSaved={(po) => {
+            setShowCreate(false);
+            setItems(prev => [po, ...prev]);
+            router.push(`/inventory/purchase-orders/${po.id}`);
+          }}
+        />
+      )}
     </div>
   );
 }

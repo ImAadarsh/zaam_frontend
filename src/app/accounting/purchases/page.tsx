@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { RichDataTable } from '@/components/rich-data-table';
@@ -12,7 +13,7 @@ import { listAccBills, createAccBill, listVatCodes } from '@/lib/accounting-api'
 import { formatMoney, formatDate, statusBadgeClass, accApiError, accFieldErrors, vatRateFraction } from '@/lib/accounting-utils';
 import { AccModal, AccField, AccModalActions, AccCreateButton, accInputClass, MtdBanner } from '@/components/accounting/acc-modal';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus } from 'lucide-react';
+import { Plus, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AccountingPurchasesPage() {
@@ -87,7 +88,7 @@ export default function AccountingPurchasesPage() {
     const vatCodeId = vatCodes.find((c) => c.code === form.vatCode)?.id;
     setSaving(true);
     try {
-      await createAccBill({
+      const created: any = await createAccBill({
         organizationId: orgId,
         billNumber: form.billNumber.trim(),
         billDate: form.billDate,
@@ -98,7 +99,8 @@ export default function AccountingPurchasesPage() {
         subtotal: Number(form.netAmount),
         vatCodeId: vatCodeId ? String(vatCodeId) : undefined,
       });
-      toast.success('Bill created');
+      const newId = created?.data?.id;
+      toast.success('Bill created', newId ? { action: { label: 'View', onClick: () => router.push(`/accounting/purchases/${newId}`) } } : undefined);
       setOpen(false);
       await load();
     } catch (err) {
@@ -111,12 +113,30 @@ export default function AccountingPurchasesPage() {
 
   const columns = useMemo<ColumnDef<any>[]>(
     () => [
-      { accessorKey: 'billNumber', header: 'Bill #', cell: ({ row }) => <span className="font-mono text-xs">{row.original.billNumber || row.original.reference}</span> },
+      {
+        accessorKey: 'billNumber',
+        header: 'Bill #',
+        cell: ({ row }) => (
+          <Link href={`/accounting/purchases/${row.original.id}`} className="font-mono text-xs text-[#D4A017] hover:underline">
+            {row.original.billNumber || row.original.reference}
+          </Link>
+        ),
+      },
       { accessorKey: 'supplierName', header: 'Supplier', cell: ({ row }) => row.original.supplierName || row.original.supplier?.name || '—' },
       { accessorKey: 'billDate', header: 'Date', cell: ({ row }) => formatDate(row.original.billDate || row.original.invoiceDate) },
       { accessorKey: 'dueDate', header: 'Due', cell: ({ row }) => formatDate(row.original.dueDate) },
       { accessorKey: 'total', header: 'Total', cell: ({ row }) => formatMoney(row.original.total, row.original.currency || 'GBP') },
-      { accessorKey: 'status', header: 'Status', cell: ({ row }) => <span className={statusBadgeClass(row.original.status)}>{row.original.status || 'draft'}</span> },
+      { accessorKey: 'status', header: 'Status', cell: ({ row }) => <span className={statusBadgeClass(row.original.status)}>{String(row.original.status || 'draft').replace(/_/g, ' ')}</span> },
+      {
+        id: 'actions',
+        header: '',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Link href={`/accounting/purchases/${row.original.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-[#D4A017] hover:underline" title="View bill">
+            <Eye size={14} /> View
+          </Link>
+        ),
+      },
     ],
     []
   );
@@ -134,7 +154,7 @@ export default function AccountingPurchasesPage() {
             </p>
           ) : null}
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-sm text-muted-foreground">Supplier bills, input VAT, and AP ageing.</p>
+            <p className="text-sm text-muted-foreground">Supplier bills, input VAT, and AP ageing. Click a bill number to view, approve, post, pay or attach documents.</p>
             <AccCreateButton
               label="Create Bill"
               onClick={() => {

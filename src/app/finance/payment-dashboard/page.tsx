@@ -7,7 +7,7 @@ import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { StatCard } from '@/components/stat-card';
 import { GatewayManager } from '@/components/finance/gateway-manager';
-import { PaymentDetailModal } from '@/components/finance/payment-detail-modal';
+import { PaymentDetailModal, paymentReferenceText } from '@/components/finance/payment-detail-modal';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { getPaymentDashboard, getPayment } from '@/lib/api';
@@ -296,7 +296,7 @@ export default function PaymentDashboardPage() {
                         className="p-3 rounded-xl border border-border text-sm flex items-center justify-between gap-3"
                       >
                         <div className="min-w-0">
-                          <div className="font-medium truncate">{p.reference || p.transactionId || p.id}</div>
+                          <div className="font-medium truncate">{paymentReferenceText(p.reference) || p.transactionId || p.id}</div>
                           <div className="text-xs text-muted-foreground">
                             {p.paymentMethod} · {p.status}
                             {p.paymentDate ? ` · ${new Date(p.paymentDate).toLocaleDateString('en-GB')}` : ''}

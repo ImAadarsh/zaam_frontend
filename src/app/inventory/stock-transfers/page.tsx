@@ -17,6 +17,7 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { Trash2, Plus, X, ArrowRightLeft, Search, Receipt, Loader2, AlertTriangle } from 'lucide-react';
+import { activeWarehouses } from '@/components/inventory/location-status-badge';
 
 type StockTransfer = {
   id: string;
@@ -374,7 +375,7 @@ export default function StockTransfersPage() {
                         required
                       >
                         <option value="">Select…</option>
-                        {warehouses.map((w) => (
+                        {activeWarehouses(warehouses).map((w) => (
                           <option key={w.id} value={w.id}>{w.name}</option>
                         ))}
                       </select>
@@ -391,7 +392,7 @@ export default function StockTransfersPage() {
                         required
                       >
                         <option value="">Select…</option>
-                        {warehouses.filter((w) => w.id !== form.fromWarehouseId).map((w) => (
+                        {activeWarehouses(warehouses).filter((w) => w.id !== form.fromWarehouseId).map((w) => (
                           <option key={w.id} value={w.id}>{w.name}</option>
                         ))}
                       </select>

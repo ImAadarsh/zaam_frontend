@@ -10,6 +10,7 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, PackageSearch } from 'lucide-react';
+import { activeWarehouses } from '@/components/inventory/location-status-badge';
 
 type ASN = {
   id: string;
@@ -75,6 +76,21 @@ export default function ASNPage() {
       setSuppliers(suppliersRes.data || []);
       setWarehouses(warehousesRes.data || []);
       setPurchaseOrders(poRes.data || []);
+
+      // Opened from a purchase order ("Create ASN"): start a new ASN for that PO.
+      const fromPo = new URLSearchParams(window.location.search).get('purchaseOrderId');
+      const po = fromPo ? (poRes.data || []).find((p: any) => String(p.id) === fromPo) : null;
+      if (po) {
+        setForm(prev => ({
+          ...prev,
+          purchaseOrderId: String(po.id),
+          supplierId: po.supplier?.id ? String(po.supplier.id) : '',
+          warehouseId: po.warehouse?.status === 'active' ? String(po.warehouse.id) : '',
+          reference: po.poNumber,
+          expectedDate: po.expectedDeliveryDate ? String(po.expectedDeliveryDate).slice(0, 10) : ''
+        }));
+        setShowCreate(true);
+      }
     } catch (e: any) {
       toast.error('Failed to load ASN');
     } finally {
@@ -369,7 +385,7 @@ export default function ASNPage() {
                           required
                         >
                           <option value="">Select warehouse...</option>
-                          {warehouses.map(w => (
+                          {activeWarehouses(warehouses).map(w => (
                             <option key={w.id} value={w.id}>{w.name}</option>
                           ))}
                         </select>

@@ -54,6 +54,7 @@ import {
   TrendingUp,
   ShoppingCart
 } from 'lucide-react';
+import { activeWarehouses } from '@/components/inventory/location-status-badge';
 
 type WpConnection = {
   id: string;
@@ -1120,7 +1121,7 @@ export default function WordPressChannelsPage() {
                         <select className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm"
                           value={importWarehouseId} onChange={(e) => setImportWarehouseId(e.target.value)}>
                           <option value="">None (skip inventory)</option>
-                          {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.code})</option>)}
+                          {activeWarehouses(warehouses).map((w) => <option key={w.id} value={w.id}>{w.name} ({w.code})</option>)}
                         </select>
                       </label>
                       <label className="block text-sm font-medium">

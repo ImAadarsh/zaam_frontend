@@ -152,6 +152,22 @@ export async function payAccBill(id: string, payload?: any) {
   return postFin(`/bills/${id}/payments`, payload);
 }
 
+export async function getAccBill(id: string, organizationId?: string) {
+  return getFin(`/bills/${id}`, { organizationId });
+}
+
+export async function submitAccBill(id: string) {
+  return postFin(`/bills/${id}/submit`);
+}
+
+export async function approveAccBill(id: string) {
+  return postFin(`/bills/${id}/approve`);
+}
+
+export async function postAccBill(id: string) {
+  return postFin(`/bills/${id}/post`);
+}
+
 // ─── Banking ─────────────────────────────────────────────────
 export async function listAccBankAccounts(organizationId?: string, params?: Query) {
   return getFin('/bank-accounts', { organizationId, ...params });
@@ -204,6 +220,7 @@ export type LedgerAccountTypeOption = {
   label: string;
   normalBalance: 'debit' | 'credit';
   subtypes: string[];
+  subtypeOptions?: Array<{ value: string; label: string }>;
 };
 
 /** Fallback only — the API (`GET /ledger-accounts/types`) is the source of truth and validates against the same list. */
@@ -326,6 +343,10 @@ export async function approveAccExpense(id: string) {
   return postFin(`/expenses/${id}/approve`);
 }
 
+export async function rejectAccExpense(id: string, rejectionReason?: string) {
+  return postFin(`/expenses/${id}/reject`, { rejectionReason });
+}
+
 // ─── Fixed assets ────────────────────────────────────────────
 export async function listFixedAssets(organizationId?: string, params?: Query) {
   try {
@@ -405,4 +426,8 @@ export async function listAccDocuments(organizationId?: string, params?: Query) 
 
 export async function createAccDocument(payload: any) {
   return postFin('/documents', payload);
+}
+
+export async function getAccDocument(id: string, organizationId?: string) {
+  return getFin(`/documents/${id}`, { organizationId });
 }

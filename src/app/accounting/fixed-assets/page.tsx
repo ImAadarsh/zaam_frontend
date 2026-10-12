@@ -94,6 +94,60 @@ export default function AccountingFixedAssetsPage() {
     }
   }
 
+  const [pending, setPending] = useState<{ id: string; action: 'depreciate' | 'dispose' } | null>(null);
+
+  const onDepreciate = useCallback(
+    async (asset: any) => {
+      const next = [...(asset.schedule || [])]
+        .filter((s: any) => s.status === 'scheduled')
+        .sort((a: any, b: any) => String(a.periodStart).localeCompare(String(b.periodStart)))[0];
+      if (!next) {
+        toast.error('No scheduled depreciation remaining for this asset');
+        return;
+      }
+      const id = String(asset.id);
+      setPending({ id, action: 'depreciate' });
+      try {
+        const res: any = await depreciateFixedAsset(id, { scheduleId: next.id });
+        const posted = res?.data || { ...next, status: 'posted' };
+        setRows((prev) =>
+          prev.map((r) =>
+            String(r.id) === id
+              ? { ...r, schedule: (r.schedule || []).map((s: any) => (String(s.id) === String(next.id) ? { ...s, ...posted, asset: undefined } : s)) }
+              : r
+          )
+        );
+        toast.success(`Depreciation posted for period ending ${formatDate(next.periodEnd)}`);
+        await load();
+      } catch (err) {
+        toast.error(accApiError(err, 'Failed to post depreciation'));
+      } finally {
+        setPending(null);
+      }
+    },
+    [load]
+  );
+
+  const onDispose = useCallback(
+    async (asset: any) => {
+      if (!confirm(`Dispose asset ${asset.assetCode}? A disposal journal will be posted.`)) return;
+      const id = String(asset.id);
+      setPending({ id, action: 'dispose' });
+      try {
+        const res: any = await disposeFixedAsset(id, { disposedAt: new Date().toISOString().slice(0, 10), proceeds: 0 });
+        const updated = res?.data || { status: 'disposed' };
+        setRows((prev) => prev.map((r) => (String(r.id) === id ? { ...r, ...updated, schedule: updated.schedule || r.schedule } : r)));
+        toast.success('Asset disposed');
+        await load();
+      } catch (err) {
+        toast.error(accApiError(err, 'Failed to dispose asset'));
+      } finally {
+        setPending(null);
+      }
+    },
+    [load]
+  );
+
   const columns = useMemo<ColumnDef<any>[]>(
     () => [
       { accessorKey: 'assetCode', header: 'Code', cell: ({ row }) => <span className="font-mono text-xs">{row.original.assetCode}</span> },
@@ -115,53 +169,33 @@ export default function AccountingFixedAssetsPage() {
       {
         id: 'actions',
         header: '',
-        cell: ({ row }) =>
-          row.original.status === 'active' ? (
-            <div className="flex gap-2">
+        cell: ({ row }) => {
+          if (row.original.status !== 'active') return null;
+          const busy = pending?.id === String(row.original.id);
+          return (
+            <div className="flex gap-3">
               <button
                 type="button"
-                className="text-xs font-semibold text-[#D4A017] hover:underline"
-                onClick={async () => {
-                  const next = [...(row.original.schedule || [])]
-                    .filter((s: any) => s.status === 'scheduled')
-                    .sort((a: any, b: any) => String(a.periodStart).localeCompare(String(b.periodStart)))[0];
-                  if (!next) {
-                    toast.error('No scheduled depreciation remaining for this asset');
-                    return;
-                  }
-                  try {
-                    await depreciateFixedAsset(row.original.id, { scheduleId: next.id });
-                    toast.success(`Depreciation posted for period ending ${formatDate(next.periodEnd)}`);
-                    await load();
-                  } catch (err) {
-                    toast.error(accApiError(err));
-                  }
-                }}
+                disabled={pending !== null}
+                className="text-xs font-semibold text-[#D4A017] hover:underline disabled:opacity-50 disabled:no-underline"
+                onClick={() => onDepreciate(row.original)}
               >
-                Depreciate
+                {busy && pending?.action === 'depreciate' ? 'Posting…' : 'Depreciate'}
               </button>
               <button
                 type="button"
-                className="text-xs text-muted-foreground hover:underline"
-                onClick={async () => {
-                  try {
-                    if (!confirm(`Dispose asset ${row.original.assetCode}? A disposal journal will be posted.`)) return;
-                    await disposeFixedAsset(row.original.id, { disposedAt: new Date().toISOString().slice(0, 10), proceeds: 0 });
-                    toast.success('Asset disposed');
-                    await load();
-                  } catch (err) {
-                    toast.error(accApiError(err));
-                  }
-                }}
+                disabled={pending !== null}
+                className="text-xs text-muted-foreground hover:underline disabled:opacity-50 disabled:no-underline"
+                onClick={() => onDispose(row.original)}
               >
-                Dispose
+                {busy && pending?.action === 'dispose' ? 'Disposing…' : 'Dispose'}
               </button>
             </div>
-          ) : null,
+          );
+        },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [onDepreciate, onDispose, pending]
   );
 
   return (

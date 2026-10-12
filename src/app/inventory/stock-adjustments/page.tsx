@@ -129,11 +129,12 @@ export default function StockAdjustmentsPage() {
     setStockItemSearch('');
   }
 
-  const filteredStockItems = stockItems.filter(si => 
+  // Stock in inactive / maintenance warehouses cannot be adjusted.
+  const filteredStockItems = stockItems.filter(si => (si.warehouse?.status ?? 'active') === 'active' && (
     si.variant?.variantSku.toLowerCase().includes(stockItemSearch.toLowerCase()) ||
     si.variant?.catalogItem?.name.toLowerCase().includes(stockItemSearch.toLowerCase()) ||
     si.warehouse?.name.toLowerCase().includes(stockItemSearch.toLowerCase())
-  );
+  ));
 
   function selectStockItem(item: any) {
     setSelectedStockItem(item);

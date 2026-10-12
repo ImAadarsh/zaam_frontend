@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { X, type LucideIcon } from 'lucide-react';
 
 export function AccModal({
@@ -134,7 +135,10 @@ export function MtdBanner({ children }: { children?: ReactNode }) {
     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
       <span className="font-semibold">HMRC / MTD:</span>{' '}
       {children ||
-        'Support & structured export only. Live RTI/MTD submission requires HMRC credentials and is not claimed as submitted here.'}
+        'Live MTD submission is not connected yet — nothing is sent to HMRC from here. It needs the business VRN, an HMRC Developer Hub application (client ID + secret) and the business to authorise Zaam with HMRC. Until then, export VAT returns and file them through HMRC.'}{' '}
+      <Link href="/accounting/settings#hmrc-mtd" className="font-semibold underline underline-offset-2 whitespace-nowrap">
+        HMRC connection status
+      </Link>
     </div>
   );
 }

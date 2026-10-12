@@ -17,12 +17,56 @@ type LedgerAccount = {
   accountCode: string;
   accountName: string;
   accountType: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense' | 'cost_of_goods_sold';
+  accountSubtype?: string | null;
   normalBalance: 'debit' | 'credit';
+  description?: string | null;
   isSystem: boolean;
   isActive: boolean;
   chartOfAccounts?: { id: string; name: string };
   parentAccount?: { id: string; accountCode: string; accountName: string } | null;
 };
+
+const humanizeSubtype = (v: string) => v.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+
+function subtypeOptionsFor(types: LedgerAccountTypeOption[], accountType: string) {
+  const t = types.find((x) => x.value === accountType);
+  return t?.subtypeOptions ?? (t?.subtypes ?? []).map((value) => ({ value, label: humanizeSubtype(value) }));
+}
+
+function SubtypeSelect({
+  types,
+  accountType,
+  value,
+  onChange
+}: {
+  types: LedgerAccountTypeOption[];
+  accountType: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const options = subtypeOptionsFor(types, accountType);
+  // Keep a saved value that is not in the standard list selectable instead of silently dropping it.
+  const withCurrent = value && !options.some((o) => o.value === value)
+    ? [...options, { value, label: humanizeSubtype(value) }]
+    : options;
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-3 py-2 border border-border rounded-lg bg-background"
+    >
+      <option value="">None</option>
+      {withCurrent.map((o) => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
+  );
+}
+
+/** Drop a subtype that does not belong to the newly chosen account type. */
+function subtypeForType(types: LedgerAccountTypeOption[], accountType: string, current: string) {
+  return subtypeOptionsFor(types, accountType).some((o) => o.value === current) ? current : '';
+}
 
 export default function LedgerAccountsPage() {
   const router = useRouter();
@@ -159,6 +203,16 @@ export default function LedgerAccountsPage() {
       header: 'Type',
       cell: ({ row }) => row.original.accountType.replace(/_/g, ' ').toUpperCase()
     },
+    {
+      id: 'accountSubtype',
+      header: 'Subtype',
+      accessorFn: (r) => r.accountSubtype ?? '',
+      cell: ({ row }) => {
+        const v = row.original.accountSubtype;
+        if (!v) return <span className="text-muted-foreground">—</span>;
+        return subtypeOptionsFor(accountTypes, row.original.accountType).find((o) => o.value === v)?.label ?? humanizeSubtype(v);
+      }
+    },
     { 
       accessorKey: 'normalBalance', 
       header: 'Normal Balance',
@@ -180,9 +234,9 @@ export default function LedgerAccountsPage() {
               accountCode: row.original.accountCode,
               accountName: row.original.accountName,
               accountType: row.original.accountType,
-              accountSubtype: '',
+              accountSubtype: row.original.accountSubtype || '',
               normalBalance: row.original.normalBalance,
-              description: '',
+              description: row.original.description || '',
               isActive: row.original.isActive
             });
           }} className="p-1.5 hover:bg-muted rounded">
@@ -196,7 +250,7 @@ export default function LedgerAccountsPage() {
         </div>
       )
     }
-  ], []);
+  ], [accountTypes]);
 
   if (!hydrated || loading) {
     return (
@@ -322,7 +376,7 @@ export default function LedgerAccountsPage() {
                         <label className="block text-sm font-medium mb-1">Account Type *</label>
                         <select
                           value={form.accountType}
-                          onChange={(e) => setForm({ ...form, accountType: e.target.value as any, normalBalance: accountTypes.find((t) => t.value === e.target.value)?.normalBalance ?? form.normalBalance })}
+                          onChange={(e) => setForm({ ...form, accountType: e.target.value as any, accountSubtype: subtypeForType(accountTypes, e.target.value, form.accountSubtype), normalBalance: accountTypes.find((t) => t.value === e.target.value)?.normalBalance ?? form.normalBalance })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                           required
                         >
@@ -346,18 +400,12 @@ export default function LedgerAccountsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Account Subtype</label>
-                      <input
-                        type="text"
+                      <SubtypeSelect
+                        types={accountTypes}
+                        accountType={form.accountType}
                         value={form.accountSubtype}
-                        list="ledger-subtypes-create"
-                        onChange={(e) => setForm({ ...form, accountSubtype: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background"
+                        onChange={(v) => setForm({ ...form, accountSubtype: v })}
                       />
-                      <datalist id="ledger-subtypes-create">
-                        {(accountTypes.find((t) => t.value === form.accountType)?.subtypes || []).map((st) => (
-                          <option key={st} value={st} />
-                        ))}
-                      </datalist>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Description</label>
@@ -441,7 +489,7 @@ export default function LedgerAccountsPage() {
                         <label className="block text-sm font-medium mb-1">Account Type *</label>
                         <select
                           value={editForm.accountType}
-                          onChange={(e) => setEditForm({ ...editForm, accountType: e.target.value as any, normalBalance: accountTypes.find((t) => t.value === e.target.value)?.normalBalance ?? editForm.normalBalance })}
+                          onChange={(e) => setEditForm({ ...editForm, accountType: e.target.value as any, accountSubtype: subtypeForType(accountTypes, e.target.value, editForm.accountSubtype), normalBalance: accountTypes.find((t) => t.value === e.target.value)?.normalBalance ?? editForm.normalBalance })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                           required
                         >
@@ -465,18 +513,12 @@ export default function LedgerAccountsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Account Subtype</label>
-                      <input
-                        type="text"
+                      <SubtypeSelect
+                        types={accountTypes}
+                        accountType={editForm.accountType}
                         value={editForm.accountSubtype}
-                        list="ledger-subtypes-edit"
-                        onChange={(e) => setEditForm({ ...editForm, accountSubtype: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background"
+                        onChange={(v) => setEditForm({ ...editForm, accountSubtype: v })}
                       />
-                      <datalist id="ledger-subtypes-edit">
-                        {(accountTypes.find((t) => t.value === editForm.accountType)?.subtypes || []).map((st) => (
-                          <option key={st} value={st} />
-                        ))}
-                      </datalist>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Description</label>

@@ -8,8 +8,9 @@ import { useRoleCheck } from '@/hooks/use-role-check';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { UnifiedInvoiceDocument, type InvoiceDocumentData } from '@/components/unified-invoice';
+import { InvoiceLetterheadEditor } from '@/components/invoice-letterhead-editor';
 import { getInvoice } from '@/lib/api';
-import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
+import { ArrowLeft, Printer, Loader2, PenSquare } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Letterhead = NonNullable<InvoiceDocumentData['seller']> & { key: string; label: string };
@@ -24,6 +25,7 @@ export default function InvoiceDetailPage() {
   >(null);
   const [loading, setLoading] = useState(true);
   const [letterheadKey, setLetterheadKey] = useState('');
+  const [editingLetterhead, setEditingLetterhead] = useState(false);
   const storageKey = `zaam.invoiceLetterhead.${session?.user?.organizationId ?? ''}`;
   const letterheads = invoice?.letterheads ?? [];
 
@@ -64,6 +66,13 @@ export default function InvoiceDetailPage() {
       .finally(() => setLoading(false));
   }, [hydrated, hasAccess, session?.accessToken, params?.id, router]);
 
+  function reloadInvoice() {
+    if (!params?.id) return;
+    getInvoice(params.id)
+      .then((res) => setInvoice(res.data))
+      .catch(() => undefined);
+  }
+
   if (!hydrated || !hasAccess) return null;
 
   return (
@@ -99,6 +108,15 @@ export default function InvoiceDetailPage() {
                 </label>
               )}
               <button
+                onClick={() => setEditingLetterhead(true)}
+                disabled={!invoice}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                title="Logo, company name, address, contact details, VAT number, footer and colour"
+              >
+                <PenSquare className="h-4 w-4" />
+                Edit letterhead
+              </button>
+              <button
                 onClick={() => window.print()}
                 disabled={!invoice}
                 className="inline-flex items-center gap-2 rounded-lg bg-[#D4A017] px-4 py-2 text-sm font-medium text-white hover:bg-[#B89015] disabled:opacity-50"
@@ -124,6 +142,13 @@ export default function InvoiceDetailPage() {
           </div>
         </main>
       </div>
+
+      <InvoiceLetterheadEditor
+        open={editingLetterhead}
+        organizationId={(invoice as any)?.organizationId ? String((invoice as any).organizationId) : session?.user?.organizationId}
+        onClose={() => setEditingLetterhead(false)}
+        onSaved={reloadInvoice}
+      />
 
       <style jsx global>{`
         @media print {

@@ -12,7 +12,7 @@ import { listPayments, listOrderSyncConnections, syncAllChannelOrders, type Orde
 import { CreditCard, Eye, ArrowDownToLine, RefreshCw, Store, Monitor, Download } from 'lucide-react';
 import { ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
-import { PaymentDetailModal } from '@/components/finance/payment-detail-modal';
+import { PaymentDetailModal, PaymentReference, paymentReferenceText } from '@/components/finance/payment-detail-modal';
 
 type Payment = {
   id: string;
@@ -228,8 +228,10 @@ export default function PaymentsPage() {
           <div className="truncate font-mono text-xs" title={row.original.transactionId ?? ''}>
             {row.original.transactionId || `#${row.original.id}`}
           </div>
-          {row.original.reference && (
-            <div className="text-xs text-muted-foreground">{row.original.reference}</div>
+          {paymentReferenceText(row.original.reference) && (
+            <div className="text-xs text-muted-foreground">
+              <PaymentReference value={row.original.reference} />
+            </div>
           )}
         </div>
       )
@@ -371,7 +373,7 @@ export default function PaymentsPage() {
     const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = data.map((p) => [
       p.transactionId ?? p.id,
-      p.reference ?? '',
+      paymentReferenceText(p.reference),
       p.order?.orderNumber ?? '',
       p.order?.channel ?? '',
       p.order?.channelConnection?.name ?? '',

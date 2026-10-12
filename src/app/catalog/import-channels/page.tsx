@@ -44,6 +44,7 @@ import {
   Trash2,
   Zap
 } from 'lucide-react';
+import { activeWarehouses } from '@/components/inventory/location-status-badge';
 
 type ImportSource = {
   id: string;
@@ -897,7 +898,7 @@ export default function ImportChannelsPage() {
                   <option value="">
                     {options.importInventory ? 'Select warehouse…' : 'Enable inventory import first'}
                   </option>
-                  {warehouses.map((w) => (
+                  {activeWarehouses(warehouses).map((w) => (
                     <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
                   ))}
                 </select>

@@ -8,7 +8,7 @@ import { Header } from '@/components/header';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
-import { listAccExpenses, createAccExpense, approveAccExpense, listAccExpenseEmployees } from '@/lib/accounting-api';
+import { listAccExpenses, createAccExpense, approveAccExpense, rejectAccExpense, listAccExpenseEmployees } from '@/lib/accounting-api';
 import { formatMoney, formatDate, statusBadgeClass, accApiError, accFieldErrors } from '@/lib/accounting-utils';
 import { AccModal, AccField, AccModalActions, AccCreateButton, accInputClass } from '@/components/accounting/acc-modal';
 import { FileUploadField } from '@/components/file-upload-field';
@@ -99,15 +99,32 @@ export default function AccountingExpensesPage() {
     }
   }
 
-  async function onApprove(id: string) {
-    try {
-      await approveAccExpense(id);
-      toast.success('Expense approved');
-      await load();
-    } catch (err) {
-      toast.error(accApiError(err));
-    }
-  }
+  const [pending, setPending] = useState<{ id: string; action: 'approve' | 'reject' } | null>(null);
+
+  const onStatusAction = useCallback(
+    async (row: any, action: 'approve' | 'reject') => {
+      let reason: string | undefined;
+      if (action === 'reject') {
+        const input = window.prompt(`Reject expense "${row.description}"? Optional reason:`, '');
+        if (input === null) return;
+        reason = input.trim() || undefined;
+      }
+      const id = String(row.id);
+      setPending({ id, action });
+      try {
+        const res: any = action === 'approve' ? await approveAccExpense(id) : await rejectAccExpense(id, reason);
+        const updated = res?.data || { status: action === 'approve' ? 'approved' : 'rejected' };
+        setRows((prev) => prev.map((r) => (String(r.id) === id ? { ...r, ...updated, employee: r.employee, vatCode: r.vatCode } : r)));
+        toast.success(action === 'approve' ? 'Expense approved and posted to the ledger' : 'Expense rejected');
+        await load();
+      } catch (err) {
+        toast.error(accApiError(err, `Failed to ${action} expense`));
+      } finally {
+        setPending(null);
+      }
+    },
+    [load]
+  );
 
   const columns = useMemo<ColumnDef<any>[]>(
     () => [
@@ -139,16 +156,33 @@ export default function AccountingExpensesPage() {
       {
         id: 'actions',
         header: '',
-        cell: ({ row }) =>
-          ['draft', 'submitted', 'pending'].includes(row.original.status) ? (
-            <button type="button" className="text-xs font-semibold text-[#D4A017] hover:underline" onClick={() => onApprove(row.original.id)}>
-              Approve
-            </button>
-          ) : null,
+        cell: ({ row }) => {
+          if (!['draft', 'submitted', 'pending'].includes(row.original.status)) return null;
+          const busy = pending?.id === String(row.original.id);
+          return (
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={pending !== null}
+                className="text-xs font-semibold text-[#D4A017] hover:underline disabled:opacity-50 disabled:no-underline"
+                onClick={() => onStatusAction(row.original, 'approve')}
+              >
+                {busy && pending?.action === 'approve' ? 'Approving…' : 'Approve'}
+              </button>
+              <button
+                type="button"
+                disabled={pending !== null}
+                className="text-xs text-red-600 hover:underline disabled:opacity-50 disabled:no-underline"
+                onClick={() => onStatusAction(row.original, 'reject')}
+              >
+                {busy && pending?.action === 'reject' ? 'Rejecting…' : 'Reject'}
+              </button>
+            </div>
+          );
+        },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [onStatusAction, pending]
   );
 
   return (

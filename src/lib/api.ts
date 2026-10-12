@@ -7132,3 +7132,214 @@ export async function deleteHrDocument(id: string) {
   const { status } = await axios.delete(`${API_BASE}/api/hr/documents/${id}`, { headers: authHeaders() });
   return status === 204;
 }
+
+/** Soft-deletes an organization (SUPER_ADMIN). `confirmName` must equal the organization name. */
+export async function deleteOrganization(id: string, confirmName: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/iam/organizations/${id}`, {
+    headers: authHeaders(),
+    data: { confirmName },
+  });
+  return data as { data: { id: string; deleted: boolean } };
+}
+
+/** Current user's roles and allowed panel page keys (`pages: null` = unrestricted). */
+export async function getMyAccess() {
+  const { data } = await axios.get(`${API_BASE}/api/iam/me`, { headers: authHeaders() });
+  return data as { data: { id: string; organizationId: string; roles: string[]; pages: string[] | null } };
+}
+
+/** Shipment with order, address, packages and status/carrier event history. */
+export async function getFulfillmentShipment(id: string, organizationId?: string) {
+  const { data } = await axios.get(`${API_BASE}/api/fulfillment/shipments/${id}`, {
+    params: { organizationId },
+    headers: authHeaders(),
+  });
+  return data as { data: any };
+}
+
+export type InvoiceLetterheadSettings = {
+  logoUrl: string | null;
+  companyName: string | null;
+  addressLines: string[];
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  vatNumber: string | null;
+  companyNumber: string | null;
+  footerText: string | null;
+  accentColor: string | null;
+};
+
+/** Organization's editable invoice letterhead (`settings: null` = uses the organization profile). */
+export async function getInvoiceLetterhead(organizationId?: string) {
+  const { data } = await axios.get(`${API_BASE}/api/finance/invoices/letterhead`, {
+    params: { organizationId },
+    headers: authHeaders(),
+  });
+  return data as { data: { organizationId: string; settings: InvoiceLetterheadSettings | null; profile: Record<string, string | null> } };
+}
+
+/** Affiliate payout with the conversions (orders) its period covers. */
+export async function getAffiliatePayout(payoutId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/marketing/affiliates/payouts/${payoutId}`, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function saveInvoiceLetterhead(settings: Partial<InvoiceLetterheadSettings>, organizationId?: string) {
+  const { data } = await axios.put(
+    `${API_BASE}/api/finance/invoices/letterhead`,
+    { organizationId, settings },
+    { headers: authHeaders() }
+  );
+  return data as { data: { organizationId: string; settings: InvoiceLetterheadSettings } };
+}
+
+// WAREHOUSE TYPES (per organisation; warehouses.type stores the code)
+export type WarehouseType = {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+  inUse: number;
+};
+
+export async function listWarehouseTypes(params?: { organizationId?: string; active?: boolean }) {
+  const { data } = await axios.get(`${API_BASE}/api/inventory/warehouse-types`, {
+    params: { organizationId: params?.organizationId, active: params?.active ? 'true' : undefined },
+    headers: authHeaders(),
+  });
+  return data as { data: WarehouseType[] };
+}
+
+export async function createWarehouseType(payload: { organizationId?: string; name: string; code?: string }) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/warehouse-types`, payload, { headers: authHeaders() });
+  return data as { data: WarehouseType };
+}
+
+export async function updateWarehouseType(id: string, payload: { name?: string; isActive?: boolean; sortOrder?: number }) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/warehouse-types/${id}`, payload, { headers: authHeaders() });
+  return data as { data: WarehouseType };
+}
+
+export async function deleteWarehouseType(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/warehouse-types/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
+// PURCHASE ORDERS with lines (totals are computed by the API)
+export type PurchaseOrderLineInput = {
+  variantId: string;
+  quantity: number;
+  unitPrice: number;
+  /** Fraction, e.g. 0.2 for 20% */
+  taxRate?: number;
+  notes?: string;
+};
+
+export type PurchaseOrderInput = {
+  organizationId: string;
+  supplierId: string;
+  warehouseId: string;
+  poNumber?: string;
+  reference?: string;
+  orderDate: string;
+  expectedDeliveryDate?: string;
+  currency?: string;
+  shippingCost?: number;
+  otherCosts?: number;
+  status?: 'draft' | 'submitted';
+  notes?: string;
+  lines: PurchaseOrderLineInput[];
+};
+
+export async function createPurchaseOrderWithLines(payload: PurchaseOrderInput) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/purchase-orders`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePurchaseOrderWithLines(id: string, payload: Partial<Omit<PurchaseOrderInput, 'organizationId'>>) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/purchase-orders/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function setPurchaseOrderStatus(
+  id: string,
+  status: 'draft' | 'submitted' | 'confirmed' | 'partial_received' | 'received' | 'cancelled'
+) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/purchase-orders/${id}`, { status }, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+// PRICE LIST ITEM IMPORT (CSV / XLSX)
+export type PriceListImportResult = {
+  dryRun: boolean;
+  totalRows: number;
+  validRows: number;
+  created: number;
+  updated: number;
+  failed: number;
+  errors: Array<{ row: number; identifier: string; message: string }>;
+};
+
+export async function importPriceListItemsFile(priceListId: string, file: File, options?: { dryRun?: boolean }) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('dryRun', String(!!options?.dryRun));
+  const { data } = await axios.post(`${API_BASE}/api/catalog/price-lists/${priceListId}/import`, formData, {
+    headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
+    timeout: 300000,
+  });
+  return data as { data: PriceListImportResult };
+}
+
+export async function downloadPriceListImportTemplate(format: 'csv' | 'xlsx' = 'xlsx') {
+  const res = await axios.get(`${API_BASE}/api/catalog/price-lists/import-template`, {
+    params: { format },
+    headers: authHeaders(),
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `price-list-items-template.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function postJournalEntry(id: string) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/journal-entries/${id}/post`, {}, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function reverseJournalEntry(id: string, payload: { entryDate?: string } = {}) {
+  const { data } = await axios.post(`${API_BASE}/api/finance/journal-entries/${id}/reverse`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+/** HR dashboard visa board: every visa expiring within `withinDays`, plus already-expired ones for current staff. */
+export async function listVisaBoard(params: { organizationId?: string; withinDays?: number }) {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/compliance/visa-expiring${hrQuery({ ...params, includeExpired: 1 })}`,
+    { headers: authHeaders() }
+  );
+  const payload = data?.data;
+  return { data: (Array.isArray(payload?.expiring) ? payload.expiring : []) as any[] };
+}
+
+/** All compliance alerts for a status (pages through the API, 200 per request). */
+export async function listAllComplianceAlerts(params: { organizationId?: string; status?: string }) {
+  const all: any[] = [];
+  for (let page = 1; page <= 25; page++) {
+    const { data } = await axios.get(
+      `${API_BASE}/api/hr/compliance/alerts${hrQuery({ ...params, page, limit: 200 })}`,
+      { headers: authHeaders() }
+    );
+    const rows: any[] = data?.data || [];
+    all.push(...rows);
+    if (!rows.length || all.length >= Number(data?.meta?.total ?? all.length)) break;
+  }
+  return { data: all };
+}

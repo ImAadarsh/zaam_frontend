@@ -832,7 +832,7 @@ export default function OrderDetailPage() {
                     className="select"
                   >
                     <option value="">Select warehouse...</option>
-                    {warehouses.map(w => (
+                    {warehouses.filter(w => w.status === 'active' || w.id === lineForm.warehouseId).map(w => (
                       <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
                   </select>

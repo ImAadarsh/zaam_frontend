@@ -370,6 +370,11 @@ export default function RolesPage() {
                 </div>
                 
                 <div className="space-y-4 mb-6">
+                  <p className="text-xs text-muted-foreground rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    Selected pages are enforced in the menu, on direct page links and on the API (users see a “No access” screen otherwise).
+                    Leaving every page unticked keeps this role unrestricted, and a user holding any unrestricted role keeps full access.
+                    Super Administrator always has full access. Changes apply on the user&apos;s next page load.
+                  </p>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
                       Select which pages this role can access ({Object.values(pagePermissions).filter(Boolean).length} selected):

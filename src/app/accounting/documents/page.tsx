@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { RichDataTable } from '@/components/rich-data-table';
@@ -20,7 +21,7 @@ import { formatDate, formatMoney, accApiError, accFieldErrors } from '@/lib/acco
 import { AccModal, AccField, AccModalActions, AccCreateButton, accInputClass } from '@/components/accounting/acc-modal';
 import { FileUploadField } from '@/components/file-upload-field';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus } from 'lucide-react';
+import { Plus, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 type EntityType = 'invoice' | 'bill' | 'expense' | 'journal' | 'other';
@@ -46,12 +47,26 @@ export default function AccountingDocumentsPage() {
   const orgId = session?.user?.organizationId;
   const emptyForm = () => ({
     entityType: 'invoice' as EntityType,
+    entityId: '',
     entityRef: '',
+    manualRef: false,
     documentName: '',
     documentUrls: [] as string[],
     documentUrl: '',
   });
   const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    const type = q.get('entityType') as EntityType | null;
+    if (type && type in REF_LABEL) {
+      setForm({ ...emptyForm(), entityType: type, entityId: q.get('entityId') || '' });
+      setErrors({});
+      setOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = useCallback(async () => {
     if (!orgId) return;
@@ -81,7 +96,7 @@ export default function AccountingDocumentsPage() {
         if (type === 'invoice') {
           const res: any = await listAccInvoices(orgId, { limit: 500 });
           opts = (res.data || []).map((i: any) => ({
-            value: i.invoiceNumber,
+            value: String(i.id),
             label: [i.invoiceNumber, i.orderNumber || i.order?.orderNumber, i.customerName || i.customer?.name, formatMoney(i.total, i.currency || 'GBP')]
               .filter(Boolean)
               .join(' · '),
@@ -89,7 +104,7 @@ export default function AccountingDocumentsPage() {
         } else if (type === 'bill') {
           const res: any = await listAccBills(orgId);
           opts = (res.data || []).map((b: any) => ({
-            value: b.billNumber,
+            value: String(b.id),
             label: [b.billNumber, b.supplier?.name, formatMoney(b.total, b.currency || 'GBP')].filter(Boolean).join(' · '),
           }));
         } else if (type === 'expense') {
@@ -101,7 +116,7 @@ export default function AccountingDocumentsPage() {
         } else if (type === 'journal') {
           const res: any = await listAccJournals(orgId);
           opts = (res.data || []).map((j: any) => ({
-            value: j.journalNumber,
+            value: String(j.id),
             label: [j.journalNumber, j.description, formatDate(j.entryDate)].filter(Boolean).join(' · '),
           }));
         }
@@ -117,7 +132,8 @@ export default function AccountingDocumentsPage() {
     if (!orgId) return;
     const documentUrl = form.documentUrls[0] || form.documentUrl.trim();
     const next: Record<string, string> = {};
-    if (form.entityType !== 'other' && !form.entityRef.trim()) next.entityRef = 'Choose the record to link this document to';
+    const useId = form.entityType !== 'other' && !form.manualRef;
+    if (form.entityType !== 'other' && !(useId ? form.entityId : form.entityRef.trim())) next.entityRef = 'Choose the record to link this document to';
     if (!form.documentName.trim()) next.documentName = 'Document name is required';
     if (!documentUrl) next.documentUrl = 'Upload a file or enter a document URL';
     setErrors(next);
@@ -127,12 +143,14 @@ export default function AccountingDocumentsPage() {
       await createAccDocument({
         organizationId: orgId,
         entityType: form.entityType,
-        entityRef: form.entityType === 'other' ? undefined : form.entityRef.trim(),
+        entityId: useId ? form.entityId : undefined,
+        entityRef: form.entityType !== 'other' && !useId ? form.entityRef.trim() : undefined,
         documentName: form.documentName.trim(),
         documentUrl,
       });
       toast.success('Document linked');
       setOpen(false);
+      if (window.location.search) router.replace('/accounting/documents');
       await load();
     } catch (err) {
       setErrors(accFieldErrors(err));
@@ -144,12 +162,27 @@ export default function AccountingDocumentsPage() {
 
   const columns = useMemo<ColumnDef<any>[]>(
     () => [
-      { accessorKey: 'documentName', header: 'Name' },
+      {
+        accessorKey: 'documentName',
+        header: 'Name',
+        cell: ({ row }) => (
+          <Link href={`/accounting/documents/${row.original.id}`} className="font-medium text-[#D4A017] hover:underline">
+            {row.original.documentName || 'Document'}
+          </Link>
+        ),
+      },
       { accessorKey: 'entityType', header: 'Linked to', cell: ({ row }) => <span className="capitalize">{row.original.entityType}</span> },
       {
         accessorKey: 'entityRef',
         header: 'Reference',
-        cell: ({ row }) => <span className="font-mono text-xs">{row.original.entityRef || row.original.entityId || '—'}</span>,
+        cell: ({ row }) => {
+          const ref = row.original.entityRef || row.original.entityId || '—';
+          return row.original.entityHref ? (
+            <Link href={row.original.entityHref} className="font-mono text-xs hover:underline">{ref}</Link>
+          ) : (
+            <span className="font-mono text-xs">{ref}</span>
+          );
+        },
       },
       {
         accessorKey: 'documentUrl',
@@ -164,6 +197,16 @@ export default function AccountingDocumentsPage() {
           ),
       },
       { accessorKey: 'createdAt', header: 'Added', cell: ({ row }) => formatDate(row.original.createdAt) },
+      {
+        id: 'actions',
+        header: '',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Link href={`/accounting/documents/${row.original.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-[#D4A017] hover:underline">
+            <Eye size={14} /> View
+          </Link>
+        ),
+      },
     ],
     []
   );
@@ -197,10 +240,13 @@ export default function AccountingDocumentsPage() {
             <select
               className={accInputClass}
               value={form.entityType}
-              onChange={(e) => setForm({ ...form, entityType: e.target.value as EntityType, entityRef: '' })}
+              onChange={(e) => {
+                setForm({ ...form, entityType: e.target.value as EntityType, entityId: '', entityRef: '', manualRef: false });
+                setErrors((prev) => ({ ...prev, entityRef: '' }));
+              }}
             >
               {(['invoice', 'bill', 'expense', 'journal', 'other'] as const).map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t} className="capitalize">{t}</option>
               ))}
             </select>
           </AccField>
@@ -208,21 +254,57 @@ export default function AccountingDocumentsPage() {
             <AccField
               label={REF_LABEL[form.entityType]}
               error={errors.entityRef}
-              hint={options.length ? 'Start typing to search, or pick from the list' : undefined}
+              hint={
+                refOptions[form.entityType] === undefined
+                  ? 'Loading records…'
+                  : form.manualRef
+                    ? 'Type the exact number or ID'
+                    : options.length
+                      ? undefined
+                      : 'No records found — type a number or ID instead'
+              }
             >
-              <input
-                className={accInputClass}
-                list="acc-doc-ref-options"
-                value={form.entityRef}
-                onChange={(e) => setForm({ ...form, entityRef: e.target.value })}
-                placeholder={form.entityType === 'invoice' ? 'INV-2026-00122' : ''}
-                autoComplete="off"
-              />
-              <datalist id="acc-doc-ref-options">
-                {options.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </datalist>
+              {form.manualRef || (refOptions[form.entityType] !== undefined && !options.length) ? (
+                <input
+                  className={accInputClass}
+                  value={form.entityRef}
+                  onChange={(e) => {
+                    setForm({ ...form, entityRef: e.target.value, manualRef: true });
+                    setErrors((prev) => ({ ...prev, entityRef: '' }));
+                  }}
+                  placeholder={form.entityType === 'invoice' ? 'INV-2026-00122' : ''}
+                  autoComplete="off"
+                />
+              ) : (
+                <select
+                  className={accInputClass}
+                  value={form.entityId}
+                  onChange={(e) => {
+                    setForm({ ...form, entityId: e.target.value });
+                    setErrors((prev) => ({ ...prev, entityRef: '' }));
+                  }}
+                >
+                  <option value="">Select…</option>
+                  {form.entityId && !options.some((o) => o.value === form.entityId) ? (
+                    <option value={form.entityId}>#{form.entityId}</option>
+                  ) : null}
+                  {options.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              )}
+              {options.length ? (
+                <button
+                  type="button"
+                  className="text-[11px] text-[#D4A017] hover:underline"
+                  onClick={() => {
+                    setForm({ ...form, manualRef: !form.manualRef, entityRef: '', entityId: '' });
+                    setErrors((prev) => ({ ...prev, entityRef: '' }));
+                  }}
+                >
+                  {form.manualRef ? 'Pick from the list instead' : 'Not in the list? Type a number or ID'}
+                </button>
+              ) : null}
             </AccField>
           ) : null}
           <AccField label="Document name" error={errors.documentName}>

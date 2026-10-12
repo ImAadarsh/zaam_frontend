@@ -11,6 +11,7 @@ import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { FloatingDropdown } from '@/components/inventory/floating-dropdown';
 import { Pencil, Trash2, Plus, X, Receipt, Search } from 'lucide-react';
+import { activeWarehouses } from '@/components/inventory/location-status-badge';
 
 type GRN = {
   id: string;
@@ -349,7 +350,7 @@ export default function GRNPage() {
                           required
                         >
                           <option value="">Select warehouse...</option>
-                          {warehouses.map(w => (
+                          {activeWarehouses(warehouses).map(w => (
                             <option key={w.id} value={w.id}>{w.name}</option>
                           ))}
                         </select>

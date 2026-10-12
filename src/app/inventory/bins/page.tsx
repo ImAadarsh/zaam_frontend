@@ -10,12 +10,13 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Package } from 'lucide-react';
+import { LocationStatusBadge, activeWarehouses } from '@/components/inventory/location-status-badge';
 
 type Bin = {
   id: string;
   code: string;
   name?: string;
-  warehouse?: { id: string; name: string };
+  warehouse?: { id: string; name: string; status?: string };
   zone?: string;
   aisle?: string;
   rack?: string;
@@ -139,11 +140,34 @@ export default function BinsPage() {
     {
       accessorKey: 'warehouse',
       header: 'Warehouse',
-      cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.original.warehouse?.name || 'N/A'}</span>
+      cell: ({ row }) => {
+        const wh = row.original.warehouse;
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-sm text-muted-foreground">{wh?.name || 'N/A'}</span>
+            {wh?.status && wh.status !== 'active' && <LocationStatusBadge status={wh.status} title={`Warehouse is ${wh.status}`} />}
+          </div>
+        );
+      }
     },
     { accessorKey: 'zone', header: 'Zone' },
     { accessorKey: 'binType', header: 'Type' },
-    { accessorKey: 'status', header: 'Status' },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+        const whStatus = row.original.warehouse?.status;
+        const blocked = whStatus && whStatus !== 'active';
+        return (
+          <div className="flex flex-col gap-0.5">
+            <LocationStatusBadge status={row.original.status} />
+            {blocked && (
+              <span className="text-xs text-amber-700">Unavailable — warehouse {whStatus}</span>
+            )}
+          </div>
+        );
+      }
+    },
     {
       id: 'actions',
       header: 'Actions',
@@ -263,10 +287,11 @@ export default function BinsPage() {
                           required
                         >
                           <option value="">Select...</option>
-                          {warehouses.map(w => (
+                          {activeWarehouses(warehouses).map(w => (
                             <option key={w.id} value={w.id}>{w.name}</option>
                           ))}
                         </select>
+                        <p className="mt-1 text-xs text-muted-foreground">Only active warehouses are listed.</p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1.5">Code *</label>

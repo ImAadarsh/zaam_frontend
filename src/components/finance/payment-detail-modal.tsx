@@ -1,7 +1,8 @@
 'use client';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { X } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ExternalLink, X } from 'lucide-react';
 
 export const PAYMENT_CHANNEL_LABELS: Record<string, string> = {
   pos: 'POS / EPOS',
@@ -25,6 +26,44 @@ function money(amount: unknown, currency = 'GBP') {
   } catch {
     return `${currency} ${n.toFixed(2)}`;
   }
+}
+
+/** Channel references can arrive as HTML (e.g. a gateway logo `<img>`); reduce to text, keeping img alt text. */
+export function paymentReferenceText(value?: string | null): string {
+  if (!value) return '';
+  return String(value)
+    .replace(/<img\b[^>]*?\balt\s*=\s*(["'])(.*?)\1[^>]*>/gi, ' $2 ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export const isHttpUrl = (s: string) => /^https?:\/\/\S+$/i.test(s);
+
+/** Plain-text reference; a URL becomes an "Open" link. */
+export function PaymentReference({ value, className }: { value?: string | null; className?: string }) {
+  const text = paymentReferenceText(value);
+  if (!text) return null;
+  if (isHttpUrl(text)) {
+    return (
+      <a
+        href={text}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={text}
+        onClick={(e) => e.stopPropagation()}
+        className={`inline-flex items-center gap-1 text-primary hover:underline ${className ?? ''}`}
+      >
+        Open <ExternalLink className="h-3 w-3" />
+      </a>
+    );
+  }
+  return <span className={className}>{text}</span>;
 }
 
 const humanize = (s?: string | null) => (s ? s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : null);
@@ -66,7 +105,7 @@ export function PaymentDetailModal({ payment, onClose }: { payment: any | null; 
   const channel = payment.order?.channel;
   const rows = ([
     ['Transaction ID', payment.transactionId || `#${payment.id}`],
-    ['Reference', payment.reference],
+    ['Reference', paymentReferenceText(payment.reference) ? <PaymentReference value={payment.reference} /> : null],
     ['Amount', money(payment.amount, currency)],
     ['Status', humanize(payment.status)],
     ['Method', humanize(payment.paymentMethod)],
@@ -80,7 +119,7 @@ export function PaymentDetailModal({ payment, onClose }: { payment: any | null; 
     ['Gateway', payment.paymentGateway?.name],
     ['Failure reason', payment.failureMessage],
     ['Notes', payment.notes]
-  ] as Array<[string, string | null | undefined]>).filter(([, v]) => v);
+  ] as Array<[string, ReactNode]>).filter(([, v]) => v);
   const extra = channelFields(payment.gatewayResponse, currency);
 
   return (

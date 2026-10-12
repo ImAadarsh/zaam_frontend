@@ -12,7 +12,8 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Pencil, Trash2, Plus, X, DollarSign } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Plus, X, DollarSign, Upload } from 'lucide-react';
+import { PriceListImportModal } from '@/components/catalog/price-list-import-modal';
 
 type PriceList = {
   id: string;
@@ -70,6 +71,8 @@ export default function PriceListsPage() {
     status: 'active' as 'active' | 'inactive'
   });
   const [confirmDel, setConfirmDel] = useState<PriceList | null>(null);
+  const [importing, setImporting] = useState<{ list: PriceList; file: File | null } | null>(null);
+  const [createFile, setCreateFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -134,6 +137,10 @@ export default function PriceListsPage() {
       
       setItems([res.data, ...items]);
       setShowCreate(false);
+      if (createFile) {
+        setImporting({ list: res.data, file: createFile });
+        setCreateFile(null);
+      }
       setForm({ 
         organizationId: session.user.organizationId || '',
         businessUnitId: '',
@@ -211,7 +218,15 @@ export default function PriceListsPage() {
     {
       accessorKey: 'name',
       header: 'Name',
-      cell: ({ row }) => <div className="font-medium">{row.original.name}</div>
+      cell: ({ row }) => (
+        <button
+          onClick={() => router.push(`/catalog/price-lists/${row.original.id}`)}
+          className="font-medium text-left hover:underline"
+          title="View items"
+        >
+          {row.original.name}
+        </button>
+      )
     },
     {
       accessorKey: 'type',
@@ -270,6 +285,13 @@ export default function PriceListsPage() {
         return (
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setImporting({ list: item, file: null })}
+              className="p-1 hover:bg-gray-100 rounded"
+              title="Import items (CSV / Excel)"
+            >
+              <Upload className="h-4 w-4" />
+            </button>
+            <button
               onClick={() => {
                 setEditing(item);
                 setEditForm({
@@ -298,7 +320,7 @@ export default function PriceListsPage() {
         );
       }
     }
-  ], []);
+  ], [router]);
 
   if (!hydrated || loading) {
     return (
@@ -348,7 +370,9 @@ export default function PriceListsPage() {
                   <DollarSign className="h-8 w-8" />
                   Price Lists
                 </h1>
-                <p className="text-muted-foreground mt-1">Manage pricing tiers and lists</p>
+                <p className="text-muted-foreground mt-1">
+                  Manage pricing tiers and lists. Use the upload icon on a row to import items from CSV or Excel.
+                </p>
               </div>
               <button
                 onClick={() => setShowCreate(true)}
@@ -366,7 +390,7 @@ export default function PriceListsPage() {
                 <div className="w-full max-w-2xl rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold">Create Price List</h3>
-                    <button onClick={() => setShowCreate(false)} className="p-1 hover:bg-muted rounded-lg transition-colors">
+                    <button onClick={() => { setShowCreate(false); setCreateFile(null); }} className="p-1 hover:bg-muted rounded-lg transition-colors">
                       <X className="h-5 w-5" />
                     </button>
                   </div>
@@ -487,10 +511,23 @@ export default function PriceListsPage() {
                         <span className="text-sm">Set as default price list</span>
                       </label>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Items file (optional)</label>
+                      <input
+                        type="file"
+                        accept=".csv,.xlsx,.xls"
+                        onChange={e => setCreateFile(e.target.files?.[0] ?? null)}
+                        className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm hover:file:bg-muted/80"
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        CSV or Excel with sku / barcode / variant_id and price. After the list is created the rows are
+                        checked and you confirm the import. The template is available from the import dialog.
+                      </p>
+                    </div>
                     <div className="flex justify-end gap-3 pt-4 border-t border-border">
                       <button
                         type="button"
-                        onClick={() => setShowCreate(false)}
+                        onClick={() => { setShowCreate(false); setCreateFile(null); }}
                         className="btn btn-outline"
                       >
                         Cancel
@@ -624,6 +661,14 @@ export default function PriceListsPage() {
                   </form>
                 </div>
               </div>
+            )}
+
+            {importing && (
+              <PriceListImportModal
+                priceList={importing.list}
+                initialFile={importing.file}
+                onClose={() => setImporting(null)}
+              />
             )}
 
             {confirmDel && (

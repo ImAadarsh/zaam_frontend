@@ -18,6 +18,7 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { Package2, Plus, X, Pencil, Trash2, Search } from 'lucide-react';
+import { activeWarehouses } from '@/components/inventory/location-status-badge';
 
 type StockItem = {
   id: string;
@@ -551,7 +552,7 @@ export default function StockItemsPage() {
                           required
                         >
                           <option value="">Select warehouse...</option>
-                          {warehouses.map(w => (
+                          {activeWarehouses(warehouses).map(w => (
                             <option key={w.id} value={w.id}>{w.name}</option>
                           ))}
                         </select>
@@ -565,7 +566,7 @@ export default function StockItemsPage() {
                           disabled={!form.warehouseId}
                         >
                           <option value="">No bin</option>
-                          {bins.map(b => (
+                          {bins.filter(b => b.status === 'active' || b.id === form.binId).map(b => (
                             <option key={b.id} value={b.id}>{b.code} {b.name ? `- ${b.name}` : ''}</option>
                           ))}
                         </select>
@@ -730,7 +731,7 @@ export default function StockItemsPage() {
                           className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                           <option value="">No bin</option>
-                          {bins.map(b => (
+                          {bins.filter(b => b.status === 'active' || b.id === form.binId).map(b => (
                             <option key={b.id} value={b.id}>{b.code} {b.name ? `- ${b.name}` : ''}</option>
                           ))}
                         </select>

@@ -1,15 +1,16 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listJournalEntries, createJournalEntry, updateJournalEntry, deleteJournalEntry, listOrganizations, listBusinessUnits, listFiscalPeriods, listLedgerAccounts, listCostCenters } from '@/lib/api';
+import { listJournalEntries, getJournalEntry, createJournalEntry, updateJournalEntry, deleteJournalEntry, listOrganizations, listBusinessUnits, listFiscalPeriods, listLedgerAccounts, listCostCenters } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Eye } from 'lucide-react';
 
 type JournalLine = {
   ledgerAccountId: string;
@@ -287,8 +288,64 @@ export default function JournalEntriesPage() {
     }
   }
 
+  /** List rows carry no lines, so load the full entry before opening the editor. */
+  async function openEdit(id: string) {
+    try {
+      const { data: item } = await getJournalEntry(id);
+      if (item.status !== 'draft') {
+        toast.error('Only draft journal entries can be edited');
+        return;
+      }
+      setEditing(item);
+      setEditForm({
+        businessUnitId: item.businessUnit?.id || '',
+        fiscalPeriodId: item.fiscalPeriod?.id || '',
+        journalNumber: item.journalNumber,
+        entryDate: String(item.entryDate || '').slice(0, 10),
+        entryType: item.entryType,
+        sourceType: item.sourceType,
+        description: item.description || '',
+        reference: item.reference || '',
+        status: item.status
+      });
+      setEditJournalLines(
+        [...(item.journalLines || [])]
+          .sort((a: any, b: any) => a.lineNumber - b.lineNumber)
+          .map((line: any) => ({
+            ledgerAccountId: line.ledgerAccount?.id || line.ledgerAccountId,
+            costCenterId: line.costCenter?.id || line.costCenterId || '',
+            lineNumber: line.lineNumber,
+            description: line.description || '',
+            debitAmount: amt(line.debitAmount),
+            creditAmount: amt(line.creditAmount),
+            currency: line.currency || 'GBP'
+          }))
+      );
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || 'Failed to load journal entry');
+    }
+  }
+
+  // The view page links here with ?edit=<id> for drafts.
+  useEffect(() => {
+    if (loading || typeof window === 'undefined') return;
+    const editId = new URLSearchParams(window.location.search).get('edit');
+    if (!editId) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    void openEdit(editId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
   const columns = useMemo<ColumnDef<JournalEntry>[]>(() => [
-    { accessorKey: 'journalNumber', header: 'Journal Number' },
+    {
+      accessorKey: 'journalNumber',
+      header: 'Journal Number',
+      cell: ({ row }) => (
+        <Link href={`/finance/journal-entries/${row.original.id}`} className="font-medium text-primary hover:underline">
+          {row.original.journalNumber}
+        </Link>
+      )
+    },
     { 
       accessorKey: 'entryDate', 
       header: 'Date',
@@ -321,31 +378,15 @@ export default function JournalEntriesPage() {
         const canEdit = row.original.status === 'draft';
         return (
           <div className="flex gap-2">
+            <Link
+              href={`/finance/journal-entries/${row.original.id}`}
+              className="p-1.5 hover:bg-muted rounded"
+              title="View"
+            >
+              <Eye size={16} />
+            </Link>
             {canEdit && (
-              <button onClick={() => {
-                const item = row.original;
-                setEditing(item);
-                setEditForm({
-                  businessUnitId: (item as any).businessUnit?.id || '',
-                  fiscalPeriodId: item.fiscalPeriod?.id || '',
-                  journalNumber: item.journalNumber,
-                  entryDate: String(item.entryDate || '').slice(0, 10),
-                  entryType: item.entryType,
-                  sourceType: item.sourceType,
-                  description: item.description || '',
-                  reference: (item as any).reference || '',
-                  status: item.status
-                });
-                setEditJournalLines((item.journalLines || []).map(line => ({
-                  ledgerAccountId: (line as any).ledgerAccount?.id || line.ledgerAccountId,
-                  costCenterId: (line as any).costCenter?.id || line.costCenterId || '',
-                  lineNumber: line.lineNumber,
-                  description: line.description || '',
-                  debitAmount: amt(line.debitAmount),
-                  creditAmount: amt(line.creditAmount),
-                  currency: line.currency || 'GBP'
-                })));
-              }} className="p-1.5 hover:bg-muted rounded">
+              <button onClick={() => void openEdit(row.original.id)} className="p-1.5 hover:bg-muted rounded" title="Edit draft">
                 <Pencil size={16} />
               </button>
             )}

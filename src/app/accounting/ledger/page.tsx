@@ -24,7 +24,7 @@ import {
   DEFAULT_LEDGER_ACCOUNT_TYPES,
   type LedgerAccountTypeOption,
 } from '@/lib/accounting-api';
-import { formatMoney, formatDate, statusBadgeClass, accApiError, printElement, downloadCsv } from '@/lib/accounting-utils';
+import { formatMoney, formatDate, statusBadgeClass, accApiError, printElement, printTable, downloadCsv, type PrintColumn } from '@/lib/accounting-utils';
 import { AccModal, AccField, AccModalActions, AccCreateButton, accInputClass } from '@/components/accounting/acc-modal';
 import { ColumnDef } from '@tanstack/react-table';
 import { Plus, Printer, Download } from 'lucide-react';
@@ -223,15 +223,24 @@ export default function AccountingLedgerPage() {
     }
   }
 
-  async function onPost(id: string) {
-    try {
-      await postAccJournal(id);
-      toast.success('Journal posted');
-      await load();
-    } catch (err) {
-      toast.error(accApiError(err));
-    }
-  }
+  const [postingId, setPostingId] = useState<string | null>(null);
+
+  const onPost = useCallback(
+    async (id: string) => {
+      setPostingId(String(id));
+      try {
+        await postAccJournal(id);
+        setJournals((prev) => prev.map((j) => (String(j.id) === String(id) ? { ...j, status: 'posted' } : j)));
+        toast.success('Journal posted');
+        await load();
+      } catch (err) {
+        toast.error(accApiError(err, 'Failed to post journal'));
+      } finally {
+        setPostingId(null);
+      }
+    },
+    [load]
+  );
 
   const coaCols = useMemo<ColumnDef<any>[]>(
     () => [
@@ -260,14 +269,18 @@ export default function AccountingLedgerPage() {
         header: '',
         cell: ({ row }) =>
           row.original.status === 'draft' ? (
-            <button type="button" className="text-xs font-semibold text-[#D4A017] hover:underline" onClick={() => onPost(row.original.id)}>
-              Post
+            <button
+              type="button"
+              disabled={postingId !== null}
+              className="text-xs font-semibold text-[#D4A017] hover:underline disabled:opacity-50 disabled:no-underline"
+              onClick={() => onPost(row.original.id)}
+            >
+              {postingId === String(row.original.id) ? 'Posting…' : 'Post'}
             </button>
           ) : null,
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [journals]
+    [onPost, postingId]
   );
 
   const glCols = useMemo<ColumnDef<any>[]>(
@@ -301,25 +314,64 @@ export default function AccountingLedgerPage() {
     []
   );
 
-  function printTb() {
-    const rows = tbRows
-      .map(
-        (r) =>
-          `<tr><td>${r.accountCode || ''}</td><td>${r.accountName || ''}</td><td class="num">${formatMoney(r.debit)}</td><td class="num">${formatMoney(r.credit)}</td><td class="num">${formatMoney(r.net)}</td></tr>`
-      )
-      .join('');
-    printElement(
-      'Trial Balance',
-      `<table><thead><tr><th>Code</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance (Dr − Cr)</th></tr></thead><tbody>${rows}<tr class="total"><td></td><td>Total</td><td class="num">${formatMoney(tbTotals.debit)}</td><td class="num">${formatMoney(tbTotals.credit)}</td><td class="num">${formatMoney(tbTotals.debit - tbTotals.credit)}</td></tr></tbody></table>`
-    );
+  const tbDiff = Math.round((tbTotals.debit - tbTotals.credit) * 100) / 100;
+  const tbPeriod = tbTotals.from && tbTotals.to ? `Period ${formatDate(tbTotals.from)} – ${formatDate(tbTotals.to)} · posted journals only` : undefined;
+  const balanceLabel = (n: number) => (n === 0 ? '—' : `${formatMoney(Math.abs(n))} ${n > 0 ? 'Dr' : 'Cr'}`);
+  const typeLabel = (t: unknown) => String(t || '').replace(/_/g, ' ');
+
+  /** One definition per tab drives both Print and CSV so they always match what is on screen. */
+  function tabReport(): { title: string; file: string; subtitle?: string; columns: PrintColumn[]; rows: (string | number)[][]; csvRows: (string | number)[][]; footer: (string | number)[][]; csvFooter: (string | number)[][] } {
+    if (tab === 'coa') {
+      const rows = accounts.map((a) => [a.accountCode || '', a.accountName || '', typeLabel(a.accountType), a.normalBalance || '', a.isActive === false ? 'Inactive' : 'Active']);
+      return { title: 'Chart of Accounts', file: 'chart-of-accounts.csv', columns: [{ label: 'Code' }, { label: 'Name' }, { label: 'Type' }, { label: 'Normal balance' }, { label: 'Status' }], rows, csvRows: rows, footer: [], csvFooter: [] };
+    }
+    if (tab === 'journals') {
+      const rows = journals.map((j) => [j.journalNumber || '', formatDate(j.entryDate), j.description || '', j.sourceType || 'manual', j.status || '']);
+      return { title: 'Journals', file: 'journals.csv', columns: [{ label: 'Journal #' }, { label: 'Date' }, { label: 'Description' }, { label: 'Source' }, { label: 'Status' }], rows, csvRows: rows, footer: [], csvFooter: [] };
+    }
+    if (tab === 'gl') {
+      const dr = glLines.reduce((s, l) => s + l.debit, 0);
+      const cr = glLines.reduce((s, l) => s + l.credit, 0);
+      return {
+        title: 'General Ledger',
+        file: 'general-ledger.csv',
+        columns: [{ label: 'Date' }, { label: 'Journal' }, { label: 'Code' }, { label: 'Account' }, { label: 'Description' }, { label: 'Debit', num: true }, { label: 'Credit', num: true }],
+        rows: glLines.map((l) => [formatDate(l.entryDate), l.journalNumber || '', l.accountCode || '', l.accountName || '', l.description || '', formatMoney(l.debit), formatMoney(l.credit)]),
+        csvRows: glLines.map((l) => [l.entryDate ? String(l.entryDate).slice(0, 10) : '', l.journalNumber || '', l.accountCode || '', l.accountName || '', l.description || '', l.debit, l.credit]),
+        footer: [['', '', '', 'Total', '', formatMoney(dr), formatMoney(cr)]],
+        csvFooter: [['', '', '', 'Total', '', Math.round(dr * 100) / 100, Math.round(cr * 100) / 100]],
+      };
+    }
+    return {
+      title: 'Trial Balance',
+      file: 'trial-balance.csv',
+      subtitle: tbPeriod,
+      columns: [{ label: 'Code' }, { label: 'Account' }, { label: 'Type' }, { label: 'Debit', num: true }, { label: 'Credit', num: true }, { label: 'Balance', num: true }],
+      rows: tbRows.map((r) => [r.accountCode || '', r.accountName || '', typeLabel(r.accountType), r.debit ? formatMoney(r.debit) : '—', r.credit ? formatMoney(r.credit) : '—', balanceLabel(r.net)]),
+      csvRows: tbRows.map((r) => [r.accountCode || '', r.accountName || '', typeLabel(r.accountType), r.debit, r.credit, r.net]),
+      footer: [
+        ['', 'Total', '', formatMoney(tbTotals.debit), formatMoney(tbTotals.credit), ''],
+        ['', tbDiff === 0 ? 'Balanced' : 'Difference (Dr − Cr)', '', '', '', tbDiff === 0 ? '—' : formatMoney(tbDiff)],
+      ],
+      csvFooter: [
+        ['', 'Total', '', tbTotals.debit, tbTotals.credit, ''],
+        ['', 'Difference (Dr - Cr)', '', '', '', tbDiff],
+      ],
+    };
   }
 
-  function csvTb() {
-    downloadCsv('trial-balance.csv', [
-      ['Code', 'Account', 'Debit', 'Credit', 'Balance (Dr - Cr)'],
-      ...tbRows.map((r) => [r.accountCode, r.accountName, r.debit, r.credit, r.net]),
-      ['', 'Total', tbTotals.debit, tbTotals.credit, tbTotals.debit - tbTotals.credit],
-    ]);
+  function onPrint() {
+    const r = tabReport();
+    if (!r.rows.length) {
+      toast.error(`Nothing to print — ${r.title} has no rows`);
+      return;
+    }
+    printElement(r.title, printTable(r.columns, r.rows, r.footer), r.subtitle);
+  }
+
+  function onCsv() {
+    const r = tabReport();
+    downloadCsv(r.file, [r.columns.map((c) => c.label), ...r.csvRows, ...r.csvFooter]);
   }
 
   return (
@@ -357,16 +409,14 @@ export default function AccountingLedgerPage() {
                 }}
               />
             )}
-            {tab === 'tb' && (
-              <div className="flex gap-2">
-                <button type="button" onClick={printTb} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm hover:bg-muted">
-                  <Printer size={16} /> Print
-                </button>
-                <button type="button" onClick={csvTb} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm hover:bg-muted">
-                  <Download size={16} /> CSV
-                </button>
-              </div>
-            )}
+            <div className="flex gap-2">
+              <button type="button" onClick={onPrint} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
+                <Printer size={16} /> Print
+              </button>
+              <button type="button" onClick={onCsv} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
+                <Download size={16} /> CSV
+              </button>
+            </div>
           </div>
 
           {tab === 'coa' && <RichDataTable columns={coaCols} data={accounts} />}
