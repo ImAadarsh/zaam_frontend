@@ -32,6 +32,8 @@ export default function AccountingFixedAssetsPage() {
     residualValue: '0',
     usefulLifeMonths: '36',
     depreciationMethod: 'straight_line',
+    reducingRatePercent: '25',
+    acquisitionSource: 'bank',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -69,6 +71,10 @@ export default function AccountingFixedAssetsPage() {
     if (residual < 0) next.residualValue = 'Residual value cannot be negative';
     else if (cost > 0 && residual >= cost) next.residualValue = 'Residual value must be less than cost';
     if (!Number.isInteger(life) || life < 1) next.usefulLifeMonths = 'Useful life must be at least 1 whole month';
+    const ratePct = Number(form.reducingRatePercent);
+    if (form.depreciationMethod === 'reducing_balance' && !(ratePct > 0 && ratePct < 100)) {
+      next.reducingRate = 'Annual rate must be between 0 and 100%';
+    }
     setErrors(next);
     if (Object.keys(next).length) return;
     setSaving(true);
@@ -82,6 +88,8 @@ export default function AccountingFixedAssetsPage() {
         residualValue: residual,
         usefulLifeMonths: life,
         depreciationMethod: form.depreciationMethod,
+        reducingRate: form.depreciationMethod === 'reducing_balance' ? Number(form.reducingRatePercent) / 100 : undefined,
+        acquisitionSource: form.acquisitionSource,
       });
       toast.success('Fixed asset added');
       setOpen(false);
@@ -222,6 +230,8 @@ export default function AccountingFixedAssetsPage() {
                   residualValue: '0',
                   usefulLifeMonths: '36',
                   depreciationMethod: 'straight_line',
+                  reducingRatePercent: '25',
+                  acquisitionSource: 'bank',
                 });
                 setErrors({});
                 setOpen(true);
@@ -246,6 +256,18 @@ export default function AccountingFixedAssetsPage() {
             <select className={accInputClass} value={form.depreciationMethod} onChange={(e) => setForm({ ...form, depreciationMethod: e.target.value })}>
               <option value="straight_line">Straight line</option>
               <option value="reducing_balance">Reducing balance</option>
+            </select>
+          </AccField>
+          {form.depreciationMethod === 'reducing_balance' ? (
+            <AccField label="Annual reducing-balance rate (%)" error={errors.reducingRate}>
+              <input type="number" min="0.01" max="99.99" step="0.01" className={accInputClass} value={form.reducingRatePercent} onChange={(e) => setForm({ ...form, reducingRatePercent: e.target.value })} />
+            </AccField>
+          ) : null}
+          <AccField label="Paid from (acquisition journal)">
+            <select className={accInputClass} value={form.acquisitionSource} onChange={(e) => setForm({ ...form, acquisitionSource: e.target.value })}>
+              <option value="bank">Bank (1000) — paid now</option>
+              <option value="creditor">Trade creditors (2000) — owed to supplier</option>
+              <option value="already_recorded">Already recorded in the ledger (e.g. via a supplier bill)</option>
             </select>
           </AccField>
           <AccModalActions onCancel={() => setOpen(false)} submitLabel="Add asset" submitting={saving} />
