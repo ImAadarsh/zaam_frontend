@@ -22,8 +22,11 @@ import {
   Package2,
   Warehouse,
   Users,
-  X
+  X,
+  Download
 } from 'lucide-react';
+
+const TEMPLATE_URL = '/templates/Inventory_Import_Template.xlsx';
 
 type PreviewData = {
   rowCount: number;
@@ -177,11 +180,21 @@ export default function InventoryImportPage() {
       <main className="flex-1 lg:ml-[280px]">
         <Header title="Catalog · Inventory Import" />
         <div className="p-6 space-y-6 max-w-5xl">
-          <div>
-            <h1 className="text-2xl font-bold">Import Inventory Excel</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Upload the Zaam inventory sheet to create products, barcodes, warehouses, bins, suppliers, and stock levels.
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold">Import Inventory Excel</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Upload the Zaam inventory sheet to create products, barcodes, warehouses, bins, suppliers, and stock levels.
+              </p>
+            </div>
+            <a
+              href={TEMPLATE_URL}
+              download
+              className="btn btn-outline inline-flex items-center gap-2 text-sm"
+            >
+              <Download size={16} />
+              Download sample Excel
+            </a>
           </div>
 
           <div className="rounded-xl border bg-card p-5 space-y-4">
@@ -242,8 +255,15 @@ export default function InventoryImportPage() {
               <p className="text-sm font-medium mb-1">
                 {file ? file.name : 'Drop inventory Excel here or choose a file'}
               </p>
+              <p className="text-xs text-muted-foreground mb-1">
+                Required columns: <strong>SKU / Item Code</strong> and <strong>Product Name</strong>. Optional: Barcode, Category, Brand, UOM, Pack Size, Qty, Prices, Tax, Warehouse, Bin, Supplier, Batch, Expiry, Status, Remarks…
+              </p>
               <p className="text-xs text-muted-foreground mb-4">
-                Expected columns: SKU, Barcode, Name, Category, Sub-Category, UOM, Pack Size, Qty, Prices, Tax, Warehouse, Bin, Supplier, Status, Remarks…
+                Not sure of the format?{' '}
+                <a href={TEMPLATE_URL} download className="underline text-primary">
+                  Download the sample Excel
+                </a>{' '}
+                (example rows + an Instructions sheet). Use dates as YYYY-MM-DD.
               </p>
               <input
                 type="file"
