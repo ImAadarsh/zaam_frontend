@@ -418,6 +418,20 @@ function ProductFields({
   );
 }
 
+const CATALOG_PAGE_SIZE = 500;
+
+/** Every catalogue item: first page, then the remaining pages in parallel. */
+async function loadAllCatalogItems(organizationId?: string) {
+  const first = await listCatalogItems({ organizationId, page: 1, limit: CATALOG_PAGE_SIZE });
+  const totalPages = first.pagination?.totalPages ?? 1;
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, totalPages - 1) }, (_, i) =>
+      listCatalogItems({ organizationId, page: i + 2, limit: CATALOG_PAGE_SIZE })
+    )
+  );
+  return [...(first.data || []), ...rest.flatMap((r) => r.data || [])];
+}
+
 export default function CatalogItemsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
@@ -441,11 +455,7 @@ export default function CatalogItemsPage() {
   const [saving, setSaving] = useState(false);
 
   async function refreshItems() {
-    const res = await listCatalogItems({
-      organizationId: session?.user?.organizationId,
-      limit: 500
-    });
-    setItems(res.data || []);
+    setItems(await loadAllCatalogItems(session?.user?.organizationId));
   }
 
   useEffect(() => {
@@ -457,7 +467,7 @@ export default function CatalogItemsPage() {
     (async () => {
       try {
         const [itemsRes, orgsRes, taxCodesRes] = await Promise.all([
-          listCatalogItems({ organizationId: session?.user?.organizationId, limit: 500 }),
+          loadAllCatalogItems(session?.user?.organizationId).then((data) => ({ data })),
           listOrganizations(),
           listTaxCodes({ organizationId: session?.user?.organizationId })
         ]);
