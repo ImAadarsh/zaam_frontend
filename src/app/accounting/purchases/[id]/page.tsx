@@ -19,6 +19,12 @@ type Action = 'submit' | 'approve' | 'post';
 const btn = 'inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm hover:bg-muted disabled:opacity-50';
 const primaryBtn = 'inline-flex items-center gap-2 rounded-lg bg-[#D4A017] px-3 py-2 text-sm font-medium text-white hover:bg-[#B89015] disabled:opacity-50';
 
+/** Reverse-charge VAT is in the VAT figure but not in the amount owed to the supplier. */
+function reverseChargeVat(bill: any) {
+  const rc = Number(bill?.subtotal || 0) + Number(bill?.taxAmount || 0) - Number(bill?.total || 0);
+  return rc > 0.004 ? Math.round(rc * 100) / 100 : 0;
+}
+
 export default function AccountingBillDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -110,6 +116,7 @@ export default function AccountingBillDetailPage() {
       [
         ['Net', '', '', '', '', formatMoney(bill.subtotal, cur)],
         ['VAT', '', '', '', '', formatMoney(bill.taxAmount, cur)],
+        ...(reverseChargeVat(bill) > 0 ? [['Less reverse-charge VAT (not payable)', '', '', '', '', formatMoney(-reverseChargeVat(bill), cur)]] : []),
         ['Total', '', '', '', '', formatMoney(bill.total, cur)],
         ['Paid', '', '', '', '', formatMoney(bill.paidAmount, cur)],
         ['Outstanding', '', '', '', '', formatMoney(bill.outstanding, cur)],
@@ -250,6 +257,9 @@ export default function AccountingBillDetailPage() {
                 <div className="ml-auto w-full max-w-xs space-y-1 text-sm pt-2">
                   <Total label="Net" value={formatMoney(bill.subtotal, cur)} />
                   <Total label="VAT" value={formatMoney(bill.taxAmount, cur)} />
+                  {reverseChargeVat(bill) > 0 ? (
+                    <Total label="Less reverse-charge VAT (not payable)" value={formatMoney(-reverseChargeVat(bill), cur)} />
+                  ) : null}
                   <Total label="Total" value={formatMoney(bill.total, cur)} strong />
                   <Total label="Paid" value={formatMoney(bill.paidAmount, cur)} />
                   <Total label="Outstanding" value={formatMoney(bill.outstanding, cur)} strong />

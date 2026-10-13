@@ -71,7 +71,9 @@ export default function AccountingPurchasesPage() {
     const net = Number(netStr) || 0;
     const rate = vatRateFraction((vatCodes.find((c) => c.code === code) || { rate: 0 }).rate);
     const vat = Math.round(net * rate * 100) / 100;
-    return { vatAmount: vat.toFixed(2), total: (net + vat).toFixed(2) };
+    // Reverse charge: the buyer self-accounts the VAT, so it is not owed to the supplier.
+    const payableVat = code === 'RC' ? 0 : vat;
+    return { vatAmount: vat.toFixed(2), total: (net + payableVat).toFixed(2) };
   }
 
   async function onCreate(e: React.FormEvent) {
@@ -215,7 +217,7 @@ export default function AccountingPurchasesPage() {
             <AccField label="VAT" hint="Calculated from VAT code">
               <input type="number" className={accInputClass} value={form.vatAmount} readOnly tabIndex={-1} />
             </AccField>
-            <AccField label="Total" hint="Net + VAT">
+            <AccField label="Total" hint={form.vatCode === 'RC' ? 'Reverse charge: VAT is not paid to the supplier' : 'Net + VAT'}>
               <input type="number" className={accInputClass} value={form.total} readOnly tabIndex={-1} />
             </AccField>
           </div>
