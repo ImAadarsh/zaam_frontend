@@ -11,6 +11,7 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { Plus, UserPlus, Settings } from 'lucide-react';
 import { NAV_MODULES, type NavModule } from '@/lib/nav-pages.generated';
+import { builtInPagesForRoles } from '@/lib/page-access';
 
 type Role = {
   id: string;
@@ -18,6 +19,11 @@ type Role = {
   code: string;
   [key: string]: any;
 };
+
+function savedPages(role: Role): string[] {
+  const pages = role.permissions?.pages;
+  return Array.isArray(pages) ? pages.filter((p: unknown): p is string => typeof p === 'string' && !!p) : [];
+}
 
 export default function RolesPage() {
   const router = useRouter();
@@ -37,6 +43,7 @@ export default function RolesPage() {
   const [locations, setLocations] = useState<any[]>([]);
   const [pagePermissions, setPagePermissions] = useState<Record<string, boolean>>({});
   const [permissionFilter, setPermissionFilter] = useState('');
+  const [showingBuiltInPages, setShowingBuiltInPages] = useState(false);
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -146,10 +153,13 @@ export default function RolesPage() {
 
   function openPermissionsEditor(role: Role) {
     setSelectedRole(role);
-    const granted: string[] = Array.isArray(role.permissions?.pages) ? role.permissions.pages : [];
+    const saved = savedPages(role);
+    // No saved pages = unrestricted today; tick what the role can already open so saving keeps that access.
+    const granted = saved.length > 0 ? saved : builtInPagesForRoles([role.code]);
     const pages: Record<string, boolean> = {};
     granted.forEach((key) => { pages[key] = true; });
     setPagePermissions(pages);
+    setShowingBuiltInPages(saved.length === 0);
     setPermissionFilter('');
     setShowPermissions(true);
   }
@@ -169,8 +179,9 @@ export default function RolesPage() {
         .filter(([_, enabled]) => enabled)
         .map(([key, _]) => key);
       
+      const current = selectedRole.permissions;
       const permissions = {
-        ...(selectedRole.permissions || {}),
+        ...(current && typeof current === 'object' && !Array.isArray(current) ? current : {}),
         pages: pageKeys
       };
       
@@ -372,9 +383,16 @@ export default function RolesPage() {
                 <div className="space-y-4 mb-6">
                   <p className="text-xs text-muted-foreground rounded-lg border border-border bg-muted/40 px-3 py-2">
                     Selected pages are enforced in the menu, on direct page links and on the API (users see a “No access” screen otherwise).
-                    Leaving every page unticked keeps this role unrestricted, and a user holding any unrestricted role keeps full access.
+                    Leaving every page unticked puts this role back on its built-in access (the pages pre-ticked when nothing is saved);
+                    a user holding any role without saved pages gets the built-in access of all their roles.
                     Super Administrator always has full access. Changes apply on the user&apos;s next page load.
                   </p>
+                  {showingBuiltInPages && (
+                    <p className="text-xs rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-3 py-2">
+                      No pages are saved for this role yet, so it currently uses its built-in access. The ticked pages are the ones it can open today;
+                      saving them restricts the role to exactly these pages.
+                    </p>
+                  )}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
                       Select which pages this role can access ({Object.values(pagePermissions).filter(Boolean).length} selected):

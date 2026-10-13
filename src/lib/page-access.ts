@@ -3,7 +3,8 @@ import { NAV_MODULES, type NavPage } from '@/lib/nav-pages.generated';
 
 /**
  * Role page permissions (`roles.permissions.pages`) resolved by the API at login / GET /api/iam/me.
- * `null` = unrestricted: SUPER_ADMIN, or a role without page permissions configured (legacy access).
+ * When the API reports none configured, the roles' built-in pages apply (see builtInPagesForRoles).
+ * `null` = unrestricted (SUPER_ADMIN only).
  */
 export type AllowedPages = ReadonlySet<string> | null;
 
@@ -16,13 +17,24 @@ const ALL_PAGES: NavPage[] = (() => {
 /** Routes every signed-in user may open regardless of page permissions. */
 const ALWAYS_ALLOWED = ['/', '/login', '/auth', '/modules', '/profile'];
 
+/** Pages the given role codes can open through the built-in role checks (sidebar + page guards). */
+export function builtInPagesForRoles(roleCodes: string[]): string[] {
+  const codes = roleCodes.map((r) => String(r || '').toUpperCase());
+  const all = codes.includes('SUPER_ADMIN');
+  const keys = new Set<string>();
+  NAV_MODULES.forEach((m) => m.pages.forEach((p) => {
+    if (all || !p.roles || p.roles.some((r) => codes.includes(r))) keys.add(p.key);
+  }));
+  return Array.from(keys);
+}
+
 export function allowedPagesFromSession(session: Session | null): AllowedPages {
   const user = session?.user;
   if (!user) return null;
   const roles = (user.roles || []).map((r: any) => String(typeof r === 'string' ? r : r?.code || '').toUpperCase());
   if (roles.includes('SUPER_ADMIN')) return null;
-  if (!Array.isArray(user.pages)) return null;
-  return new Set(user.pages);
+  if (Array.isArray(user.pages)) return new Set(user.pages);
+  return new Set(builtInPagesForRoles(roles));
 }
 
 function pathRoot(path: string): string {

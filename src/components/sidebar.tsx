@@ -89,9 +89,9 @@ export function Sidebar() {
                 <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Identity & Access</div>
               </div>
               <Item href="/iam/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/iam/dashboard'} />
-              <Item href="/iam/organizations" icon={<Building2 size={18} />} label="Organizations" active={pathname?.startsWith('/iam/organizations')} />
               {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
                 <>
+                  <Item href="/iam/organizations" icon={<Building2 size={18} />} label="Organizations" active={pathname?.startsWith('/iam/organizations')} />
                   <Item href="/iam/users" icon={<Users size={18} />} label="Users" active={pathname?.startsWith('/iam/users')} />
                   <Item href="/iam/roles" icon={<Shield size={18} />} label="Roles" active={pathname?.startsWith('/iam/roles')} />
                   <Item href="/iam/audit-logs" icon={<FileClock size={18} />} label="Audit Logs" active={pathname?.startsWith('/iam/audit-logs')} />
@@ -175,11 +175,13 @@ export function Sidebar() {
               </div>
               <Item href="/orders/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/orders/dashboard'} />
               {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']) && (
-                <>
-                  <Item href="/orders/customers" icon={<Users size={18} />} label="Customers" active={pathname?.startsWith('/orders/customers')} />
-                  <Item href="/orders/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/orders/orders')} />
-                  <Item href="/orders/returns" icon={<RotateCcw size={18} />} label="Returns" active={pathname?.startsWith('/orders/returns')} />
-                </>
+                <Item href="/orders/customers" icon={<Users size={18} />} label="Customers" active={pathname?.startsWith('/orders/customers')} />
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE', 'WAREHOUSE_MANAGER']) && (
+                <Item href="/orders/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/orders/orders')} />
+              )}
+              {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']) && (
+                <Item href="/orders/returns" icon={<RotateCcw size={18} />} label="Returns" active={pathname?.startsWith('/orders/returns')} />
               )}
               {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
                 <Item href="/orders/channel-sync" icon={<Download size={18} />} label="Channel Sync" active={pathname?.startsWith('/orders/channel-sync')} />
@@ -458,9 +460,9 @@ export function Sidebar() {
                     <div className="text-[10px] uppercase tracking-widest font-semibold text-white/40">Identity & Access</div>
                   </div>
                   <Item href="/iam/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/iam/dashboard'} />
-                  <Item href="/iam/organizations" icon={<Building2 size={18} />} label="Organizations" active={pathname?.startsWith('/iam/organizations')} />
                   {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
                     <>
+                      <Item href="/iam/organizations" icon={<Building2 size={18} />} label="Organizations" active={pathname?.startsWith('/iam/organizations')} />
                       <Item href="/iam/users" icon={<Users size={18} />} label="Users" active={pathname?.startsWith('/iam/users')} />
                       <Item href="/iam/roles" icon={<Shield size={18} />} label="Roles" active={pathname?.startsWith('/iam/roles')} />
                       <Item href="/iam/audit-logs" icon={<FileClock size={18} />} label="Audit Logs" active={pathname?.startsWith('/iam/audit-logs')} />
@@ -544,11 +546,13 @@ export function Sidebar() {
                   </div>
                   <Item href="/orders/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/orders/dashboard'} />
                   {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']) && (
-                    <>
-                      <Item href="/orders/customers" icon={<Users size={18} />} label="Customers" active={pathname?.startsWith('/orders/customers')} />
-                      <Item href="/orders/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/orders/orders')} />
-                      <Item href="/orders/returns" icon={<RotateCcw size={18} />} label="Returns" active={pathname?.startsWith('/orders/returns')} />
-                    </>
+                    <Item href="/orders/customers" icon={<Users size={18} />} label="Customers" active={pathname?.startsWith('/orders/customers')} />
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE', 'WAREHOUSE_MANAGER']) && (
+                    <Item href="/orders/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/orders/orders')} />
+                  )}
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']) && (
+                    <Item href="/orders/returns" icon={<RotateCcw size={18} />} label="Returns" active={pathname?.startsWith('/orders/returns')} />
                   )}
                   {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
                     <Item href="/orders/channel-sync" icon={<Download size={18} />} label="Channel Sync" active={pathname?.startsWith('/orders/channel-sync')} />

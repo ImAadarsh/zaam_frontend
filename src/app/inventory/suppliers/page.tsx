@@ -24,7 +24,7 @@ type Supplier = {
 export default function SuppliersPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PURCHASING']);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Supplier[]>([]);
   const [showCreate, setShowCreate] = useState(false);
