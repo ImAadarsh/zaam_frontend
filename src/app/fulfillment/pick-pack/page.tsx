@@ -79,7 +79,7 @@ function PickListSheet({ orders }: { orders: any[] }) {
                 {o.lines.map((l: any) => (
                   <tr key={l.id} className="border-b border-gray-400 align-top" style={{ breakInside: 'avoid' }}>
                     <td className="py-2 pr-2"><span className="inline-block h-4 w-4 border border-black" /></td>
-                    <td className="py-2 pr-2">{l.bins?.length ? l.bins.slice(0, 3).join(', ') : '—'}</td>
+                    <td className="py-2 pr-2">{l.bins?.length ? l.bins.slice(0, 3).join(', ') : l.variantId ? '—' : 'Not in catalogue'}</td>
                     <td className="py-2 pr-2 font-mono">{l.sku || l.variantSku || '—'}</td>
                     <td className="py-2 pr-2">{l.name}</td>
                     <td className="py-2 text-right text-base font-bold">{l.quantity}</td>
@@ -333,7 +333,7 @@ export default function PickPackPage() {
                 <tbody>
                   {pickList.lines.map((l: any) => (
                     <tr key={l.id} className="border-t border-border">
-                      <td className="px-3 py-2 text-xs">{l.bins?.length ? l.bins.slice(0, 3).join(', ') : '—'}</td>
+                      <td className="px-3 py-2 text-xs">{l.bins?.length ? l.bins.slice(0, 3).join(', ') : l.variantId ? '—' : <span className="text-amber-600">Not in catalogue</span>}</td>
                       <td className="px-3 py-2 font-mono text-xs">{l.sku || l.variantSku || '—'}</td>
                       <td className="px-3 py-2">
                         {l.name}
