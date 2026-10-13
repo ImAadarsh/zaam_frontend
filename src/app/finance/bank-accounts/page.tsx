@@ -11,6 +11,19 @@ import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X } from 'lucide-react';
 
+const COMMON_CURRENCIES = ['GBP', 'EUR', 'USD'];
+const ISO_CURRENCIES: string[] = (() => {
+  const all = (Intl as any).supportedValuesOf?.('currency') as string[] | undefined;
+  return all?.length ? all : [...COMMON_CURRENCIES, 'AUD', 'CAD', 'CHF', 'CNY', 'INR', 'JPY', 'NZD', 'SEK'];
+})();
+
+/** Common codes first; an existing invalid value is kept visible so it can be corrected. */
+function currencyOptions(current: string) {
+  const rest = ISO_CURRENCIES.filter((c) => !COMMON_CURRENCIES.includes(c));
+  const list = [...COMMON_CURRENCIES, ...rest];
+  return current && !list.includes(current) ? [current, ...list] : list;
+}
+
 type BankAccount = {
   id: string;
   accountName: string;
@@ -112,13 +125,29 @@ export default function BankAccountsPage() {
     return null;
   }
 
+  function bankDetailsError(f: { accountNumber: string; routingNumber: string; iban: string; swiftCode: string; currency: string }) {
+    const numErr = accountNumberError(f.accountNumber, f.currency);
+    if (numErr) return numErr;
+    if (!ISO_CURRENCIES.includes((f.currency || '').toUpperCase())) return 'Choose a valid ISO currency code';
+    const routing = (f.routingNumber || '').replace(/[\s-]/g, '');
+    if (routing) {
+      if ((f.currency || 'GBP').toUpperCase() === 'GBP' && !/^\d{6}$/.test(routing)) return 'For GBP accounts enter the 6-digit sort code (e.g. 12-34-56)';
+      if (!/^\d{6,9}$/.test(routing)) return 'Routing number must be 6–9 digits';
+    }
+    const swift = (f.swiftCode || '').replace(/\s/g, '').toUpperCase();
+    if (swift && !/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(swift)) return 'SWIFT/BIC must be 8 or 11 characters (e.g. NWBKGB2L)';
+    const iban = (f.iban || '').replace(/\s/g, '').toUpperCase();
+    if (iban && !/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) return 'IBAN is not valid';
+    return null;
+  }
+
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.organizationId || !form.accountName || !form.bankName) {
       toast.error('Please fill in required fields');
       return;
     }
-    const numErr = accountNumberError(form.accountNumber, form.currency);
+    const numErr = bankDetailsError(form);
     if (numErr) {
       toast.error(numErr);
       return;
@@ -155,7 +184,7 @@ export default function BankAccountsPage() {
       toast.error('Please fill in required fields');
       return;
     }
-    const numErr = accountNumberError(editForm.accountNumber, editForm.currency);
+    const numErr = bankDetailsError(editForm);
     if (numErr) {
       toast.error(numErr);
       return;
@@ -337,11 +366,13 @@ export default function BankAccountsPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1">Routing Number</label>
+                        <label className="block text-sm font-medium mb-1">Sort code / routing number</label>
                         <input
                           type="text"
+                          inputMode="numeric"
+                          placeholder={(form.currency || 'GBP') === 'GBP' ? '12-34-56' : '6–9 digits'}
                           value={form.routingNumber}
-                          onChange={(e) => setForm({ ...form, routingNumber: e.target.value })}
+                          onChange={(e) => setForm({ ...form, routingNumber: e.target.value.replace(/[^\d\s-]/g, '') })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                         />
                       </div>
@@ -369,14 +400,16 @@ export default function BankAccountsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1">Currency *</label>
-                        <input
-                          type="text"
+                        <select
                           value={form.currency}
-                          onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })}
+                          onChange={(e) => setForm({ ...form, currency: e.target.value })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
-                          maxLength={3}
                           required
-                        />
+                        >
+                          {currencyOptions(form.currency).map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">Current Balance</label>
@@ -478,11 +511,13 @@ export default function BankAccountsPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1">Routing Number</label>
+                        <label className="block text-sm font-medium mb-1">Sort code / routing number</label>
                         <input
                           type="text"
+                          inputMode="numeric"
+                          placeholder={(editForm.currency || 'GBP') === 'GBP' ? '12-34-56' : '6–9 digits'}
                           value={editForm.routingNumber}
-                          onChange={(e) => setEditForm({ ...editForm, routingNumber: e.target.value })}
+                          onChange={(e) => setEditForm({ ...editForm, routingNumber: e.target.value.replace(/[^\d\s-]/g, '') })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
                         />
                       </div>
@@ -510,14 +545,16 @@ export default function BankAccountsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1">Currency *</label>
-                        <input
-                          type="text"
+                        <select
                           value={editForm.currency}
-                          onChange={(e) => setEditForm({ ...editForm, currency: e.target.value.toUpperCase() })}
+                          onChange={(e) => setEditForm({ ...editForm, currency: e.target.value })}
                           className="w-full px-3 py-2 border border-border rounded-lg bg-background"
-                          maxLength={3}
                           required
-                        />
+                        >
+                          {currencyOptions(editForm.currency).map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">Current Balance</label>
