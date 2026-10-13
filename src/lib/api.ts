@@ -5854,6 +5854,7 @@ export async function createB2bAdminOrder(payload: {
   shippingMethodCode?: string;
   addressId?: string;
   customerNotes?: string;
+  paymentMethod?: 'trade_credit' | 'bank_transfer' | 'pay_on_portal';
 }) {
   const { data } = await axios.post(`${API_BASE}/api/b2b/admin/orders`, payload, { headers: authHeaders() });
   return data as { data: any };

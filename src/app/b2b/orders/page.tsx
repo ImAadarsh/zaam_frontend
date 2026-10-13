@@ -43,6 +43,7 @@ export default function B2bOrdersPage() {
   const [shippingCode, setShippingCode] = useState('');
   const [addressId, setAddressId] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'' | 'trade_credit' | 'bank_transfer' | 'pay_on_portal'>('');
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
@@ -74,6 +75,7 @@ export default function B2bOrdersPage() {
     setShippingCode('');
     setAddressId('');
     setNotes('');
+    setPaymentMethod('');
     setShowNew(true);
     try {
       const [r, s] = await Promise.all([
@@ -94,6 +96,7 @@ export default function B2bOrdersPage() {
     setCatalog([]);
     setRetailerDetail(null);
     setAddressId('');
+    setPaymentMethod('');
     if (!id || !orgId) return;
     setCatalogLoading(true);
     try {
@@ -163,6 +166,14 @@ export default function B2bOrdersPage() {
       toast.error('Each line needs a whole quantity of at least 1 and a price of £0 or more');
       return;
     }
+    if (!paymentMethod) {
+      toast.error('Choose a payment method');
+      return;
+    }
+    if (paymentMethod === 'trade_credit' && totals.gross > availableCredit + 0.0001) {
+      toast.error(`Order total ${gbp(totals.gross)} is over the retailer's available trade credit (${gbp(availableCredit)})`);
+      return;
+    }
     setSaving(true);
     try {
       const res = await createB2bAdminOrder({
@@ -171,7 +182,8 @@ export default function B2bOrdersPage() {
         lines: lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity, unitPrice: l.unitPrice })),
         shippingMethodCode: shippingCode || undefined,
         addressId: addressId || undefined,
-        customerNotes: notes.trim() || undefined
+        customerNotes: notes.trim() || undefined,
+        paymentMethod
       });
       toast.success(`Order ${res.data?.orderNumber || ''} created`);
       setShowNew(false);
@@ -215,6 +227,8 @@ export default function B2bOrdersPage() {
   ], []);
 
   const addresses = retailerDetail?.customer?.addresses || [];
+  const creditLimit = Number(retailerDetail?.customer?.creditLimit || 0);
+  const availableCredit = Math.max(0, creditLimit - Number(retailerDetail?.customer?.creditUsed || 0));
 
   return (
     <div className="min-h-screen app-surface">
@@ -378,6 +392,28 @@ export default function B2bOrdersPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="block text-xs font-medium text-muted-foreground">
+                Payment method *
+                <select
+                  className="mt-1 w-full border border-border rounded-lg px-3 py-2 bg-background text-sm text-foreground"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+                  disabled={!retailerId}
+                >
+                  <option value="">Select payment method…</option>
+                  <option value="trade_credit" disabled={creditLimit <= 0}>
+                    Trade credit {retailerId ? `(available ${gbp(availableCredit)} of ${gbp(creditLimit)})` : ''}
+                  </option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="pay_on_portal">Retailer pays on the B2B portal</option>
+                </select>
+                {paymentMethod === 'trade_credit' && (
+                  <span className={`block mt-1 ${totals.gross > availableCredit ? 'text-destructive' : ''}`}>
+                    The order total (incl. shipping) is charged to the retailer&apos;s credit when saved; orders over the available credit are refused.
+                  </span>
+                )}
+              </label>
+              <div />
+              <label className="block text-xs font-medium text-muted-foreground">
                 Notes
                 <textarea
                   className="mt-1 w-full border border-border rounded-lg px-3 py-2 bg-background text-sm text-foreground"
@@ -398,7 +434,7 @@ export default function B2bOrdersPage() {
             <div className="flex justify-end gap-2">
               <button className="px-4 py-2 rounded-xl border border-border text-sm" onClick={() => setShowNew(false)}>Cancel</button>
               <button
-                disabled={saving || !retailerId || lines.length === 0}
+                disabled={saving || !retailerId || lines.length === 0 || !paymentMethod}
                 className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50"
                 onClick={submit}
               >
