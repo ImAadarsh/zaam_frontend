@@ -7,9 +7,10 @@ import { toast } from 'sonner';
 import { FilterBar } from '@/components/filter-bar';
 import { SocialPage } from '@/components/social/social-page';
 import { PlatformTag } from '@/components/social/platform-tag';
+import { PermissionLock } from '@/components/social/permission-lock';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
-import { listMetaFeed, listSocialAccounts, listSocialPosts } from '@/lib/api';
+import { getMetaConnectUrl, listMetaFeed, listSocialAccounts, listSocialPosts } from '@/lib/api';
 import { Film, Image as ImageIcon, RefreshCw } from 'lucide-react';
 
 function isOrganic(a: any) {
@@ -40,6 +41,7 @@ export default function SocialPostsPage() {
     status: ''
   });
   const [q, setQ] = useState('');
+  const [feedLock, setFeedLock] = useState<{ message: string; missingPermissions?: string[]; platform?: string } | null>(null);
 
   const organic = useMemo(() => accounts.filter(isOrganic), [accounts]);
   const accountOptions = useMemo(
@@ -77,16 +79,33 @@ export default function SocialPostsPage() {
   const loadLive = async (accountId: string, mediaType?: string, after?: string) => {
     if (!accountId) {
       setLive([]);
+      setFeedLock(null);
       return;
     }
-    const res = await listMetaFeed({
-      accountId,
-      mediaType: mediaType || undefined,
-      after,
-      since: filters.since || undefined,
-      until: filters.until || undefined,
-      limit: 25
-    });
+    let res: any;
+    try {
+      res = await listMetaFeed({
+        accountId,
+        mediaType: mediaType || undefined,
+        after,
+        since: filters.since || undefined,
+        until: filters.until || undefined,
+        limit: 25
+      });
+    } catch (e: any) {
+      const err = e?.response?.data?.error;
+      if (err?.permissionError || err?.missingPermissions?.length) {
+        setLive([]);
+        setFeedLock({
+          message: err.message,
+          missingPermissions: err.missingPermissions,
+          platform: accounts.find((a) => String(a.id) === String(accountId))?.platform
+        });
+        return;
+      }
+      throw e;
+    }
+    setFeedLock(null);
     setLive(after ? [...live, ...(res.data || [])] : res.data || []);
     setPaging(res.paging || {});
   };
@@ -254,7 +273,19 @@ export default function SocialPostsPage() {
           stats={[{ label: 'Shown', value: String(tab === 'drafts' ? filteredDrafts.length : filteredLive.length) }]}
         />
 
-        {tab !== 'drafts' ? (
+        {tab !== 'drafts' && feedLock ? (
+          <PermissionLock
+            title="Live feed not granted"
+            message={feedLock.message}
+            missingPermissions={feedLock.missingPermissions}
+            product={feedLock.platform === 'instagram' ? 'Instagram API' : 'Pages API'}
+            onReconnect={async () => {
+              const { data: c } = await getMetaConnectUrl('default');
+              if (c?.authUrl) window.location.href = c.authUrl;
+            }}
+            reconnectLabel="Reconnect Meta"
+          />
+        ) : tab !== 'drafts' ? (
           <div className="grid gap-3">
             {filteredLive.length === 0 ? (
               <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
