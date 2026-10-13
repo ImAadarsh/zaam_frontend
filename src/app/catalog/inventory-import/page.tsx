@@ -35,7 +35,19 @@ type PreviewData = {
   warehouses: string[];
   suppliers: string[];
   warnings: string[];
+  warningCount?: number;
 };
+
+function formatSheetDate(value: unknown): string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return '-';
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+}
 
 type ImportResult = {
   productsCreated: number;
@@ -61,7 +73,7 @@ export default function InventoryImportPage() {
   const [businessUnits, setBusinessUnits] = useState<any[]>([]);
   const [organizationId, setOrganizationId] = useState('');
   const [businessUnitId, setBusinessUnitId] = useState('');
-  const [duplicateMode, setDuplicateMode] = useState<'skip' | 'update'>('update');
+  const [duplicateMode, setDuplicateMode] = useState<'skip' | 'update'>('skip');
   const [importInventory, setImportInventory] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -232,8 +244,8 @@ export default function InventoryImportPage() {
                   value={duplicateMode}
                   onChange={(e) => setDuplicateMode(e.target.value as 'skip' | 'update')}
                 >
-                  <option value="update">Update existing</option>
                   <option value="skip">Skip existing</option>
+                  <option value="update">Update existing</option>
                 </select>
               </label>
               <label className="text-sm flex items-end gap-2 pb-2">
@@ -263,7 +275,7 @@ export default function InventoryImportPage() {
                 <a href={TEMPLATE_URL} download className="underline text-primary">
                   Download the sample Excel
                 </a>{' '}
-                (example rows + an Instructions sheet). Use dates as YYYY-MM-DD.
+                (example rows + an Instructions sheet). Dates are read as UK day/month: dd/mm/yyyy (e.g. 07/10/2026 = 7 Oct 2026).
               </p>
               <input
                 type="file"
@@ -343,6 +355,8 @@ export default function InventoryImportPage() {
                 <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   <div className="font-medium flex items-center gap-1 mb-1">
                     <AlertTriangle size={14} /> Warnings
+                    {(preview.warningCount ?? preview.warnings.length) > 10 &&
+                      ` (showing 10 of ${preview.warningCount ?? preview.warnings.length})`}
                   </div>
                   <ul className="list-disc pl-4 space-y-0.5">
                     {preview.warnings.slice(0, 10).map((w, i) => (
@@ -362,6 +376,8 @@ export default function InventoryImportPage() {
                       <th className="px-3 py-2 text-left">Warehouse</th>
                       <th className="px-3 py-2 text-right">Qty</th>
                       <th className="px-3 py-2 text-right">Cost</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">Expiry</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">Date Added</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -373,6 +389,8 @@ export default function InventoryImportPage() {
                         <td className="px-3 py-2 max-w-[160px] truncate">{String(row.warehouseName ?? '-')}</td>
                         <td className="px-3 py-2 text-right">{String(row.openingQuantity ?? '-')}</td>
                         <td className="px-3 py-2 text-right">{String(row.costPrice ?? '-')}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{formatSheetDate(row.expiryDate)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{formatSheetDate(row.dateAdded)}</td>
                       </tr>
                     ))}
                   </tbody>

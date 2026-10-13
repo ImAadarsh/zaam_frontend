@@ -2018,7 +2018,7 @@ export async function executeInventoryExcelImport(
   formData.append('file', file);
   formData.append('organizationId', options.organizationId);
   if (options.businessUnitId) formData.append('businessUnitId', options.businessUnitId);
-  formData.append('duplicateMode', options.duplicateMode ?? 'update');
+  formData.append('duplicateMode', options.duplicateMode ?? 'skip');
   formData.append('importInventory', String(options.importInventory ?? true));
   const { data } = await axios.post(`${API_BASE}/api/catalog/inventory-import/execute`, formData, {
     headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
