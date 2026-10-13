@@ -150,6 +150,7 @@ export default function WordPressChannelsPage() {
   const [loadingSyncStatus, setLoadingSyncStatus] = useState(false);
   // health dashboard
   const [health, setHealth] = useState<{ wpTotal: number; erpMapped: number; lastSync: string | null; recentJobs: any[] } | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [loadingHealth, setLoadingHealth] = useState(false);
   // slide-over product detail
   const [slideoverProduct, setSlideoverProduct] = useState<any | null>(null);
@@ -376,7 +377,11 @@ export default function WordPressChannelsPage() {
     try {
       const res = await wpSyncHealth({ connectionId: selectedConnId, organizationId: effectiveOrgId });
       setHealth(res.data);
-    } catch { /* non-fatal */ } finally {
+      setHealthError(null);
+    } catch (e: any) {
+      setHealth(null);
+      setHealthError(e?.response?.data?.error?.message || 'Could not load sync health');
+    } finally {
       setLoadingHealth(false);
     }
   }
@@ -905,6 +910,15 @@ export default function WordPressChannelsPage() {
                   )}
 
                   {/* ── Sync health card ─────────────────────────────── */}
+                  {!health && healthError && (
+                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm flex items-start gap-2">
+                      <Activity size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                      <span>
+                        <span className="font-medium">Sync health unavailable:</span>{' '}
+                        <span className="text-muted-foreground">{healthError}</span>
+                      </span>
+                    </div>
+                  )}
                   {health && (
                     <div className="rounded-2xl border border-border bg-card/50 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-4">
