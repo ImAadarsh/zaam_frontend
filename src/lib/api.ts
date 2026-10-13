@@ -5673,6 +5673,18 @@ export async function deleteScheduledReport(id: string) {
   const { data } = await axios.delete(`${API_BASE}/api/analytics/scheduled-reports/${id}`, { headers: authHeaders() });
   return data;
 }
+export async function runScheduledReportNow(id: string) {
+  const { data } = await axios.post(`${API_BASE}/api/analytics/scheduled-reports/${id}/run`, {}, { headers: authHeaders() });
+  return data as {
+    data: {
+      executionId: string | null;
+      exportId: string | null;
+      rowCount: number;
+      range: { from: string; to: string };
+      delivery: { status: string; recipients: string[]; message: string };
+    };
+  };
+}
 
 export async function listDashboards(params?: any) {
   const { data } = await axios.get(`${API_BASE}/api/analytics/dashboards`, { params, headers: authHeaders() });

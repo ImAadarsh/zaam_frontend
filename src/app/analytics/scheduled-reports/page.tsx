@@ -3,13 +3,32 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listScheduledReports, createScheduledReport, updateScheduledReport, deleteScheduledReport, listReportDefinitions } from '@/lib/api';
+import { listScheduledReports, createScheduledReport, updateScheduledReport, deleteScheduledReport, listReportDefinitions, runScheduledReportNow } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Play } from 'lucide-react';
+
+const EMPTY_FORM = {
+  reportDefinitionId: '',
+  scheduleName: '',
+  frequency: 'weekly',
+  runTime: '09:00',
+  dayOfWeek: '1',
+  dayOfMonth: '1',
+  recipients: '',
+  isActive: true
+};
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function fmtDateTime(v?: string | null) {
+  if (!v) return '—';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+}
 
 export default function ScheduledReportsPage() {
   const router = useRouter();
@@ -19,7 +38,8 @@ export default function ScheduledReportsPage() {
   const [items, setItems] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ reportDefinitionId: '', scheduleName: '', frequency: 'weekly', runTime: '09:00:00', isActive: true });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [runningId, setRunningId] = useState<string | null>(null);
   const [editing, setEditing] = useState<any>(null);
   const [confirmDel, setConfirmDel] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -51,12 +71,24 @@ export default function ScheduledReportsPage() {
       toast.error('Select a report');
       return;
     }
+    const emails = form.recipients.split(/[,;\s]+/).map((e) => e.trim()).filter(Boolean);
+    const invalid = emails.filter((e) => !EMAIL_RE.test(e));
+    if (invalid.length) {
+      toast.error(`Invalid email: ${invalid.join(', ')}`);
+      return;
+    }
     setSubmitting(true);
     try {
-      const payload: any = { 
-        ...form, 
-        recipients: { emailList: [] } // Mock empty recipients
+      const payload: any = {
+        reportDefinitionId: form.reportDefinitionId,
+        scheduleName: form.scheduleName,
+        frequency: form.frequency,
+        runTime: form.runTime,
+        isActive: form.isActive,
+        recipients: { emailList: emails }
       };
+      if (form.frequency === 'weekly') payload.dayOfWeek = Number(form.dayOfWeek);
+      if (form.frequency !== 'daily' && form.frequency !== 'weekly') payload.dayOfMonth = Number(form.dayOfMonth);
       if (editing) {
         await updateScheduledReport(editing.id, payload);
         toast.success('Schedule updated');
@@ -66,12 +98,25 @@ export default function ScheduledReportsPage() {
       }
       setShowCreate(false);
       setEditing(null);
-      setForm({ reportDefinitionId: '', scheduleName: '', frequency: 'weekly', runTime: '09:00:00', isActive: true });
+      setForm({ ...EMPTY_FORM });
       loadData();
     } catch (error: any) {
       toast.error(error.response?.data?.error?.message || 'Error saving schedule');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRunNow = async (row: any) => {
+    setRunningId(String(row.id));
+    try {
+      const { data } = await runScheduledReportNow(row.id);
+      toast.success(`Ran ${row.scheduleName}: ${data.rowCount} row(s) for ${data.range.from} to ${data.range.to}. ${data.delivery.message}`);
+      loadData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error?.message || 'Run failed');
+    } finally {
+      setRunningId(null);
     }
   };
 
@@ -93,7 +138,39 @@ export default function ScheduledReportsPage() {
     { accessorKey: 'scheduleName', header: 'Schedule Name' },
     { accessorKey: 'reportDefinition.reportName', header: 'Report Source' },
     { accessorKey: 'frequency', header: 'Frequency', cell: ({ row }) => <span className="capitalize">{row.original.frequency}</span> },
-    { accessorKey: 'runTime', header: 'Time' },
+    { accessorKey: 'runTime', header: 'Time', cell: ({ row }) => String(row.original.runTime || '').slice(0, 5) },
+    {
+      id: 'recipients',
+      header: 'Recipients',
+      accessorFn: (r: any) => (r.recipients?.emailList || []).join(', '),
+      cell: ({ row }) => {
+        const list: string[] = row.original.recipients?.emailList || [];
+        return list.length ? <span className="text-xs">{list.join(', ')}</span> : <span className="text-xs text-amber-600">None</span>;
+      }
+    },
+    { id: 'nextRunAt', header: 'Next run', accessorFn: (r: any) => r.nextRunAt || '', cell: ({ row }) => (row.original.isActive ? fmtDateTime(row.original.nextRunAt) : '—') },
+    {
+      id: 'lastRun',
+      header: 'Last run',
+      accessorFn: (r: any) => r.lastExecution?.completedAt || r.lastRunAt || '',
+      cell: ({ row }) => {
+        const e = row.original.lastExecution;
+        if (!e) return <span className="text-muted-foreground text-xs">Never</span>;
+        return (
+          <div className="text-xs">
+            <div>
+              {fmtDateTime(e.completedAt)} ·{' '}
+              <span className={e.status === 'completed' ? 'text-emerald-600' : e.status === 'failed' ? 'text-destructive' : ''}>{e.status}</span>
+              {e.rowCount != null ? ` · ${e.rowCount} rows` : ''}
+            </div>
+            {e.errorMessage ? <div className="text-destructive">{e.errorMessage}</div> : null}
+            {e.delivery?.message ? (
+              <div className={e.delivery.status === 'sent' ? 'text-muted-foreground' : 'text-amber-600'}>{e.delivery.message}</div>
+            ) : null}
+          </div>
+        );
+      }
+    },
     { accessorKey: 'isActive', header: 'Status', cell: ({ row }) => row.original.isActive ? <span className="text-emerald-500 font-medium">Active</span> : <span className="text-muted-foreground">Paused</span> },
     {
       id: 'actions',
@@ -105,9 +182,12 @@ export default function ScheduledReportsPage() {
               setEditing(row.original);
               setForm({
                 scheduleName: row.original.scheduleName,
-                reportDefinitionId: row.original.reportDefinitionId,
+                reportDefinitionId: String(row.original.reportDefinitionId),
                 frequency: row.original.frequency,
-                runTime: row.original.runTime,
+                runTime: String(row.original.runTime || '09:00').slice(0, 5),
+                dayOfWeek: String(row.original.dayOfWeek ?? 1),
+                dayOfMonth: String(row.original.dayOfMonth ?? 1),
+                recipients: (row.original.recipients?.emailList || []).join(', '),
                 isActive: row.original.isActive
               });
               setShowCreate(true);
@@ -116,6 +196,14 @@ export default function ScheduledReportsPage() {
             title="Edit"
           >
             <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => handleRunNow(row.original)}
+            disabled={runningId === String(row.original.id)}
+            className="p-1 hover:bg-secondary rounded text-emerald-600 transition-colors disabled:opacity-50"
+            title="Run now"
+          >
+            <Play className="h-4 w-4" />
           </button>
           <button
             onClick={() => setConfirmDel(row.original)}
@@ -127,7 +215,7 @@ export default function ScheduledReportsPage() {
         </div>
       )
     }
-  ], []);
+  ], [runningId]);
 
   if (!hydrated || loading) {
     return (
@@ -173,7 +261,7 @@ export default function ScheduledReportsPage() {
             <button
               onClick={() => {
                 setEditing(null);
-                setForm({ reportDefinitionId: '', scheduleName: '', frequency: 'weekly', runTime: '09:00:00', isActive: true });
+                setForm({ ...EMPTY_FORM });
                 setShowCreate(true);
               }}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2"
@@ -247,6 +335,49 @@ export default function ScheduledReportsPage() {
                         className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none"
                       />
                     </div>
+                  </div>
+
+                  {form.frequency === 'weekly' && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Day of week</label>
+                      <select
+                        value={form.dayOfWeek}
+                        onChange={e => setForm({ ...form, dayOfWeek: e.target.value })}
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none"
+                      >
+                        {WEEKDAYS.map((d, i) => <option key={d} value={String(i)}>{d}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {form.frequency !== 'daily' && form.frequency !== 'weekly' && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Day of month</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        value={form.dayOfMonth}
+                        onChange={e => setForm({ ...form, dayOfMonth: e.target.value })}
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {form.frequency === 'quarterly' ? 'Runs in January, April, July and October.' : form.frequency === 'yearly' ? 'Runs in January.' : ''} Short months use their last day.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Email recipients</label>
+                    <textarea
+                      value={form.recipients}
+                      onChange={e => setForm({ ...form, recipients: e.target.value })}
+                      placeholder="finance@example.com, manager@example.com"
+                      rows={2}
+                      className="w-full px-3 py-2 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Comma-separated. Each run covers the previous period, saves a CSV under Data Exports and emails these addresses (needs an email connector under Marketing).
+                    </p>
                   </div>
 
                   <label className="flex items-center gap-2 text-sm mt-2">
