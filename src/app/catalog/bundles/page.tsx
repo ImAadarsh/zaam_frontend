@@ -12,7 +12,8 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Pencil, Trash2, Plus, X, Package } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Plus, X, Package, ListPlus } from 'lucide-react';
+import { BundleItemsEditor } from '@/components/catalog/bundle-items-editor';
 
 type Bundle = {
   id: string;
@@ -58,6 +59,11 @@ export default function BundlesPage() {
     status: 'active' as 'active' | 'inactive'
   });
   const [confirmDel, setConfirmDel] = useState<Bundle | null>(null);
+  const [itemsFor, setItemsFor] = useState<Bundle | null>(null);
+  // bundle-items POST/PATCH/DELETE are ADMIN/SUPER_ADMIN on the API; other roles get a read-only list.
+  const canEditItems = (session?.user?.roles || [])
+    .map((r: any) => String(typeof r === 'string' ? r : r?.code || r?.name || '').toUpperCase())
+    .some((r: string) => r === 'ADMIN' || r === 'SUPER_ADMIN');
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -109,6 +115,7 @@ export default function BundlesPage() {
       
       setItems([res.data, ...items]);
       setShowCreate(false);
+      setItemsFor(res.data);
       setForm({ 
         catalogItemId: '',
         name: '',
@@ -118,7 +125,7 @@ export default function BundlesPage() {
         currency: 'GBP',
         status: 'active'
       });
-      toast.success('Bundle created');
+      toast.success('Bundle created — now add the products it contains');
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message ?? 'Create failed');
     }
@@ -188,7 +195,15 @@ export default function BundlesPage() {
     {
       accessorKey: 'items',
       header: 'Items',
-      cell: ({ row }) => row.original.items?.length || 0
+      cell: ({ row }) => (
+        <button
+          onClick={() => setItemsFor(row.original)}
+          className="underline-offset-2 hover:underline"
+          title="View bundle items"
+        >
+          {row.original.items?.length || 0}
+        </button>
+      )
     },
     {
       accessorKey: 'status',
@@ -212,6 +227,13 @@ export default function BundlesPage() {
         const item = row.original;
         return (
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setItemsFor(item)}
+              className="p-1 hover:bg-gray-100 rounded"
+              title={canEditItems ? 'Add / remove items' : 'View items'}
+            >
+              <ListPlus className="h-4 w-4" />
+            </button>
             <button
               onClick={() => {
                 setEditing(item);
@@ -240,7 +262,7 @@ export default function BundlesPage() {
         );
       },
     },
-  ], []);
+  ], [canEditItems]);
 
   if (!hydrated || loading) {
     return (
@@ -513,6 +535,17 @@ export default function BundlesPage() {
                   </form>
                 </div>
               </div>
+            )}
+
+            {itemsFor && (
+              <BundleItemsEditor
+                bundle={itemsFor}
+                canEdit={canEditItems}
+                onClose={() => setItemsFor(null)}
+                onCountChange={(bundleId, lines) =>
+                  setItems((prev) => prev.map((b) => (b.id === bundleId ? { ...b, items: lines } : b)))
+                }
+              />
             )}
 
             {confirmDel && (
