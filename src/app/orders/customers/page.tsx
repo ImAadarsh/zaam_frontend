@@ -31,6 +31,8 @@ export default function CustomersPage() {
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']);
   const [loading, setLoading] = useState(true);
+  // Full-page loader only until the first load; later reloads keep the table on screen.
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [items, setItems] = useState<Customer[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const emptyForm = () => ({
@@ -64,6 +66,7 @@ export default function CustomersPage() {
       toast.error('Failed to load customers');
     } finally {
       setLoading(false);
+      setLoadedOnce(true);
     }
   }, [orgId, search, filters]);
 
@@ -242,7 +245,7 @@ export default function CustomersPage() {
     }
   ], []);
 
-  if (!hydrated || loading) {
+  if (!hydrated || (loading && !loadedOnce)) {
     return (
       <div className="min-h-screen app-surface">
         <Sidebar />
@@ -334,7 +337,10 @@ export default function CustomersPage() {
                 <div className="text-sm text-muted-foreground">Loading customers...</div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-border bg-card p-2">
+              <div
+                className={`rounded-2xl border border-border bg-card p-2 transition-opacity ${loading ? 'opacity-60' : ''}`}
+                aria-busy={loading}
+              >
                 <RichDataTable columns={columns} data={items} hideSearch />
               </div>
             )}

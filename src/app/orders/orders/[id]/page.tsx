@@ -302,7 +302,8 @@ export default function OrderDetailPage() {
     }
   }
 
-  if (!hydrated || loading) {
+  // Full-page loader only before the order is first shown; reloads after edits keep the page.
+  if (!hydrated || (loading && !order)) {
     return (
       <div className="min-h-screen app-surface">
         <Sidebar />
@@ -344,7 +345,10 @@ export default function OrderDetailPage() {
       <Sidebar />
       <div className="flex flex-col overflow-hidden lg:ml-[280px]">
         <Header title={`Orders · ${order.orderNumber}`} />
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main
+          className={`flex-1 overflow-auto p-4 md:p-6 transition-opacity ${loading ? 'opacity-60' : ''}`}
+          aria-busy={loading}
+        >
           <div className="w-full space-y-6">
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-3">

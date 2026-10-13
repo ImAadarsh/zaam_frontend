@@ -29,6 +29,8 @@ export default function ReturnsPage() {
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']);
   const [loading, setLoading] = useState(true);
+  // Full-page loader only until the first load; later reloads keep the table on screen.
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [items, setItems] = useState<Return[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -76,6 +78,7 @@ export default function ReturnsPage() {
       toast.error('Failed to load returns');
     } finally {
       setLoading(false);
+      setLoadedOnce(true);
     }
   }, [orgId, search, filters]);
 
@@ -334,7 +337,7 @@ export default function ReturnsPage() {
     }
   ], [canRefund]);
 
-  if (!hydrated || loading) {
+  if (!hydrated || (loading && !loadedOnce)) {
     return (
       <div className="min-h-screen app-surface">
         <Sidebar />
@@ -422,7 +425,10 @@ export default function ReturnsPage() {
                 <div className="text-sm text-muted-foreground">Loading returns...</div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-border bg-card p-2">
+              <div
+                className={`rounded-2xl border border-border bg-card p-2 transition-opacity ${loading ? 'opacity-60' : ''}`}
+                aria-busy={loading}
+              >
                 <RichDataTable columns={columns} data={items} hideSearch />
               </div>
             )}
