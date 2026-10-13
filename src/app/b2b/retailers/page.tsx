@@ -38,6 +38,7 @@ export default function B2bRetailersPage() {
   const [items, setItems] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [credsUnlocked, setCredsUnlocked] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -136,6 +137,7 @@ export default function B2bRetailersPage() {
 
   const openCreate = () => {
     setForm({ ...EMPTY_FORM });
+    setCredsUnlocked(false);
     setShowCreate(true);
   };
 
@@ -217,6 +219,9 @@ export default function B2bRetailersPage() {
                     name={`retailer-${f.key}`}
                     type={f.type || 'text'}
                     autoComplete={f.autoComplete || 'off'}
+                    // Browsers skip read-only fields when filling saved ERP logins.
+                    readOnly={(f.key === 'email' || f.key === 'password') && !credsUnlocked}
+                    onFocus={() => setCredsUnlocked(true)}
                     placeholder={f.placeholder}
                     min={f.type === 'number' ? 0 : undefined}
                     className="mt-1 w-full border border-border rounded-lg px-3 py-2 bg-background text-sm text-foreground"
