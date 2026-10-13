@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal, Pencil, Trash2, Plus, X, Package, ListPlus } from 'lucide-react';
 import { BundleItemsEditor } from '@/components/catalog/bundle-items-editor';
@@ -36,6 +37,10 @@ export default function BundlesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'SALES_REP']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/catalog/bundles');
+  const canUpdate = can('PATCH', '/api/catalog/bundles/:id');
+  const canDelete = can('DELETE', '/api/catalog/bundles/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Bundle[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
@@ -234,6 +239,7 @@ export default function BundlesPage() {
             >
               <ListPlus className="h-4 w-4" />
             </button>
+            {canUpdate && (
             <button
               onClick={() => {
                 setEditing(item);
@@ -251,6 +257,8 @@ export default function BundlesPage() {
             >
               <Pencil className="h-4 w-4" />
             </button>
+            )}
+            {canDelete && (
             <button
               onClick={() => setConfirmDel(item)}
               className="p-1 hover:bg-gray-100 rounded text-red-600"
@@ -258,11 +266,12 @@ export default function BundlesPage() {
             >
               <Trash2 className="h-4 w-4" />
             </button>
+            )}
           </div>
         );
       },
     },
-  ], [canEditItems]);
+  ], [canEditItems, canUpdate, canDelete]);
 
   if (!hydrated || loading) {
     return (
@@ -314,6 +323,7 @@ export default function BundlesPage() {
                 </h1>
                 <p className="text-muted-foreground mt-1">Manage product bundles and kits</p>
               </div>
+              {canCreate && (
               <button
                 onClick={() => setShowCreate(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
@@ -321,6 +331,7 @@ export default function BundlesPage() {
                 <Plus className="h-4 w-4" />
                 Add Bundle
               </button>
+              )}
             </div>
 
             <RichDataTable columns={columns} data={items} />

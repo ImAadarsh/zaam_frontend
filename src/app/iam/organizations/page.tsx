@@ -21,6 +21,7 @@ import {
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { Plus, Building2, Edit2, Save, X, Trash2, MapPin, Briefcase, ChevronDown, ChevronRight } from 'lucide-react';
 
 // ISO 3166-1 alpha-2 country codes
@@ -205,6 +206,9 @@ type Location = {
 export default function OrganizationsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
+  const { can } = useApiAccess();
+  const canCreateOrg = can('POST', '/api/iam/organizations');
+  const canDeleteOrgRoute = can('DELETE', '/api/iam/organizations/:id');
   const [loading, setLoading] = useState(true);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
@@ -473,7 +477,7 @@ export default function OrganizationsPage() {
   }
 
   function canDeleteOrg(org: Organization): boolean {
-    return isSuperAdmin && organizations.length > 1 && session?.user?.organizationId !== org.id;
+    return isSuperAdmin && canDeleteOrgRoute && organizations.length > 1 && session?.user?.organizationId !== org.id;
   }
 
   function canEditOrg(org: Organization): boolean {
@@ -495,7 +499,7 @@ export default function OrganizationsPage() {
         <Header
           title="IAM · Manage Organization"
           actions={
-            isSuperAdmin
+            isSuperAdmin && canCreateOrg
               ? [{ label: 'New Organization', onClick: () => { 
                   setShowCreateOrg(true); 
                   setOrgFormData({ status: 'active' }); 
@@ -513,7 +517,7 @@ export default function OrganizationsPage() {
                 Manage organizations, business units, and locations
               </p>
             </div>
-            {isSuperAdmin && (
+            {isSuperAdmin && canCreateOrg && (
               <button
                 className="btn btn-primary"
                 onClick={() => {

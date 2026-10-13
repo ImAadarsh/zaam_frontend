@@ -9,6 +9,7 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { FilterBar, type FilterField } from '@/components/filter-bar';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, RotateCcw, RefreshCw, CircleDollarSign } from 'lucide-react';
 
@@ -28,6 +29,11 @@ export default function ReturnsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/orders/returns');
+  const canUpdate = can('PATCH', '/api/orders/returns/:id');
+  const canDelete = can('DELETE', '/api/orders/returns/:id');
+  const canRefund = can('POST', '/api/orders/returns/:id/refund');
   const [loading, setLoading] = useState(true);
   // Full-page loader only until the first load; later reloads keep the table on screen.
   const [loadedOnce, setLoadedOnce] = useState(false);
@@ -59,13 +65,6 @@ export default function ReturnsPage() {
   const [totalCount, setTotalCount] = useState(0);
 
   const orgId = session?.user?.organizationId;
-  const canRefund = useMemo(() => {
-    const roles = session?.user?.roles ?? [];
-    const codes = roles.map((role: any) =>
-      String(typeof role === 'string' ? role : role?.code || role?.name || '').toUpperCase()
-    );
-    return codes.some((code: string) => ['ADMIN', 'SUPER_ADMIN', 'CUSTOMER_SERVICE'].includes(code));
-  }, [session?.user?.roles]);
 
   const loadData = useCallback(async () => {
     if (!orgId) return;
@@ -290,7 +289,7 @@ export default function ReturnsPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
-          {!['refunded', 'completed'].includes(row.original.status || '') && (
+          {canUpdate && !['refunded', 'completed'].includes(row.original.status || '') && (
             <button
               onClick={() => {
                 setEditing(row.original);
@@ -329,13 +328,15 @@ export default function ReturnsPage() {
                 <CircleDollarSign className="h-4 w-4" />
               </button>
             )}
+          {canDelete && (
           <button onClick={() => setConfirmDel(row.original)} className="p-1 hover:bg-muted rounded text-red-500">
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </div>
       )
     }
-  ], [canRefund]);
+  ], [canUpdate, canRefund, canDelete]);
 
   if (!hydrated || (loading && !loadedOnce)) {
     return (
@@ -407,7 +408,7 @@ export default function ReturnsPage() {
                     <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                     Refresh
                   </button>
-                  {hasAccess && (
+                  {canCreate && (
                     <button
                       onClick={() => setShowCreate(true)}
                       className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded-lg hover:bg-[#B89015]"

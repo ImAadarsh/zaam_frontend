@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Package } from 'lucide-react';
 import { LocationStatusBadge, activeWarehouses } from '@/components/inventory/location-status-badge';
@@ -30,6 +31,10 @@ export default function BinsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/inventory/bins');
+  const canUpdate = can('PATCH', '/api/inventory/bins/:id');
+  const canDelete = can('DELETE', '/api/inventory/bins/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Bin[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -173,6 +178,7 @@ export default function BinsPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          {canUpdate && (
           <button
             onClick={() => {
               setEditing(row.original);
@@ -192,13 +198,16 @@ export default function BinsPage() {
           >
             <Pencil className="h-4 w-4" />
           </button>
+          )}
+          {canDelete && (
           <button onClick={() => setConfirmDel(row.original)} className="p-1 hover:bg-muted rounded text-red-500">
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </div>
       )
     }
-  ], []);
+  ], [canUpdate, canDelete]);
 
   if (!hydrated || loading) {
     return (
@@ -247,6 +256,7 @@ export default function BinsPage() {
                 <h1 className="text-3xl font-bold">Bins</h1>
                 <p className="text-muted-foreground mt-1">Manage warehouse storage bins</p>
               </div>
+              {canCreate && (
               <button
                 onClick={() => setShowCreate(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
@@ -254,6 +264,7 @@ export default function BinsPage() {
                 <Plus className="h-4 w-4" />
                 Add Bin
               </button>
+              )}
             </div>
 
             {loading ? (

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { useSession } from '@/hooks/use-session';
+import { useApiAccess } from '@/hooks/use-api-access';
 import {
   getEmployee360, listEmploymentContracts, listEmployeeDocuments,
   listLeaveRequests, listLeaveBalances, listImmigration, listRtwDocuments,
@@ -32,6 +33,11 @@ export default function Employee360Page() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { session, hydrated } = useSession();
+  const { can } = useApiAccess();
+  const canEdit = can('PATCH', '/api/hr/employees/:id');
+  const canAddImmigration = can('POST', '/api/hr/immigration');
+  const canAddLeave = can('POST', '/api/hr/leave-requests');
+  const canAddDocument = can('POST', '/api/hr/documents');
   const [tab, setTab] = useState<Tab>('personal');
   const [loading, setLoading] = useState(true);
   const [emp, setEmp] = useState<any>(null);
@@ -347,13 +353,13 @@ export default function Employee360Page() {
                     </div>
                   </div>
                 </div>
-                <button
+                {canEdit && <button
                   type="button"
                   onClick={openEdit}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20"
                 >
                   <Pencil size={14} /> Edit profile
-                </button>
+                </button>}
               </div>
 
               <div className="flex flex-wrap gap-2 border-b border-border/50 pb-2">
@@ -423,17 +429,21 @@ export default function Employee360Page() {
 
               {tab === 'immigration' && (
                 <div className="space-y-4">
-                  <div className="flex justify-end">
-                    <button type="button" onClick={() => setImmOpen(true)} className={GOLD_BTN}>
-                      <Plus size={14} /> Add visa / status
-                    </button>
-                  </div>
-                  {immigration.length === 0 && (
-                    <div className="glass-panel rounded-2xl border border-border/50 p-8 text-center">
-                      <p className="text-sm text-muted-foreground mb-3">No immigration records yet.</p>
+                  {canAddImmigration && (
+                    <div className="flex justify-end">
                       <button type="button" onClick={() => setImmOpen(true)} className={GOLD_BTN}>
                         <Plus size={14} /> Add visa / status
                       </button>
+                    </div>
+                  )}
+                  {immigration.length === 0 && (
+                    <div className="glass-panel rounded-2xl border border-border/50 p-8 text-center">
+                      <p className="text-sm text-muted-foreground mb-3">No immigration records yet.</p>
+                      {canAddImmigration && (
+                        <button type="button" onClick={() => setImmOpen(true)} className={GOLD_BTN}>
+                          <Plus size={14} /> Add visa / status
+                        </button>
+                      )}
                     </div>
                   )}
                   {immigration.map((row: any) => {
@@ -470,11 +480,13 @@ export default function Employee360Page() {
 
               {tab === 'leave' && (
                 <div className="space-y-4">
-                  <div className="flex justify-end">
-                    <button type="button" onClick={() => setLeaveOpen(true)} className={GOLD_BTN}>
-                      <Plus size={14} /> Add leave request
-                    </button>
-                  </div>
+                  {canAddLeave && (
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => setLeaveOpen(true)} className={GOLD_BTN}>
+                        <Plus size={14} /> Add leave request
+                      </button>
+                    </div>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-3">
                     {balances.length === 0 && (
                       <div className="glass-panel rounded-xl border border-border/40 p-4 text-sm text-muted-foreground">No leave balance available.</div>
@@ -496,9 +508,11 @@ export default function Employee360Page() {
                     {leave.length === 0 && (
                       <div className="p-8 text-center">
                         <p className="text-sm text-muted-foreground mb-3">No leave requests.</p>
-                        <button type="button" onClick={() => setLeaveOpen(true)} className={GOLD_BTN}>
-                          <Plus size={14} /> Add leave request
-                        </button>
+                        {canAddLeave && (
+                          <button type="button" onClick={() => setLeaveOpen(true)} className={GOLD_BTN}>
+                            <Plus size={14} /> Add leave request
+                          </button>
+                        )}
                       </div>
                     )}
                     {leave.slice(0, 12).map((r: any) => (
@@ -518,16 +532,20 @@ export default function Employee360Page() {
                 <div className="space-y-2">
                   <div className="flex justify-end gap-3 mb-2 items-center">
                     <Link href="/hr/documents" className="text-sm text-muted-foreground hover:text-[#D4A017]">Manage all</Link>
-                    <button type="button" onClick={openDocModal} className={GOLD_BTN}>
-                      <Plus size={14} /> Add document
-                    </button>
+                    {canAddDocument && (
+                      <button type="button" onClick={openDocModal} className={GOLD_BTN}>
+                        <Plus size={14} /> Add document
+                      </button>
+                    )}
                   </div>
                   {docs.length === 0 && (
                     <div className="glass-panel rounded-2xl border border-border/50 p-8 text-center">
                       <p className="text-sm text-muted-foreground mb-3">No documents on file.</p>
-                      <button type="button" onClick={openDocModal} className={GOLD_BTN}>
-                        <Plus size={14} /> Add document
-                      </button>
+                      {canAddDocument && (
+                        <button type="button" onClick={openDocModal} className={GOLD_BTN}>
+                          <Plus size={14} /> Add document
+                        </button>
+                      )}
                     </div>
                   )}
                   {docs.map((d: any) => {

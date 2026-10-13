@@ -11,6 +11,7 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { PriceListImportModal } from '@/components/catalog/price-list-import-modal';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { deletePriceListItem, getPriceList, listPriceListItems } from '@/lib/api';
 
 type PriceListItem = {
@@ -33,6 +34,9 @@ export default function PriceListDetailPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'FINANCE']);
+  const { can } = useApiAccess();
+  const canImport = can('POST', '/api/catalog/price-lists/:id/import');
+  const canDeleteItem = can('DELETE', '/api/catalog/price-list-items/:id');
   const [priceList, setPriceList] = useState<any | null>(null);
   const [items, setItems] = useState<PriceListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,7 +131,7 @@ export default function PriceListDetailPage() {
       id: 'actions',
       header: '',
       enableSorting: false,
-      cell: ({ row }) => (
+      cell: ({ row }) => canDeleteItem && (
         <button
           onClick={() => setConfirmDel(row.original)}
           className="p-1 hover:bg-gray-100 rounded text-red-600"
@@ -137,7 +141,7 @@ export default function PriceListDetailPage() {
         </button>
       )
     }
-  ], [currency]);
+  ], [currency, canDeleteItem]);
 
   if (!hydrated || !hasAccess) return null;
 
@@ -170,6 +174,7 @@ export default function PriceListDetailPage() {
                       {priceList.isDefault ? ' · default' : ''} · {items.length} item{items.length === 1 ? '' : 's'}
                     </p>
                   </div>
+                  {canImport && (
                   <button
                     onClick={() => setShowImport(true)}
                     className="flex items-center gap-2 self-start px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
@@ -177,6 +182,7 @@ export default function PriceListDetailPage() {
                     <Upload className="h-4 w-4" />
                     Import items
                   </button>
+                  )}
                 </div>
 
                 <RichDataTable columns={columns} data={items} searchPlaceholder="Search by SKU or product…" />

@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal, Pencil, Trash2, Plus, X, Receipt } from 'lucide-react';
 
@@ -34,6 +35,10 @@ export default function TaxCodesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'FINANCE']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/catalog/tax-codes');
+  const canUpdate = can('PATCH', '/api/catalog/tax-codes/:id');
+  const canDelete = can('DELETE', '/api/catalog/tax-codes/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<TaxCode[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -217,6 +222,7 @@ export default function TaxCodesPage() {
         const item = row.original;
         return (
           <div className="flex items-center gap-2">
+            {canUpdate && (
             <button
               onClick={() => {
                 setEditing(item);
@@ -234,17 +240,20 @@ export default function TaxCodesPage() {
             >
               <Pencil className="h-4 w-4" />
             </button>
+            )}
+            {canDelete && (
             <button
               onClick={() => setConfirmDel(item)}
               className="p-1 hover:bg-gray-100 rounded text-red-600"
             >
               <Trash2 className="h-4 w-4" />
             </button>
+            )}
           </div>
         );
       }
     }
-  ], []);
+  ], [canUpdate, canDelete]);
 
   if (!hydrated || loading) {
     return (
@@ -296,6 +305,7 @@ export default function TaxCodesPage() {
                 </h1>
                 <p className="text-muted-foreground mt-1">Manage tax and VAT codes</p>
               </div>
+              {canCreate && (
               <button
                 onClick={() => setShowCreate(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
@@ -303,6 +313,7 @@ export default function TaxCodesPage() {
                 <Plus className="h-4 w-4" />
                 Add Tax Code
               </button>
+              )}
             </div>
 
             <RichDataTable columns={columns} data={items} />

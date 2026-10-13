@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, FileText, Download, Loader2 } from 'lucide-react';
 import { MediaLink } from '@/components/catalog/media-preview';
@@ -37,10 +38,8 @@ export default function ComplianceDocumentsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']);
-  // DELETE /catalog/compliance-documents stays ADMIN/SUPER_ADMIN on the API.
-  const canDelete = (session?.user?.roles || [])
-    .map((r: any) => String(typeof r === 'string' ? r : r?.code || r?.name || '').toUpperCase())
-    .some((r: string) => r === 'ADMIN' || r === 'SUPER_ADMIN');
+  const { can } = useApiAccess();
+  const canDelete = can('DELETE', '/api/catalog/compliance-documents/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ComplianceDocument[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);

@@ -40,6 +40,18 @@ const DEFAULT_SCOPES = [
   'write:products',
   'read:finance',
   'write:finance',
+  'read:crm',
+  'write:crm',
+  'read:hr',
+  'write:hr',
+  'read:marketing',
+  'write:marketing',
+  'read:analytics',
+  'read:b2b',
+  'write:b2b',
+  'read:fulfillment',
+  'write:fulfillment',
+  'read:pos',
   'admin:all'
 ];
 
@@ -328,6 +340,18 @@ export default function ApiKeysPage() {
       }
     },
     {
+      accessorKey: 'lastUsedAt',
+      header: 'Last used',
+      cell: ({ row }) => {
+        const used = row.original.lastUsedAt;
+        return (
+          <span className="text-sm text-muted-foreground">
+            {used ? new Date(used).toLocaleString('en-GB') : 'Never'}
+          </span>
+        );
+      }
+    },
+    {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
@@ -368,6 +392,12 @@ export default function ApiKeysPage() {
               <h1 className="text-2xl font-bold text-foreground">API Keys</h1>
               <p className="text-sm text-muted-foreground mt-1">
                 Manage API keys for programmatic access to your platform
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-3xl">
+                Send the key as <code className="font-mono">Authorization: Bearer zk_…</code> or <code className="font-mono">X-Api-Key: zk_…</code>.
+                Scopes are <code className="font-mono">read:&lt;module&gt;</code> / <code className="font-mono">write:&lt;module&gt;</code> (write includes read;
+                modules: orders, inventory, products, finance, crm, hr, marketing, analytics, b2b, fulfillment, pos, users) or <code className="font-mono">admin:all</code>.
+                A key acts for the organisation it belongs to; requests outside its scopes get 403.
               </p>
             </div>
             <button

@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Tag } from 'lucide-react';
 
@@ -53,6 +54,10 @@ export default function PromotionalPricesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'FINANCE']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/catalog/promotional-prices');
+  const canUpdate = can('PATCH', '/api/catalog/promotional-prices/:id');
+  const canDelete = can('DELETE', '/api/catalog/promotional-prices/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<PromotionalPrice[]>([]);
   const [variants, setVariants] = useState<any[]>([]);
@@ -252,6 +257,7 @@ export default function PromotionalPricesPage() {
         const item = row.original;
         return (
           <div className="flex items-center gap-2">
+            {canUpdate && (
             <button
               onClick={() => {
                 setEditing(item);
@@ -270,6 +276,8 @@ export default function PromotionalPricesPage() {
             >
               <Pencil className="h-4 w-4" />
             </button>
+            )}
+            {canDelete && (
             <button
               onClick={() => setConfirmDel(item)}
               className="p-1 hover:bg-gray-100 rounded text-red-600"
@@ -277,11 +285,12 @@ export default function PromotionalPricesPage() {
             >
               <Trash2 className="h-4 w-4" />
             </button>
+            )}
           </div>
         );
       },
     },
-  ], []);
+  ], [canUpdate, canDelete]);
 
   if (!hydrated || loading) {
     return (
@@ -333,6 +342,7 @@ export default function PromotionalPricesPage() {
                 </h1>
                 <p className="text-muted-foreground mt-1">Manage time-bound discounts and promotions</p>
               </div>
+              {canCreate && (
               <button
                 onClick={() => setShowCreate(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
@@ -340,6 +350,7 @@ export default function PromotionalPricesPage() {
                 <Plus className="h-4 w-4" />
                 Add Promotion
               </button>
+              )}
             </div>
 
             <RichDataTable columns={columns} data={items} />

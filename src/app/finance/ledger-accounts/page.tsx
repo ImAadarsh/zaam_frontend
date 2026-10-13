@@ -9,6 +9,7 @@ import { listLedgerAccountTypes, DEFAULT_LEDGER_ACCOUNT_TYPES, type LedgerAccoun
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X } from 'lucide-react';
 
@@ -72,6 +73,8 @@ export default function LedgerAccountsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'FINANCE']);
+  const { can } = useApiAccess();
+  const canDelete = can('DELETE', '/api/finance/ledger-accounts/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<LedgerAccount[]>([]);
   const [chartOfAccounts, setChartOfAccounts] = useState<any[]>([]);
@@ -242,7 +245,7 @@ export default function LedgerAccountsPage() {
           }} className="p-1.5 hover:bg-muted rounded">
             <Pencil size={16} />
           </button>
-          {!row.original.isSystem && (
+          {canDelete && !row.original.isSystem && (
             <button onClick={() => setConfirmDel(row.original)} className="p-1.5 hover:bg-muted rounded text-destructive">
               <Trash2 size={16} />
             </button>
@@ -250,7 +253,7 @@ export default function LedgerAccountsPage() {
         </div>
       )
     }
-  ], [accountTypes]);
+  ], [accountTypes, canDelete]);
 
   if (!hydrated || loading) {
     return (

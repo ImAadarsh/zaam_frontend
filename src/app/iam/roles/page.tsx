@@ -12,6 +12,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Plus, UserPlus, Settings } from 'lucide-react';
 import { NAV_MODULES, type NavModule } from '@/lib/nav-pages.generated';
 import { builtInPagesForRoles } from '@/lib/page-access';
+import { useApiAccess } from '@/hooks/use-api-access';
 
 type Role = {
   id: string;
@@ -29,6 +30,10 @@ export default function RolesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN']);
+  const { can } = useApiAccess();
+  const canCreateRole = can('POST', '/api/iam/roles');
+  const canEditPages = can('PATCH', '/api/iam/roles/:id');
+  const canAssignRole = can('POST', '/api/iam/roles/assign');
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -44,6 +49,11 @@ export default function RolesPage() {
   const [pagePermissions, setPagePermissions] = useState<Record<string, boolean>>({});
   const [permissionFilter, setPermissionFilter] = useState('');
   const [showingBuiltInPages, setShowingBuiltInPages] = useState(false);
+  // Pages whose data the role's API access covers; anything else would open as a 403 page.
+  const roleApiPages = useMemo(
+    () => new Set(selectedRole ? builtInPagesForRoles([selectedRole.code]) : []),
+    [selectedRole]
+  );
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -167,7 +177,7 @@ export default function RolesPage() {
   function setModulePages(mod: NavModule, enabled: boolean) {
     setPagePermissions((prev) => {
       const next = { ...prev };
-      mod.pages.forEach((page) => { next[page.key] = enabled; });
+      mod.pages.forEach((page) => { if (roleApiPages.has(page.key)) next[page.key] = enabled; });
       return next;
     });
   }
@@ -176,7 +186,7 @@ export default function RolesPage() {
     if (!selectedRole) return;
     try {
       const pageKeys = Object.entries(pagePermissions)
-        .filter(([_, enabled]) => enabled)
+        .filter(([key, enabled]) => enabled && roleApiPages.has(key))
         .map(([key, _]) => key);
       
       const current = selectedRole.permissions;
@@ -218,12 +228,13 @@ export default function RolesPage() {
             className="btn btn-outline btn-sm flex items-center gap-2"
           >
             <Settings size={14} />
-            Edit Pages
+            {canEditPages ? 'Edit Pages' : 'View Pages'}
           </button>
         );
       },
     },
-  ], []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [canEditPages]);
 
   if (!hydrated || !hasAccess || !session?.accessToken) return null;
 
@@ -234,8 +245,8 @@ export default function RolesPage() {
         <Header
           title="IAM · Roles"
           actions={[
-            { label: 'New Role', onClick: () => setShowCreate(true), icon: <Plus size={16} /> },
-            { label: 'Assign Role', onClick: () => setShowAssign(true), icon: <UserPlus size={16} /> }
+            ...(canCreateRole ? [{ label: 'New Role', onClick: () => setShowCreate(true), icon: <Plus size={16} /> }] : []),
+            ...(canAssignRole ? [{ label: 'Assign Role', onClick: () => setShowAssign(true), icon: <UserPlus size={16} /> }] : [])
           ]}
         />
         <main className="flex-1 overflow-auto p-4 md:p-6 space-y-6">
@@ -245,8 +256,8 @@ export default function RolesPage() {
               <p className="text-muted-foreground">Manage roles and permissions.</p>
             </div>
             <div className="flex gap-2">
-              <button className="btn btn-outline" onClick={() => setShowAssign(true)}>Assign Role</button>
-              <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Role</button>
+              {canAssignRole && <button className="btn btn-outline" onClick={() => setShowAssign(true)}>Assign Role</button>}
+              {canCreateRole && <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Role</button>}
             </div>
           </div>
 
@@ -365,7 +376,7 @@ export default function RolesPage() {
               <div className="w-full max-w-4xl rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h3 className="text-lg font-semibold">Edit Page Permissions</h3>
+                    <h3 className="text-lg font-semibold">{canEditPages ? 'Edit Page Permissions' : 'Page Permissions'}</h3>
                     <p className="text-sm text-muted-foreground mt-1">Role: <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{selectedRole.code}</span> - {selectedRole.name}</p>
                   </div>
                   <button
@@ -387,6 +398,14 @@ export default function RolesPage() {
                     a user holding any role without saved pages gets the built-in access of all their roles.
                     Super Administrator always has full access. Changes apply on the user&apos;s next page load.
                   </p>
+                  {!canEditPages && (
+                    <p className="text-xs rounded-lg border border-border bg-muted/40 px-3 py-2">
+                      Read-only: only a Super Administrator can change role page permissions.
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Greyed-out pages are outside this role&apos;s built-in access: the API refuses their data for this role, so they cannot be granted here.
+                  </p>
                   {showingBuiltInPages && (
                     <p className="text-xs rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-3 py-2">
                       No pages are saved for this role yet, so it currently uses its built-in access. The ticked pages are the ones it can open today;
@@ -395,7 +414,7 @@ export default function RolesPage() {
                   )}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
-                      Select which pages this role can access ({Object.values(pagePermissions).filter(Boolean).length} selected):
+                      Select which pages this role can access ({Object.entries(pagePermissions).filter(([k, on]) => on && roleApiPages.has(k)).length} selected):
                     </p>
                     <input
                       className="input sm:max-w-[220px]"
@@ -410,8 +429,9 @@ export default function RolesPage() {
                       ? mod.pages.filter((p) => `${mod.module} ${p.label} ${p.path}`.toLowerCase().includes(q))
                       : mod.pages;
                     if (visible.length === 0) return null;
-                    const selectedCount = mod.pages.filter((p) => pagePermissions[p.key]).length;
-                    const allSelected = selectedCount === mod.pages.length;
+                    const grantable = mod.pages.filter((p) => roleApiPages.has(p.key));
+                    const selectedCount = grantable.filter((p) => pagePermissions[p.key]).length;
+                    const allSelected = grantable.length > 0 && selectedCount === grantable.length;
                     return (
                       <div key={mod.module} className="rounded-xl border border-border">
                         <label className="flex items-center justify-between gap-3 px-4 py-3 bg-muted/40 rounded-t-xl cursor-pointer">
@@ -420,25 +440,30 @@ export default function RolesPage() {
                               type="checkbox"
                               className="w-4 h-4 cursor-pointer accent-[#D4A017]"
                               checked={allSelected}
+                              disabled={!canEditPages || grantable.length === 0}
                               ref={(el) => { if (el) el.indeterminate = selectedCount > 0 && !allSelected; }}
                               onChange={(e) => setModulePages(mod, e.target.checked)}
                             />
                             <span className="font-semibold text-sm">{mod.module}</span>
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {selectedCount}/{mod.pages.length} · Select all
+                            {selectedCount}/{grantable.length}{canEditPages ? ' · Select all' : ''}
                           </span>
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 p-2">
-                          {visible.map((page) => (
+                          {visible.map((page) => {
+                            const apiAllows = roleApiPages.has(page.key);
+                            return (
                             <label
                               key={`${mod.module}-${page.key}`}
-                              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-primary/5 cursor-pointer"
+                              className={`flex items-center gap-3 px-3 py-2 rounded-lg ${apiAllows ? 'hover:bg-primary/5 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                              title={apiAllows ? undefined : 'The API refuses this page’s data for this role'}
                             >
                               <input
                                 type="checkbox"
                                 className="w-4 h-4 cursor-pointer accent-[#D4A017]"
-                                checked={pagePermissions[page.key] || false}
+                                checked={apiAllows && (pagePermissions[page.key] || false)}
+                                disabled={!canEditPages || !apiAllows}
                                 onChange={(e) => setPagePermissions((prev) => ({ ...prev, [page.key]: e.target.checked }))}
                               />
                               <div className="min-w-0">
@@ -446,7 +471,8 @@ export default function RolesPage() {
                                 <div className="text-xs text-muted-foreground font-mono truncate">{page.path}</div>
                               </div>
                             </label>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -463,15 +489,17 @@ export default function RolesPage() {
                       setPagePermissions({});
                     }}
                   >
-                    Cancel
+                    {canEditPages ? 'Cancel' : 'Close'}
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={savePermissions}
-                  >
-                    Save Permissions
-                  </button>
+                  {canEditPages && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={savePermissions}
+                    >
+                      Save Permissions
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Upload, Loader2, ImageIcon, Star, RefreshCw, Settings2, Tag } from 'lucide-react';
 import { MediaThumb } from '@/components/catalog/media-preview';
@@ -436,6 +437,13 @@ export default function CatalogItemsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'SALES_REP']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/catalog/items');
+  const canUpdate = can('PATCH', '/api/catalog/items/:id');
+  const canDelete = can('DELETE', '/api/catalog/items/:id');
+  const canImport = can('POST', '/api/catalog/inventory-import/execute');
+  const canAddMedia = can('POST', '/api/catalog/media');
+  const canDeleteMedia = can('DELETE', '/api/catalog/media/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -833,6 +841,7 @@ export default function CatalogItemsPage() {
         header: '',
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
+            {canUpdate && (
             <button
               onClick={() => openEdit(row.original)}
               className="p-1 hover:bg-gray-100 rounded"
@@ -841,6 +850,8 @@ export default function CatalogItemsPage() {
             >
               <Pencil className="h-4 w-4" />
             </button>
+            )}
+            {canDelete && (
             <button
               onClick={() => setConfirmDel(row.original)}
               className="p-1 hover:bg-gray-100 rounded text-red-600"
@@ -849,11 +860,12 @@ export default function CatalogItemsPage() {
             >
               <Trash2 className="h-4 w-4" />
             </button>
+            )}
           </div>
         )
       }
     ],
-    []
+    [canUpdate, canDelete]
   );
 
   if (!hydrated || loading) {
@@ -888,9 +900,12 @@ export default function CatalogItemsPage() {
                 </p>
               </div>
               <div className="flex gap-2">
+                {canImport && (
                 <Link href="/catalog/inventory-import" className="btn btn-outline inline-flex items-center gap-2">
                   <Upload className="h-4 w-4" /> Import Excel
                 </Link>
+                )}
+                {canCreate && (
                 <button
                   type="button"
                   onClick={() => {
@@ -902,6 +917,7 @@ export default function CatalogItemsPage() {
                 >
                   <Plus className="h-4 w-4" /> Add Item
                 </button>
+                )}
               </div>
             </div>
 
@@ -935,6 +951,7 @@ export default function CatalogItemsPage() {
                         <h4 className="text-sm font-semibold inline-flex items-center gap-2">
                           <ImageIcon size={16} /> Product images
                         </h4>
+                        {canAddMedia && (
                         <label className="btn btn-outline text-xs inline-flex items-center gap-1 cursor-pointer">
                           <Upload size={14} /> Add images
                           <input
@@ -949,6 +966,7 @@ export default function CatalogItemsPage() {
                             }}
                           />
                         </label>
+                        )}
                       </div>
                       {createImages.length === 0 ? (
                         <p className="text-xs text-muted-foreground">Optional — select one or more images; the first becomes the primary image.</p>
@@ -1047,6 +1065,7 @@ export default function CatalogItemsPage() {
                         <h4 className="text-sm font-semibold inline-flex items-center gap-2">
                           <ImageIcon size={16} /> Product images
                         </h4>
+                        {canAddMedia && (
                         <label className="btn btn-outline text-xs inline-flex items-center gap-1 cursor-pointer">
                           {uploadingMedia ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                           Add images
@@ -1062,6 +1081,7 @@ export default function CatalogItemsPage() {
                             }}
                           />
                         </label>
+                        )}
                       </div>
                       {media.length === 0 ? (
                         <p className="text-xs text-muted-foreground">
@@ -1080,6 +1100,7 @@ export default function CatalogItemsPage() {
                                   <Star size={10} /> Primary
                                 </span>
                               )}
+                              {canDeleteMedia && (
                               <button
                                 type="button"
                                 onClick={() => onRemoveImage(m.id)}
@@ -1087,6 +1108,7 @@ export default function CatalogItemsPage() {
                               >
                                 <X size={12} />
                               </button>
+                              )}
                             </div>
                           ))}
                         </div>

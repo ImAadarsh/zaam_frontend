@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Tags } from 'lucide-react';
 import { LocationStatusBadge } from '@/components/inventory/location-status-badge';
@@ -22,12 +23,14 @@ function WarehouseTypeSelect({
   value,
   types,
   organizationId,
+  canAddType,
   onChange,
   onTypeCreated
 }: {
   value: string;
   types: WarehouseType[];
   organizationId?: string;
+  canAddType: boolean;
   onChange: (code: string) => void;
   onTypeCreated: (t: WarehouseType) => void;
 }) {
@@ -88,7 +91,7 @@ function WarehouseTypeSelect({
       {options.map(t => (
         <option key={t.code} value={t.code}>{t.name}{t.isActive ? '' : ' (inactive)'}</option>
       ))}
-      <option value={NEW_TYPE}>+ Add new type…</option>
+      {canAddType && <option value={NEW_TYPE}>+ Add new type…</option>}
     </select>
   );
 }
@@ -107,6 +110,13 @@ export default function WarehousesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/inventory/warehouses');
+  const canUpdate = can('PATCH', '/api/inventory/warehouses/:id');
+  const canDelete = can('DELETE', '/api/inventory/warehouses/:id');
+  const canCreateType = can('POST', '/api/inventory/warehouse-types');
+  const canUpdateType = can('PATCH', '/api/inventory/warehouse-types/:id');
+  const canDeleteType = can('DELETE', '/api/inventory/warehouse-types/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Warehouse[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
@@ -255,6 +265,7 @@ export default function WarehousesPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          {canUpdate && (
           <button onClick={() => {
             setEditing(row.original);
             setForm({
@@ -275,13 +286,16 @@ export default function WarehousesPage() {
           }} className="p-1 hover:bg-muted rounded">
             <Pencil className="h-4 w-4" />
           </button>
+          )}
+          {canDelete && (
           <button onClick={() => setConfirmDel(row.original)} className="p-1 hover:bg-muted rounded text-red-500">
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </div>
       )
     }
-  ], [typeName]);
+  ], [typeName, canUpdate, canDelete]);
 
   if (!hydrated || loading) {
     return (
@@ -338,6 +352,7 @@ export default function WarehousesPage() {
                   <Tags className="h-4 w-4" />
                   Warehouse Types
                 </button>
+                {canCreate && (
                 <button
                   onClick={() => setShowCreate(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
@@ -345,6 +360,7 @@ export default function WarehousesPage() {
                   <Plus className="h-4 w-4" />
                   Add Warehouse
                 </button>
+                )}
               </div>
             </div>
 
@@ -401,6 +417,7 @@ export default function WarehousesPage() {
                           value={form.type}
                           types={types}
                           organizationId={orgId}
+                          canAddType={canCreateType}
                           onChange={code => setForm(prev => ({ ...prev, type: code }))}
                           onTypeCreated={t => setTypes(prev => [...prev, t])}
                         />
@@ -479,6 +496,7 @@ export default function WarehousesPage() {
                           value={form.type}
                           types={types}
                           organizationId={orgId}
+                          canAddType={canCreateType}
                           onChange={code => setForm(prev => ({ ...prev, type: code }))}
                           onTypeCreated={t => setTypes(prev => [...prev, t])}
                         />
@@ -536,6 +554,7 @@ export default function WarehousesPage() {
                           <div className="text-xs text-muted-foreground font-mono">{t.code} · {t.inUse} warehouse{t.inUse === 1 ? '' : 's'}</div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {canUpdateType && (
                           <button
                             onClick={async () => {
                               try {
@@ -549,6 +568,8 @@ export default function WarehousesPage() {
                           >
                             {t.isActive ? 'Deactivate' : 'Activate'}
                           </button>
+                          )}
+                          {canDeleteType && (
                           <button
                             disabled={t.inUse > 0}
                             title={t.inUse > 0 ? 'In use by warehouses' : 'Delete'}
@@ -564,6 +585,7 @@ export default function WarehousesPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
+                          )}
                         </div>
                       </div>
                     ))}

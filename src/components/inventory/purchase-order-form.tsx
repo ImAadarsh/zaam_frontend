@@ -75,12 +75,12 @@ export function PurchaseOrderForm({
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    Promise.all([listSuppliers({ organizationId }), listWarehouses()])
-      .then(([s, w]) => {
-        setSuppliers(s.data || []);
-        setWarehouses(w.data || []);
-      })
-      .catch(() => toast.error('Failed to load suppliers / warehouses'));
+    listSuppliers({ organizationId })
+      .then((s) => setSuppliers(s.data || []))
+      .catch(() => toast.error('Failed to load suppliers'));
+    listWarehouses()
+      .then((w) => setWarehouses(w.data || []))
+      .catch(() => toast.error('Failed to load warehouses'));
   }, [organizationId]);
 
   useEffect(() => {

@@ -9,6 +9,7 @@ import { StatCard } from '@/components/stat-card';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import {
   listEmployees, listLeaveRequests, listPayrollRuns, listTimeEntries,
   getHrReportsSummary, listVisaBoard, listAllComplianceAlerts,
@@ -47,6 +48,9 @@ export default function HRDashboard() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN', 'FINANCE']);
+  const { can } = useApiAccess();
+  const canCreateEmployee = can('POST', '/api/hr/employees');
+  const canPostJob = can('POST', '/api/hr/job-postings');
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<any>(null);
   const [visaRisk, setVisaRisk] = useState<any[]>([]);
@@ -239,15 +243,19 @@ export default function HRDashboard() {
               <p className="text-sm text-muted-foreground mt-0.5">People, leave, payroll &amp; compliance</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link href="/hr/employees" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
-                <Users size={14} /> Create employee
-              </Link>
+              {canCreateEmployee && (
+                <Link href="/hr/employees" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+                  <Users size={14} /> Create employee
+                </Link>
+              )}
               <Link href="/hr/leave" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium">
                 <Calendar size={14} /> Leave
               </Link>
-              <Link href="/hr/recruitment" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium">
-                <Briefcase size={14} /> Post job
-              </Link>
+              {canPostJob && (
+                <Link href="/hr/recruitment" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium">
+                  <Briefcase size={14} /> Post job
+                </Link>
+              )}
             </div>
           </div>
 

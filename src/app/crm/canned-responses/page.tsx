@@ -8,6 +8,7 @@ import { listCannedResponses, createCannedResponse, updateCannedResponse, delete
 import { RichDataTable } from '@/components/rich-data-table';
 import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 import { crmApiError } from '@/lib/crm-utils';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { MessageSquare, Plus, Pencil, Trash2, Send, Save } from 'lucide-react';
 import { ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
@@ -16,6 +17,10 @@ const emptyForm = { title: '', shortcut: '', category: '', content: '', isActive
 
 export default function CannedResponsesPage() {
     const router = useRouter();
+    const { can } = useApiAccess();
+    const canCreate = can('POST', '/api/crm/canned-responses');
+    const canUpdate = can('PATCH', '/api/crm/canned-responses/:id');
+    const canDelete = can('DELETE', '/api/crm/canned-responses/:id');
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
@@ -112,10 +117,12 @@ export default function CannedResponsesPage() {
         {
             accessorKey: 'title',
             header: 'Title',
-            cell: (info) => (
+            cell: (info) => canUpdate ? (
                 <button type="button" onClick={() => openEdit(info.row.original)} className="font-medium text-left hover:text-[#D4A017]">
                     {String(info.getValue() || '—')}
                 </button>
+            ) : (
+                <span className="font-medium">{String(info.getValue() || '—')}</span>
             ),
         },
         {
@@ -146,6 +153,7 @@ export default function CannedResponsesPage() {
             enableSorting: false,
             cell: (info) => (
                 <div className="flex items-center gap-1">
+                    {canUpdate && (
                     <button
                         type="button"
                         title="Edit"
@@ -154,6 +162,8 @@ export default function CannedResponsesPage() {
                     >
                         <Pencil size={16} />
                     </button>
+                    )}
+                    {canDelete && (
                     <button
                         type="button"
                         title="Delete"
@@ -162,10 +172,11 @@ export default function CannedResponsesPage() {
                     >
                         <Trash2 size={16} />
                     </button>
+                    )}
                 </div>
             )
         }
-    ], [items]);
+    ], [items, canUpdate, canDelete]);
 
     return (
         <div className="min-h-screen app-surface">
@@ -173,7 +184,7 @@ export default function CannedResponsesPage() {
             <div className="flex flex-col min-w-0 lg:ml-[280px]">
                 <Header
                     title="Canned Responses"
-                    actions={[{ label: 'Create Template', onClick: openCreate, icon: <Plus size={18} /> }]}
+                    actions={canCreate ? [{ label: 'Create Template', onClick: openCreate, icon: <Plus size={18} /> }] : []}
                 />
 
                 <main className="p-6 md:p-8 space-y-5">
@@ -185,6 +196,7 @@ export default function CannedResponsesPage() {
                             <MessageSquare className="mx-auto mb-3 opacity-40" size={32} />
                             <p className="font-medium text-foreground">No templates yet</p>
                             <p className="text-sm mt-1">Create canned responses agents can insert into ticket replies.</p>
+                            {canCreate && (
                             <button
                                 type="button"
                                 onClick={openCreate}
@@ -192,6 +204,7 @@ export default function CannedResponsesPage() {
                             >
                                 <Plus size={16} /> Create Template
                             </button>
+                            )}
                         </div>
                     ) : (
                         <RichDataTable

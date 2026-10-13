@@ -8,6 +8,7 @@ import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { deletePurchaseOrder, getPurchaseOrder, setPurchaseOrderStatus } from '@/lib/api';
 import { PurchaseOrderForm } from '@/components/inventory/purchase-order-form';
 import { PurchaseOrderStatusBadge, PO_STATUS_LABELS } from '@/components/inventory/purchase-order-status-badge';
@@ -40,6 +41,10 @@ export default function PurchaseOrderDetailPage() {
   const id = params?.id;
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PURCHASING']);
+  const { can } = useApiAccess();
+  const canUpdate = can('PATCH', '/api/inventory/purchase-orders/:id');
+  const canDelete = can('DELETE', '/api/inventory/purchase-orders/:id');
+  const canCreateAsn = can('POST', '/api/inventory/asn');
   const [loading, setLoading] = useState(true);
   const [po, setPo] = useState<any | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -99,7 +104,7 @@ export default function PurchaseOrderDetailPage() {
   if (!hydrated || !hasAccess) return null;
 
   const currency = po?.currency || 'GBP';
-  const transitions: PoStatus[] = po?.allowedTransitions ?? [];
+  const transitions: PoStatus[] = canUpdate ? po?.allowedTransitions ?? [] : [];
   const lines: any[] = po?.lines ?? [];
   const canReceive = po && ['submitted', 'confirmed', 'partial_received'].includes(po.status);
 
@@ -134,7 +139,7 @@ export default function PurchaseOrderDetailPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {po.status === 'draft' && (
+                    {canUpdate && po.status === 'draft' && (
                       <button onClick={() => setEditing(true)} className="btn btn-outline flex items-center gap-2" disabled={!!busy}>
                         <Pencil className="h-4 w-4" /> Edit
                       </button>
@@ -155,7 +160,7 @@ export default function PurchaseOrderDetailPage() {
                         {busy === t ? 'Saving…' : ACTION_LABELS[t]}
                       </button>
                     ))}
-                    {['draft', 'cancelled'].includes(po.status) && (
+                    {canDelete && ['draft', 'cancelled'].includes(po.status) && (
                       <button onClick={onDelete} disabled={!!busy} className="p-2 rounded text-destructive hover:bg-destructive/10" title="Delete purchase order">
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -242,7 +247,7 @@ export default function PurchaseOrderDetailPage() {
                   <div className="rounded-xl border border-border bg-card">
                     <div className="flex items-center justify-between border-b border-border px-4 py-3">
                       <span className="flex items-center gap-2 font-semibold"><Truck className="h-4 w-4" /> ASNs (expected deliveries)</span>
-                      {canReceive && (
+                      {canReceive && canCreateAsn && (
                         <Link href={`/inventory/asn?purchaseOrderId=${po.id}`} className="text-sm text-primary hover:underline">Create ASN</Link>
                       )}
                     </div>
@@ -299,7 +304,7 @@ export default function PurchaseOrderDetailPage() {
         </main>
       </div>
 
-      {editing && po && (
+      {editing && canUpdate && po && (
         <PurchaseOrderForm
           organizationId={po.organization?.id ?? session?.user?.organizationId ?? ''}
           purchaseOrder={po}

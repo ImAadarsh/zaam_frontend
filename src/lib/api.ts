@@ -220,6 +220,16 @@ async function getPaginatedList<T = any>(
 }
 
 // USERS
+/** Active colleagues (id, email, names) for pickers; open to every signed-in staff role. */
+export async function listUserOptions() {
+  const { data } = await axios.get(`${API_BASE}/api/iam/user-options`, { headers: authHeaders() });
+  return data as { data: Array<{ id: string; email: string; firstName?: string | null; lastName?: string | null }> };
+}
+/** API routes ("METHOD /api/path/:param") the signed-in user's roles are refused. */
+export async function getMyApiAccess() {
+  const { data } = await axios.get(`${API_BASE}/api/iam/me/api-access`, { headers: authHeaders() });
+  return data as { data: { roles: string[]; denied: string[] } };
+}
 export async function listUsers() {
   const { data } = await axios.get(`${API_BASE}/api/iam/users`, { headers: authHeaders() });
   return data as { data: any[] };

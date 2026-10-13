@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { FloatingDropdown } from '@/components/inventory/floating-dropdown';
 import { Pencil, Trash2, Plus, X, Receipt, Search } from 'lucide-react';
@@ -36,6 +37,8 @@ export default function GRNPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']);
+  const { can } = useApiAccess();
+  const canDelete = can('DELETE', '/api/inventory/grn/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<GRN[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -244,6 +247,7 @@ export default function GRNPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          {canDelete && (
           <button 
             onClick={() => setConfirmDel(row.original)} 
             className="p-1 hover:bg-muted rounded text-red-500"
@@ -251,10 +255,11 @@ export default function GRNPage() {
           >
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </div>
       )
     }
-  ], []);
+  ], [canDelete]);
 
   if (!hydrated || loading) {
     return (

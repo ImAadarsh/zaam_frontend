@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Trash2, Plus, X, ArrowRightLeft, Search, Receipt, Loader2, AlertTriangle } from 'lucide-react';
 import { activeWarehouses } from '@/components/inventory/location-status-badge';
@@ -54,6 +55,8 @@ export default function StockTransfersPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']);
+  const { can } = useApiAccess();
+  const canDelete = can('DELETE', '/api/inventory/stock-transfers/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<StockTransfer[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -292,6 +295,7 @@ export default function StockTransfersPage() {
           >
             <Receipt className="h-4 w-4" />
           </button>
+          {canDelete && (
           <button
             onClick={() => setConfirmDel(row.original)}
             className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-red-500"
@@ -299,10 +303,11 @@ export default function StockTransfersPage() {
           >
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </div>
       )
     }
-  ], [router]);
+  ], [router, canDelete]);
 
   if (!hydrated || !hasAccess) return null;
 

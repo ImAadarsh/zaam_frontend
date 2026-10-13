@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, PackageSearch } from 'lucide-react';
 import { activeWarehouses } from '@/components/inventory/location-status-badge';
@@ -30,6 +31,10 @@ export default function ASNPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PURCHASING']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/inventory/asn');
+  const canUpdate = can('PATCH', '/api/inventory/asn/:id');
+  const canDelete = can('DELETE', '/api/inventory/asn/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ASN[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -68,9 +73,9 @@ export default function ASNPage() {
       setLoading(true);
       const [asnRes, suppliersRes, warehousesRes, poRes] = await Promise.all([
         listASN(),
-        listSuppliers(),
-        listWarehouses(),
-        listPurchaseOrders()
+        listSuppliers().catch(() => ({ data: [] })),
+        listWarehouses().catch(() => ({ data: [] })),
+        listPurchaseOrders().catch(() => ({ data: [] }))
       ]);
       setItems(asnRes.data || []);
       setSuppliers(suppliersRes.data || []);
@@ -241,6 +246,7 @@ export default function ASNPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          {canUpdate && (
           <button
             onClick={() => {
               const item = row.original;
@@ -265,6 +271,8 @@ export default function ASNPage() {
           >
             <Pencil className="h-4 w-4" />
           </button>
+          )}
+          {canDelete && (
           <button 
             onClick={() => setConfirmDel(row.original)} 
             className="p-1 hover:bg-muted rounded text-red-500"
@@ -272,10 +280,11 @@ export default function ASNPage() {
           >
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </div>
       )
     }
-  ], []);
+  ], [canUpdate, canDelete]);
 
   if (!hydrated || loading) {
     return (
@@ -324,6 +333,7 @@ export default function ASNPage() {
                 <h1 className="text-3xl font-bold">Advanced Shipping Notices</h1>
                 <p className="text-muted-foreground mt-1">Track inbound shipments from suppliers</p>
               </div>
+              {canCreate && (
               <button
                 onClick={() => {
                   setShowCreate(true);
@@ -334,6 +344,7 @@ export default function ASNPage() {
                 <Plus className="h-4 w-4" />
                 Create ASN
               </button>
+              )}
             </div>
 
             <div className="rounded-2xl border border-border bg-card">
@@ -341,7 +352,7 @@ export default function ASNPage() {
             </div>
 
             {/* Create Modal */}
-            {showCreate && (
+            {showCreate && canCreate && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="w-full max-w-2xl rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                   <div className="flex items-center justify-between mb-4">

@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Tag, Loader2 } from 'lucide-react';
 import { MediaThumb } from '@/components/catalog/media-preview';
@@ -240,6 +241,12 @@ export default function VariantsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'SALES_REP']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/catalog/variants');
+  const canUpdate = can('PATCH', '/api/catalog/variants/:id');
+  const canDelete = can('DELETE', '/api/catalog/variants/:id');
+  const canAddMedia = can('POST', '/api/catalog/media');
+  const canDeleteMedia = can('DELETE', '/api/catalog/media/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Variant[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
@@ -562,24 +569,28 @@ export default function VariantsPage() {
         const item = row.original;
         return (
           <div className="flex items-center gap-2">
+            {canUpdate && (
             <button
               onClick={() => openEdit(item)}
               className="p-1 hover:bg-gray-100 rounded"
             >
               <Pencil className="h-4 w-4" />
             </button>
+            )}
+            {canDelete && (
             <button
               onClick={() => setConfirmDel(item)}
               className="p-1 hover:bg-gray-100 rounded text-red-600"
             >
               <Trash2 className="h-4 w-4" />
             </button>
+            )}
           </div>
         );
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], []);
+  ], [canUpdate, canDelete]);
 
   const physicalFields = (
     f: typeof editForm | typeof form,
@@ -676,6 +687,7 @@ export default function VariantsPage() {
                 </h1>
                 <p className="text-muted-foreground mt-1">Manage product variants</p>
               </div>
+              {canCreate && (
               <button
                 onClick={openCreate}
                 className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
@@ -683,6 +695,7 @@ export default function VariantsPage() {
                 <Plus className="h-4 w-4" />
                 Add Variant
               </button>
+              )}
             </div>
 
             <RichDataTable columns={columns} data={items} />
@@ -790,7 +803,7 @@ export default function VariantsPage() {
                       </div>
                     </div>
                     {physicalFields(form, (patch) => setForm(prev => ({ ...prev, ...patch })))}
-                    <ImagePicker files={imageFiles} onChange={setImageFiles} />
+                    {canAddMedia && <ImagePicker files={imageFiles} onChange={setImageFiles} />}
                     <div className="flex justify-end gap-3 pt-4 border-t border-border">
                       <button
                         type="button"
@@ -898,12 +911,14 @@ export default function VariantsPage() {
                         <MediaThumb url={editing.imageUrl} className="w-24 h-24" />
                       </div>
                     )}
+                    {canAddMedia && (
                     <ImagePicker
                       files={editImageFiles}
                       onChange={setEditImageFiles}
                       existing={editGallery}
-                      onRemoveExisting={onRemoveGalleryImage}
+                      onRemoveExisting={canDeleteMedia ? onRemoveGalleryImage : undefined}
                     />
+                    )}
                     <div className="flex justify-end gap-3 pt-4 border-t border-border">
                       <button
                         type="button"

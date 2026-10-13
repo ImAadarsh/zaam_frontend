@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Play } from 'lucide-react';
 
@@ -34,6 +35,11 @@ export default function ScheduledReportsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'FINANCE']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/analytics/scheduled-reports');
+  const canUpdate = can('PATCH', '/api/analytics/scheduled-reports/:id');
+  const canDelete = can('DELETE', '/api/analytics/scheduled-reports/:id');
+  const canRun = can('POST', '/api/analytics/scheduled-reports/:id/run');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
@@ -177,6 +183,7 @@ export default function ScheduledReportsPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          {canUpdate && (
           <button
             onClick={() => {
               setEditing(row.original);
@@ -197,6 +204,8 @@ export default function ScheduledReportsPage() {
           >
             <Pencil className="h-4 w-4" />
           </button>
+          )}
+          {canRun && (
           <button
             onClick={() => handleRunNow(row.original)}
             disabled={runningId === String(row.original.id)}
@@ -205,6 +214,8 @@ export default function ScheduledReportsPage() {
           >
             <Play className="h-4 w-4" />
           </button>
+          )}
+          {canDelete && (
           <button
             onClick={() => setConfirmDel(row.original)}
             className="p-1 hover:bg-destructive/10 rounded text-destructive transition-colors"
@@ -212,10 +223,11 @@ export default function ScheduledReportsPage() {
           >
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </div>
       )
     }
-  ], [runningId]);
+  ], [runningId, canUpdate, canRun, canDelete]);
 
   if (!hydrated || loading) {
     return (
@@ -258,6 +270,7 @@ export default function ScheduledReportsPage() {
               <h1 className="text-2xl font-bold">Scheduled Reports</h1>
               <p className="text-muted-foreground text-sm">Automate recurring report generation and distribution</p>
             </div>
+            {canCreate && (
             <button
               onClick={() => {
                 setEditing(null);
@@ -268,6 +281,7 @@ export default function ScheduledReportsPage() {
             >
               <Plus className="h-4 w-4" /> New Schedule
             </button>
+            )}
           </div>
 
           <div className="bg-card rounded-lg border shadow-sm">

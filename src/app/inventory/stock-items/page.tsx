@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Package2, Plus, X, Pencil, Trash2, Search } from 'lucide-react';
 import { activeWarehouses } from '@/components/inventory/location-status-badge';
@@ -72,6 +73,10 @@ export default function StockItemsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/inventory/stock-items');
+  const canUpdate = can('PATCH', '/api/inventory/stock-items/:id');
+  const canDelete = can('DELETE', '/api/inventory/stock-items/:id');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<StockItem[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -354,6 +359,7 @@ export default function StockItemsPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          {canUpdate && (
           <button
             onClick={() => {
               const item = row.original;
@@ -388,6 +394,8 @@ export default function StockItemsPage() {
           >
             <Pencil className="h-4 w-4" />
           </button>
+          )}
+          {canDelete && (
           <button 
             onClick={() => setConfirmDel(row.original)} 
             className="p-1 hover:bg-muted rounded text-red-500"
@@ -395,10 +403,11 @@ export default function StockItemsPage() {
           >
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </div>
       )
     }
-  ], []);
+  ], [canUpdate, canDelete]);
 
   if (!hydrated || loading) {
     return (
@@ -447,6 +456,7 @@ export default function StockItemsPage() {
                 <h1 className="text-3xl font-bold">Stock Items</h1>
                 <p className="text-muted-foreground mt-1">View and manage inventory stock levels</p>
               </div>
+              {canCreate && (
               <button
                 onClick={() => {
                   setShowCreate(true);
@@ -457,6 +467,7 @@ export default function StockItemsPage() {
                 <Plus className="h-4 w-4" />
                 Add Stock Item
               </button>
+              )}
             </div>
 
             {loading ? (

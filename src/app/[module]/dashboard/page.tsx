@@ -2,6 +2,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { modules } from '@/data/modules';
 import { useEffect, useMemo, useState } from 'react';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { DateRangeFilter, rangeForPreset, inRange, bucketsForRange, bucketKey, type DateRange } from '@/components/date-range-filter';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
@@ -17,6 +18,8 @@ export default function ModuleDashboardPage() {
   const router = useRouter();
   const params = useParams<{ module: string }>();
   const mod = modules.find((m) => m.slug === params.module);
+  const { can, ready: accessReady } = useApiAccess();
+  const canListApiKeys = can('GET', '/api/iam/api-keys');
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalAdmins: 0,
@@ -82,15 +85,17 @@ export default function ModuleDashboardPage() {
   }, [router]);
 
   useEffect(() => {
+    if (!accessReady) return;
+    const none = Promise.resolve({ data: [] as any[] });
     if (params.module === 'catalog') {
       (async () => {
         try {
           const s = getSession();
           const [itemsRes, variantsRes, priceListsRes, taxCodesRes] = await Promise.all([
-            listCatalogItems({ organizationId: s?.user?.organizationId }).catch(() => ({ data: [] })),
-            listVariants().catch(() => ({ data: [] })),
-            listPriceLists({ organizationId: s?.user?.organizationId }).catch(() => ({ data: [] })),
-            listTaxCodes({ organizationId: s?.user?.organizationId }).catch(() => ({ data: [] }))
+            can('GET', '/api/catalog/items') ? listCatalogItems({ organizationId: s?.user?.organizationId }).catch(() => ({ data: [] })) : none,
+            can('GET', '/api/catalog/variants') ? listVariants().catch(() => ({ data: [] })) : none,
+            can('GET', '/api/catalog/price-lists') ? listPriceLists({ organizationId: s?.user?.organizationId }).catch(() => ({ data: [] })) : none,
+            can('GET', '/api/catalog/tax-codes') ? listTaxCodes({ organizationId: s?.user?.organizationId }).catch(() => ({ data: [] })) : none
           ]);
 
           const items = itemsRes.data || [];
@@ -142,7 +147,7 @@ export default function ModuleDashboardPage() {
             listOrganizations().catch(() => ({ data: [] })),
             listBusinessUnits().catch(() => ({ data: [] })),
             listLocations().catch(() => ({ data: [] })),
-            listApiKeys().catch(() => ({ data: [] }))
+            can('GET', '/api/iam/api-keys') ? listApiKeys().catch(() => ({ data: [] })) : none
           ]);
 
           const users = usersRes.data || [];
@@ -372,7 +377,8 @@ export default function ModuleDashboardPage() {
     } else {
       setLoading(false);
     }
-  }, [params.module]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.module, accessReady]);
 
   if (!mod) {
     if (typeof window !== 'undefined') router.replace('/modules');
@@ -407,12 +413,14 @@ export default function ModuleDashboardPage() {
                   hint="Defined roles"
                   icon={<Shield size={20} />}
                 />
-                <StatCard
-                  title="API Keys"
-                  value={loading ? '...' : stats.apiKeys.toString()}
-                  hint="Active keys"
-                  icon={<Key size={20} />}
-                />
+                {canListApiKeys && (
+                  <StatCard
+                    title="API Keys"
+                    value={loading ? '...' : stats.apiKeys.toString()}
+                    hint="Active keys"
+                    icon={<Key size={20} />}
+                  />
+                )}
                 <StatCard
                   title="Audit Logs"
                   value={loading ? '...' : stats.auditLogs.toString()}
@@ -454,11 +462,13 @@ export default function ModuleDashboardPage() {
                       <div className="font-medium text-sm">Manage Roles</div>
                       <div className="text-xs text-muted-foreground mt-1">Configure permissions</div>
                     </a>
-                    <a href="/iam/api-keys" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
-                      <Key size={20} className="text-primary mb-2" />
-                      <div className="font-medium text-sm">API Keys</div>
-                      <div className="text-xs text-muted-foreground mt-1">Manage access keys</div>
-                    </a>
+                    {canListApiKeys && (
+                      <a href="/iam/api-keys" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
+                        <Key size={20} className="text-primary mb-2" />
+                        <div className="font-medium text-sm">API Keys</div>
+                        <div className="text-xs text-muted-foreground mt-1">Manage access keys</div>
+                      </a>
+                    )}
                     <a href="/iam/audit-logs" className="p-4 rounded-xl border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group">
                       <FileText size={20} className="text-primary mb-2" />
                       <div className="font-medium text-sm">Audit Logs</div>

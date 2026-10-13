@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { FileText, Plus, Info, Eye } from 'lucide-react';
 import { PurchaseOrderForm } from '@/components/inventory/purchase-order-form';
@@ -30,6 +31,8 @@ export default function PurchaseOrdersPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'PURCHASING']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/inventory/purchase-orders');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<PurchaseOrder[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -176,6 +179,7 @@ export default function PurchaseOrdersPage() {
                 <h1 className="text-3xl font-bold">Purchase Orders</h1>
                 <p className="text-muted-foreground mt-1">View and manage purchase orders</p>
               </div>
+              {canCreate && (
               <button
                 onClick={() => setShowCreate(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded hover:bg-[#B89015]"
@@ -183,6 +187,7 @@ export default function PurchaseOrdersPage() {
                 <Plus className="h-4 w-4" />
                 New Purchase Order
               </button>
+              )}
             </div>
 
             <div className="mb-6 flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
@@ -209,7 +214,7 @@ export default function PurchaseOrdersPage() {
           </div>
         </main>
       </div>
-      {showCreate && orgId && (
+      {showCreate && canCreate && orgId && (
         <PurchaseOrderForm
           organizationId={orgId}
           onClose={() => setShowCreate(false)}

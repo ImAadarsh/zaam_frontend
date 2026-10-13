@@ -362,7 +362,9 @@ export function Sidebar() {
               {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'CUSTOMER_SERVICE', 'SALES_REP']) && (
                 <>
                   <Item href="/crm/tickets" icon={<MessageSquare size={18} />} label="Tickets" active={pathname?.startsWith('/crm/tickets')} />
-                  <Item href="/crm/canned-responses" icon={<FileText size={18} />} label="Canned Responses" active={pathname?.startsWith('/crm/canned-responses')} />
+                  {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'CUSTOMER_SERVICE']) && (
+                    <Item href="/crm/canned-responses" icon={<FileText size={18} />} label="Canned Responses" active={pathname?.startsWith('/crm/canned-responses')} />
+                  )}
                 </>
               )}
               {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
@@ -733,7 +735,9 @@ export function Sidebar() {
                   {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'CUSTOMER_SERVICE', 'SALES_REP']) && (
                     <>
                       <Item href="/crm/tickets" icon={<MessageSquare size={18} />} label="Tickets" active={pathname?.startsWith('/crm/tickets')} />
-                      <Item href="/crm/canned-responses" icon={<FileText size={18} />} label="Canned Responses" active={pathname?.startsWith('/crm/canned-responses')} />
+                      {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'CUSTOMER_SERVICE']) && (
+                        <Item href="/crm/canned-responses" icon={<FileText size={18} />} label="Canned Responses" active={pathname?.startsWith('/crm/canned-responses')} />
+                      )}
                     </>
                   )}
                   {hasRole(['ADMIN', 'SUPER_ADMIN']) && (

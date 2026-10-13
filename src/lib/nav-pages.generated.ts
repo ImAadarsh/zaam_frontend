@@ -1176,8 +1176,7 @@ export const NAV_MODULES: NavModule[] = [
           "ADMIN",
           "SUPER_ADMIN",
           "CS_AGENT",
-          "CUSTOMER_SERVICE",
-          "SALES_REP"
+          "CUSTOMER_SERVICE"
         ]
       },
       {

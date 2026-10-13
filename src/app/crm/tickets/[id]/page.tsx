@@ -20,10 +20,16 @@ import {
     History
 } from 'lucide-react';
 import { getSession } from '@/lib/auth';
+import { useApiAccess } from '@/hooks/use-api-access';
 
 export default function TicketDetailPage() {
     const { id } = useParams();
     const router = useRouter();
+    const { can } = useApiAccess();
+    const canReply = can('POST', '/api/crm/tickets/:id/messages');
+    const canAssign = can('POST', '/api/crm/tickets/:id/assign');
+    const canUpdate = can('PATCH', '/api/crm/tickets/:id');
+    const canTrackCanned = can('POST', '/api/crm/canned-responses/:id/usage');
     const [ticket, setTicket] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState('');
@@ -42,10 +48,10 @@ export default function TicketDetailPage() {
             try {
                 const [ticketRes, responsesRes] = await Promise.all([
                     getTicket(id as string),
-                    listCannedResponses()
+                    listCannedResponses().catch(() => ({ data: [] }))
                 ]);
                 setTicket(ticketRes.data);
-                setCannedResponses(responsesRes.data);
+                setCannedResponses(responsesRes.data || []);
             } catch (err) {
                 console.error('Failed to load ticket details', err);
                 toast.error('Failed to load ticket details');
@@ -61,7 +67,7 @@ export default function TicketDetailPage() {
 
     function applyCanned(res: any, base: string) {
         setMessage(base.trim() ? `${base.trimEnd()}\n${res.content}` : res.content);
-        void incrementCannedResponseUsage(res.id).catch(() => undefined);
+        if (canTrackCanned) void incrementCannedResponseUsage(res.id).catch(() => undefined);
     }
 
     function handleMessageChange(value: string) {
@@ -138,9 +144,9 @@ export default function TicketDetailPage() {
             <div className="flex flex-col min-w-0 lg:ml-[280px]">
                 <Header
                     title={`Ticket #${ticket.ticketNumber} - ${ticket.subject}`}
-                    actions={[
+                    actions={canAssign ? [
                         { label: 'Assign', onClick: () => { }, icon: <UserPlus size={18} /> }
-                    ]}
+                    ] : []}
                 />
 
                 <main className="p-4 md:p-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -206,6 +212,7 @@ export default function TicketDetailPage() {
                             </div>
 
                             {/* Reply Form */}
+                            {canReply && (
                             <div className="p-4 bg-muted/30 border-t border-border">
                                 <form onSubmit={handleSendMessage} className="space-y-4">
                                     <div className="relative group">
@@ -257,6 +264,7 @@ export default function TicketDetailPage() {
                                     </div>
                                 </form>
                             </div>
+                            )}
                         </div>
                     </div>
 
@@ -330,7 +338,7 @@ export default function TicketDetailPage() {
                         <div className="glass-card p-6 space-y-4">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-sm font-bold text-primary uppercase tracking-widest">Tags</h3>
-                                <button className="text-[10px] font-bold uppercase text-muted-foreground hover:text-primary transition">Manage</button>
+                                {canUpdate && <button className="text-[10px] font-bold uppercase text-muted-foreground hover:text-primary transition">Manage</button>}
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {ticket.tags ? ticket.tags.split(',').map((tag: string) => (

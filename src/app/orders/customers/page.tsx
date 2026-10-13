@@ -9,6 +9,7 @@ import { RichDataTable } from '@/components/rich-data-table';
 import { FilterBar, type FilterField } from '@/components/filter-bar';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, User, RefreshCw } from 'lucide-react';
 
@@ -30,6 +31,10 @@ export default function CustomersPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE']);
+  const { can } = useApiAccess();
+  const canCreate = can('POST', '/api/orders/customers');
+  const canUpdate = can('PATCH', '/api/orders/customers/:id');
+  const canDelete = can('DELETE', '/api/orders/customers/:id');
   const [loading, setLoading] = useState(true);
   // Full-page loader only until the first load; later reloads keep the table on screen.
   const [loadedOnce, setLoadedOnce] = useState(false);
@@ -219,6 +224,7 @@ export default function CustomersPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          {canUpdate && (
           <button
             onClick={() => {
               setEditing(row.original);
@@ -237,13 +243,16 @@ export default function CustomersPage() {
           >
             <Pencil className="h-4 w-4" />
           </button>
+          )}
+          {canDelete && (
           <button onClick={() => setConfirmDel(row.original)} className="p-1 hover:bg-muted rounded text-red-500">
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </div>
       )
     }
-  ], []);
+  ], [canUpdate, canDelete]);
 
   if (!hydrated || (loading && !loadedOnce)) {
     return (
@@ -315,7 +324,7 @@ export default function CustomersPage() {
                     <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                     Refresh
                   </button>
-                  {hasAccess && (
+                  {canCreate && (
                     <button
                       onClick={() => {
                         setEditing(null);

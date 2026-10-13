@@ -8,7 +8,8 @@ import { StatCard } from '@/components/stat-card';
 import { DateRangeFilter, rangeForPreset, inRange, bucketsForRange, bucketKey, type DateRange } from '@/components/date-range-filter';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
-import { getB2bDashboard, getMarketingDashboard, listB2bOrders } from '@/lib/api';
+import { getB2bDashboard, listB2bOrders } from '@/lib/api';
+import { allowedPagesFromSession, canAccessPath } from '@/lib/page-access';
 import { Package2, Store, ShoppingCart, DollarSign, Settings, Users, Share2 } from 'lucide-react';
 import {
   ComposedChart, Bar, Line, BarChart, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -36,6 +37,10 @@ export default function B2bDashboard() {
   const [publishMode, setPublishMode] = useState('all_active');
   const [orders, setOrders] = useState<any[]>([]);
   const [range, setRange] = useState<DateRange>(() => rangeForPreset('30d'));
+  const canOpenAffiliates = useMemo(
+    () => canAccessPath('/marketing/affiliates', allowedPagesFromSession(session)),
+    [session]
+  );
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -46,21 +51,20 @@ export default function B2bDashboard() {
     (async () => {
       try {
         const orgId = session.user.organizationId;
-        const [res, mkt, ord] = await Promise.all([
+        const [res, ord] = await Promise.all([
           getB2bDashboard(orgId),
-          getMarketingDashboard().catch(() => null),
           listB2bOrders({ organizationId: orgId, limit: 200 }).catch(() => ({ data: [] as any[] }))
         ]);
-        if (res.data?.stats) setStats(res.data.stats);
-        setPublishMode(res.data?.settings?.publishMode || 'all_active');
-        setOrders(ord.data || []);
-        const totals = mkt?.data?.totals;
-        if (totals) {
+        const dash = res.data?.stats;
+        if (dash) {
+          setStats(dash);
           setAffiliateStats({
-            b2bConversions: Number(totals.b2bConversions || 0),
-            b2bRevenue: Number(totals.b2bRevenue || 0)
+            b2bConversions: Number(dash.b2bConversions || 0),
+            b2bRevenue: Number(dash.b2bRevenue || 0)
           });
         }
+        setPublishMode(res.data?.settings?.publishMode || 'all_active');
+        setOrders(ord.data || []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -136,14 +140,17 @@ export default function B2bDashboard() {
             <StatCard title="On B2B portal" value={String(stats.publishedProducts)} hint="Visible to retailers" icon={<Store size={18} />} />
             <StatCard title="Retailers" value={String(stats.retailers)} hint="Portal logins" icon={<Users size={18} />} />
             <StatCard title="Open orders" value={String(stats.openOrders)} hint={`GMV ${gbp(Number(stats.gmv))}`} icon={<ShoppingCart size={18} />} />
-            <Link href="/marketing/affiliates?channel=b2b">
-              <StatCard
-                title="B2B affiliate GMV"
-                value={gbp(Number(affiliateStats.b2bRevenue))}
-                hint={`${affiliateStats.b2bConversions} attributed conversion${affiliateStats.b2bConversions === 1 ? '' : 's'}`}
-                icon={<Share2 size={18} />}
-              />
-            </Link>
+            {(() => {
+              const card = (
+                <StatCard
+                  title="B2B affiliate GMV"
+                  value={gbp(Number(affiliateStats.b2bRevenue))}
+                  hint={`${affiliateStats.b2bConversions} attributed conversion${affiliateStats.b2bConversions === 1 ? '' : 's'}`}
+                  icon={<Share2 size={18} />}
+                />
+              );
+              return canOpenAffiliates ? <Link href="/marketing/affiliates?channel=b2b">{card}</Link> : card;
+            })()}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -239,11 +246,13 @@ export default function B2bDashboard() {
               <div className="font-semibold">Pricing</div>
               <p className="text-sm text-muted-foreground">Assign the wholesale price list used at checkout.</p>
             </Link>
-            <Link href="/marketing/affiliates?channel=b2b" className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 transition-colors">
-              <Share2 className="mb-3" />
-              <div className="font-semibold">Affiliates & Referrals</div>
-              <p className="text-sm text-muted-foreground">B2B portal clicks, conversions and partner performance in Marketing.</p>
-            </Link>
+            {canOpenAffiliates && (
+              <Link href="/marketing/affiliates?channel=b2b" className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 transition-colors">
+                <Share2 className="mb-3" />
+                <div className="font-semibold">Affiliates & Referrals</div>
+                <p className="text-sm text-muted-foreground">B2B portal clicks, conversions and partner performance in Marketing.</p>
+              </Link>
+            )}
           </div>
         </main>
       </div>
