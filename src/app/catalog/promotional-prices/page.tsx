@@ -41,6 +41,14 @@ function toLocalInput(value?: string | null) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function promoFormError(f: { discountType: string; discountValue: string; validFrom: string; validUntil: string }): string | null {
+  const value = parseFloat(f.discountValue);
+  if (!Number.isFinite(value) || value < 0) return 'Discount value cannot be negative';
+  if (f.discountType === 'percentage' && value > 100) return 'Percentage discount must be between 0 and 100';
+  if (new Date(f.validUntil).getTime() <= new Date(f.validFrom).getTime()) return 'Valid Until must be after Valid From';
+  return null;
+}
+
 export default function PromotionalPricesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
@@ -111,6 +119,11 @@ export default function PromotionalPricesPage() {
       toast.error('Please fill in required fields');
       return;
     }
+    const formError = promoFormError(form);
+    if (formError) {
+      toast.error(formError);
+      return;
+    }
     try {
       const res = await createPromotionalPrice({
         variantId: form.variantId,
@@ -144,6 +157,11 @@ export default function PromotionalPricesPage() {
   async function onUpdate(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
+    const formError = promoFormError(editForm);
+    if (formError) {
+      toast.error(formError);
+      return;
+    }
     try {
       const res = await updatePromotionalPrice(editing.id, {
         priceListId: editForm.priceListId || null,
@@ -392,6 +410,7 @@ export default function PromotionalPricesPage() {
                           type="number"
                           step="0.01"
                           min="0"
+                          max={form.discountType === 'percentage' ? 100 : undefined}
                           value={form.discountValue}
                           onChange={e => setForm(prev => ({ ...prev, discountValue: e.target.value }))}
                           className="input"
@@ -412,6 +431,7 @@ export default function PromotionalPricesPage() {
                         <label className="block text-sm font-medium mb-1.5">Valid Until *</label>
                         <input
                           type="datetime-local"
+                          min={form.validFrom || undefined}
                           value={form.validUntil}
                           onChange={e => setForm(prev => ({ ...prev, validUntil: e.target.value }))}
                           className="input"
@@ -504,6 +524,7 @@ export default function PromotionalPricesPage() {
                           type="number"
                           step="0.01"
                           min="0"
+                          max={editForm.discountType === 'percentage' ? 100 : undefined}
                           value={editForm.discountValue}
                           onChange={e => setEditForm(prev => ({ ...prev, discountValue: e.target.value }))}
                           className="input"
@@ -524,6 +545,7 @@ export default function PromotionalPricesPage() {
                         <label className="block text-sm font-medium mb-1.5">Valid Until *</label>
                         <input
                           type="datetime-local"
+                          min={editForm.validFrom || undefined}
                           value={editForm.validUntil}
                           onChange={e => setEditForm(prev => ({ ...prev, validUntil: e.target.value }))}
                           className="input"
