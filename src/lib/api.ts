@@ -1302,7 +1302,7 @@ export async function executeProductImportApi(payload: {
     payload,
     { headers: authHeaders(), timeout: 600000 }
   );
-  return data as { data: { jobId: string; status: string; summary: Record<string, unknown> } };
+  return data as { data: { jobId: string; status: string; summary: Record<string, unknown>; warning?: string | null } };
 }
 
 // CHANNEL CONNECTIONS (saved WooCommerce / Shopify stores)
@@ -1443,7 +1443,7 @@ export async function importWordPressProducts(payload: {
     body,
     { headers: authHeaders(), timeout: 600000 }
   );
-  return data as { data: { jobId: string; status: string; summary: Record<string, unknown> } };
+  return data as { data: { jobId: string; status: string; summary: Record<string, unknown>; warning?: string | null } };
 }
 
 export async function exportToWordPress(payload: {
@@ -1858,7 +1858,7 @@ export async function importGoodTillProducts(payload: {
     body,
     { headers: authHeaders(), timeout: 600000 }
   );
-  return data as { data: { jobId: string; status: string; summary: Record<string, unknown> } };
+  return data as { data: { jobId: string; status: string; summary: Record<string, unknown>; warning?: string | null } };
 }
 
 export async function exportToGoodTill(payload: {
@@ -1978,7 +1978,7 @@ export async function executeProductImport(file: File, sourceType: string, optio
     headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
     timeout: 600000
   });
-  return data as { data: { jobId: string; status: string; summary: Record<string, unknown> } };
+  return data as { data: { jobId: string; status: string; summary: Record<string, unknown>; warning?: string | null } };
 }
 
 export async function listProductImportJobs(params?: { organizationId?: string; page?: number; limit?: number }) {
