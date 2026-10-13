@@ -11,6 +11,7 @@ import { useRoleCheck } from '@/hooks/use-role-check';
 import {
   listAccVatReturns,
   createAccVatReturn,
+  deleteAccVatReturn,
   listVatCodes,
   exportVatMtdBoxes,
   submitVatMtdPlaceholder,
@@ -170,6 +171,20 @@ export default function AccountingVatPage() {
     }
   }, []);
 
+  const onDelete = useCallback(async (item: any) => {
+    if (!confirm(`Delete draft VAT return ${item.returnNumber || item.id}? This cannot be undone.`)) return;
+    setBusyId(String(item.id));
+    try {
+      await deleteAccVatReturn(String(item.id));
+      setRows((prev) => prev.filter((r) => String(r.id) !== String(item.id)));
+      toast.success('Draft VAT return deleted');
+    } catch (err) {
+      toast.error(accApiError(err, 'Failed to delete VAT return'));
+    } finally {
+      setBusyId(null);
+    }
+  }, []);
+
   const onSubmitMtd = useCallback(async (id: string) => {
     setBusyId(String(id));
     try {
@@ -226,11 +241,16 @@ export default function AccountingVatPage() {
             <button type="button" disabled={busyId !== null} className="text-xs text-muted-foreground hover:underline disabled:opacity-50" onClick={() => onSubmitMtd(row.original.id)}>
               Submit to HMRC…
             </button>
+            {(row.original.status || 'draft') === 'draft' ? (
+              <button type="button" disabled={busyId !== null} className="text-xs text-destructive hover:underline disabled:opacity-50" onClick={() => onDelete(row.original)}>
+                Delete
+              </button>
+            ) : null}
           </div>
         ),
       },
     ],
-    [busyId, onView, onExport, onSubmitMtd]
+    [busyId, onView, onExport, onSubmitMtd, onDelete]
   );
 
   return (

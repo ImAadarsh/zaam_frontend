@@ -289,6 +289,11 @@ export async function listAccVatReturns(organizationId?: string, params?: Query)
   return getFin('/vat-returns', { organizationId, ...params });
 }
 
+export async function deleteAccVatReturn(id: string) {
+  const { data } = await axios.delete(`${API_BASE}${BASE}/vat-returns/${id}`, { headers: authHeaders() });
+  return data;
+}
+
 export async function createAccVatReturn(payload: any) {
   try {
     return await postFin('/reports/vat-draft', payload);
