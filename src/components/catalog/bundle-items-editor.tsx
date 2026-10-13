@@ -30,6 +30,56 @@ function variantLabel(v: VariantOption | BundleLine['variant']) {
   return `${product ?? v.name ?? v.variantSku}${variantName}`;
 }
 
+function QuantityCell({
+  line,
+  onSave
+}: {
+  line: BundleLine;
+  onSave: (line: BundleLine, value: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(String(line.quantity));
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setDraft(String(line.quantity)), [line.quantity]);
+  const dirty = draft !== String(line.quantity);
+  async function save() {
+    setSaving(true);
+    try {
+      await onSave(line, draft);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        min={1}
+        step={1}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            void save();
+          }
+        }}
+        className="input w-20"
+        aria-label={`Quantity of ${variantLabel(line.variant)}`}
+      />
+      {dirty && (
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="text-xs font-medium text-[#D4A017] hover:underline disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function BundleItemsEditor({
   bundle,
   canEdit,
@@ -123,10 +173,15 @@ export function BundleItemsEditor({
 
   async function changeQuantity(line: BundleLine, value: string) {
     const qty = Math.floor(Number(value));
-    if (!Number.isFinite(qty) || qty < 1 || qty === Number(line.quantity)) return;
+    if (!Number.isFinite(qty) || qty < 1) {
+      toast.error('Quantity must be a whole number of at least 1');
+      return;
+    }
+    if (qty === Number(line.quantity)) return;
     try {
       await updateBundleItem(line.id, { quantity: qty });
       await reload();
+      toast.success('Quantity updated');
     } catch (err: any) {
       toast.error(err?.response?.data?.error?.message ?? 'Could not update quantity');
     }
@@ -169,7 +224,7 @@ export function BundleItemsEditor({
               <tr className="text-left text-muted-foreground border-b border-border">
                 <th className="py-2 font-medium">Product</th>
                 <th className="py-2 font-medium">SKU</th>
-                <th className="py-2 font-medium w-28">Quantity</th>
+                <th className="py-2 font-medium w-44">Quantity</th>
                 {canEdit && <th className="py-2 w-10" />}
               </tr>
             </thead>
@@ -180,15 +235,7 @@ export function BundleItemsEditor({
                   <td className="py-2 font-mono text-xs">{line.variant?.variantSku ?? '-'}</td>
                   <td className="py-2">
                     {canEdit ? (
-                      <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        defaultValue={line.quantity}
-                        onBlur={(e) => void changeQuantity(line, e.target.value)}
-                        className="input w-24"
-                        aria-label={`Quantity of ${variantLabel(line.variant)}`}
-                      />
+                      <QuantityCell line={line} onSave={changeQuantity} />
                     ) : (
                       line.quantity
                     )}
@@ -224,7 +271,7 @@ export function BundleItemsEditor({
                     setPicked(null);
                   }}
                   placeholder="Search variant SKU or name (min 2 characters)"
-                  className="input pl-9"
+                  className="input !pl-9"
                   aria-label="Search variants"
                 />
                 {searching && (
