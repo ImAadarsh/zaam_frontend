@@ -37,6 +37,10 @@ export default function ComplianceDocumentsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']);
+  // DELETE /catalog/compliance-documents stays ADMIN/SUPER_ADMIN on the API.
+  const canDelete = (session?.user?.roles || [])
+    .map((r: any) => String(typeof r === 'string' ? r : r?.code || r?.name || '').toUpperCase())
+    .some((r: string) => r === 'ADMIN' || r === 'SUPER_ADMIN');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ComplianceDocument[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
@@ -293,18 +297,20 @@ export default function ComplianceDocumentsPage() {
             >
               <Pencil className="h-4 w-4" />
             </button>
-            <button
-              onClick={() => setConfirmDel(item)}
-              className="p-1 hover:bg-gray-100 rounded text-red-600"
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {canDelete && (
+              <button
+                onClick={() => setConfirmDel(item)}
+                className="p-1 hover:bg-gray-100 rounded text-red-600"
+                title="Delete"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         );
       },
     },
-  ], []);
+  ], [canDelete]);
 
   if (!hydrated || loading) {
     return (
