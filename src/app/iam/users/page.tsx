@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listUsers, createUser, updateUser, deleteUser, listOrganizations, listRoles, listBusinessUnits, listLocations, assignRole, unassignRole } from '@/lib/api';
+import { listUsers, createUser, updateUser, deleteUser, listOrganizations, listRoles, listBusinessUnits, listLocations, assignRole, unassignRole, adminResetPassword } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
@@ -82,6 +82,7 @@ export default function UsersPage() {
   const [editLocations, setEditLocations] = useState<any[]>([]);
   const [confirmDel, setConfirmDel] = useState<User | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -595,6 +596,15 @@ export default function UsersPage() {
                         status: editForm.status
                       };
                       const res = await updateUser(editing.id, payload);
+                      if (resetPassword.trim()) {
+                        if (resetPassword.trim().length < 8) {
+                          toast.error('New password must be at least 8 characters');
+                          return;
+                        }
+                        await adminResetPassword(editing.id, resetPassword.trim());
+                        toast.success('Password reset for this user');
+                        setResetPassword('');
+                      }
                       
                       // Update role assignment
                       try {
@@ -717,10 +727,23 @@ export default function UsersPage() {
                         <option value="locked">Locked</option>
                       </select>
                     </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1.5">Reset password</label>
+                      <input
+                        className="input"
+                        type="password"
+                        autoComplete="new-password"
+                        value={resetPassword}
+                        onChange={(e) => setResetPassword(e.target.value)}
+                        placeholder="Leave blank to keep the current password"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Super admin / admin can set a new password here (min 8 characters). The user can then sign in with it.</p>
+                    </div>
                   </div>
                   <div className="flex justify-end gap-3 pt-4 border-t border-border">
                     <button type="button" className="btn btn-outline" onClick={() => {
                       setEditing(null);
+                      setResetPassword('');
                       setEditForm({
                         email: '',
                         username: '',

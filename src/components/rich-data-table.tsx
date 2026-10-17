@@ -29,10 +29,30 @@ import {
 } from 'lucide-react';
 
 // Custom filter function for fuzzy search
-const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
-    const itemValue = row.getValue(columnId);
-    if (itemValue == null) return false;
-    return String(itemValue).toLowerCase().includes(String(value).toLowerCase());
+function filterText(value: unknown): string {
+    if (value == null) return '';
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (Array.isArray(value)) return value.map(filterText).join(' ');
+    if (typeof value === 'object') {
+        const o = value as Record<string, unknown>;
+        return ['name', 'sku', 'code', 'filename', 'email', 'variantSku', 'title']
+            .map((k) => o[k])
+            .filter((v) => v != null)
+            .map(String)
+            .join(' ');
+    }
+    return String(value);
+}
+
+const fuzzyFilter: FilterFn<any> = (row, columnId, value) => {
+    const needle = String(value).toLowerCase().trim();
+    if (!needle) return true;
+    const direct = filterText(row.getValue(columnId)).toLowerCase();
+    if (direct.includes(needle)) return true;
+    const original = row.original as Record<string, unknown> | undefined;
+    if (!original) return false;
+    return filterText(original[columnId]).toLowerCase().includes(needle) ||
+        filterText(original.catalogItem).toLowerCase().includes(needle);
 };
 
 // Debounced Input Component

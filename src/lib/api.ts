@@ -312,9 +312,16 @@ export async function deleteApiKey(id: string) {
 }
 
 // AUDIT LOGS
-export async function listAuditLogs(limit = 50) {
-  const { data } = await axios.get(`${API_BASE}/api/iam/audit-logs?limit=${limit}`, { headers: authHeaders() });
-  return data as { data: any[] };
+export async function listAuditLogs(
+  limit = 50,
+  extra?: { offset?: number; from?: string; to?: string }
+) {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (extra?.offset != null) q.set('offset', String(extra.offset));
+  if (extra?.from) q.set('from', extra.from);
+  if (extra?.to) q.set('to', extra.to);
+  const { data } = await axios.get(`${API_BASE}/api/iam/audit-logs?${q}`, { headers: authHeaders() });
+  return data as { data: any[]; total?: number };
 }
 
 // ORGANIZATIONS
@@ -438,6 +445,11 @@ export async function setPassword(payload: { password: string }) {
   const session = getSession();
   if (!session?.user?.id) throw new Error('No user session found');
   const { data } = await axios.post(`${API_BASE}/api/iam/users/${session.user.id}/password`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function adminResetPassword(userId: string, password: string) {
+  const { data } = await axios.post(`${API_BASE}/api/iam/users/${userId}/reset-password`, { password }, { headers: authHeaders() });
   return data as { data: any };
 }
 
@@ -1882,6 +1894,8 @@ export async function exportToGoodTill(payload: {
   priceListId?: string;
   warehouseId?: string;
   generateBarcodes?: boolean;
+  batchOffset?: number;
+  batchLimit?: number;
 }) {
   const { connectionId, ...body } = payload;
   const { data } = await axios.post(
@@ -1897,6 +1911,9 @@ export async function exportToGoodTill(payload: {
       unchanged: number;
       barcodesGenerated: number;
       errors: Array<{ sku: string; message: string }>;
+      processed?: number;
+      totalMatching?: number;
+      hasMore?: boolean;
     };
   };
 }

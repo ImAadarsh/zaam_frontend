@@ -23,7 +23,7 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X, Upload, Loader2, ImageIcon, Star, RefreshCw, Settings2, Tag } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Upload, Loader2, ImageIcon, Star, RefreshCw, Settings2, Tag, Download } from 'lucide-react';
 import { MediaThumb } from '@/components/catalog/media-preview';
 import Link from 'next/link';
 
@@ -280,7 +280,7 @@ function ProductFields({
               required
             />
           </label>
-          {field('Barcode / UPC', 'barcode', { placeholder: 'EAN-13 / UPC-A' })}
+          {field('Barcode / UPC', 'barcode', { placeholder: 'Optional — any barcode, EAN-13 or UPC-A' })}
           <label className="text-sm col-span-2">
             Product Name *
             <input
@@ -462,8 +462,9 @@ export default function CatalogItemsPage() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  async function refreshItems() {
-    setItems(await loadAllCatalogItems(session?.user?.organizationId));
+  async function refreshItems(organizationId?: string) {
+    const isSuper = session?.user?.roles?.includes('SUPER_ADMIN');
+    setItems(await loadAllCatalogItems(isSuper ? organizationId : (organizationId || session?.user?.organizationId)));
   }
 
   useEffect(() => {
@@ -474,8 +475,9 @@ export default function CatalogItemsPage() {
     }
     (async () => {
       try {
+        const isSuper = session?.user?.roles?.includes('SUPER_ADMIN');
         const [itemsRes, orgsRes, taxCodesRes] = await Promise.all([
-          loadAllCatalogItems(session?.user?.organizationId).then((data) => ({ data })),
+          loadAllCatalogItems(isSuper ? undefined : session?.user?.organizationId).then((data) => ({ data })),
           listOrganizations(),
           listTaxCodes({ organizationId: session?.user?.organizationId })
         ]);
@@ -508,13 +510,25 @@ export default function CatalogItemsPage() {
     listBusinessUnits(form.organizationId)
       .then((res) => setBusinessUnits(res.data || []))
       .catch(() => setBusinessUnits([]));
+    listTaxCodes({ organizationId: form.organizationId })
+      .then((res) => {
+        const codes = res.data || [];
+        setTaxCodes(codes);
+        setForm((prev) => {
+          if (prev.taxCodeId && !codes.some((tc: any) => String(tc.id) === String(prev.taxCodeId))) {
+            return { ...prev, taxCodeId: '' };
+          }
+          return prev;
+        });
+      })
+      .catch(() => setTaxCodes([]));
   }, [form.organizationId]);
 
-  async function reloadTaxCodes() {
+  async function reloadTaxCodes(organizationId?: string) {
     try {
-      const res = await listTaxCodes({ organizationId: session?.user?.organizationId });
+      const orgId = organizationId || form.organizationId || session?.user?.organizationId;
+      const res = await listTaxCodes({ organizationId: orgId });
       setTaxCodes(res.data || []);
-      toast.success('Tax codes refreshed');
     } catch {
       toast.error('Failed to load tax codes');
     }
@@ -603,7 +617,7 @@ export default function CatalogItemsPage() {
           failedImages += 1;
         }
       }
-      await refreshItems();
+      await refreshItems(form.organizationId);
       setShowCreate(false);
       setForm({ ...emptyForm, organizationId: session.user.organizationId || '' });
       setCreateImages([]);
@@ -900,6 +914,28 @@ export default function CatalogItemsPage() {
                 </p>
               </div>
               <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline inline-flex items-center gap-2"
+                  onClick={() => {
+                    const cols = ['SKU', 'Name', 'Barcode', 'Category', 'Brand', 'UOM', 'Selling Price', 'Tax', 'Status'];
+                    const rows = items.map((it) => [
+                      it.sku, it.name, it.barcode || '', it.category || '', it.brand || '', it.uom || '',
+                      it.sellingPrice ?? '', it.taxCode ? `${Math.round(Number(it.taxCode.rate) * 100)}%` : '', it.status
+                    ]);
+                    const csv = [cols, ...rows]
+                      .map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+                      .join('\n');
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `zaam-catalog-${new Date().toISOString().slice(0, 10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                  }}
+                >
+                  <Download className="h-4 w-4" /> Export
+                </button>
                 {canImport && (
                 <Link href="/catalog/inventory-import" className="btn btn-outline inline-flex items-center gap-2">
                   <Upload className="h-4 w-4" /> Import Excel
@@ -969,22 +1005,25 @@ export default function CatalogItemsPage() {
                         )}
                       </div>
                       {createImages.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">Optional — select one or more images; the first becomes the primary image.</p>
+                        <p className="text-xs text-muted-foreground">Optional — select one or more images; the first becomes the primary image. Click a thumbnail to view it.</p>
                       ) : (
-                        <ul className="text-xs space-y-1">
-                          {createImages.map((f, i) => (
-                            <li key={`${f.name}-${i}`} className="flex items-center justify-between rounded border px-2 py-1">
-                              <span className="truncate">{i === 0 ? '★ ' : ''}{f.name}</span>
-                              <button
-                                type="button"
-                                onClick={() => setCreateImages((prev) => prev.filter((_, idx) => idx !== i))}
-                                className="text-red-600"
-                              >
-                                <X size={12} />
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="flex flex-wrap gap-2">
+                          {createImages.map((f, i) => {
+                            const url = URL.createObjectURL(f);
+                            return (
+                              <div key={`${f.name}-${i}`} className="relative w-20 h-20 rounded-lg overflow-hidden border">
+                                {i === 0 && (
+                                  <span className="absolute left-1 top-1 z-10 rounded bg-black/70 px-1 text-[10px] text-white">Primary</span>
+                                )}
+                                <button type="button" className="absolute right-0 top-0 z-10 bg-black/60 text-white p-0.5" onClick={() => setCreateImages((prev) => prev.filter((_, idx) => idx !== i))}>
+                                  <X size={12} />
+                                </button>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={url} alt={f.name} className="h-full w-full object-cover cursor-zoom-in" onClick={() => window.open(url, '_blank')} />
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                     <div className="flex justify-end gap-3 pt-4 border-t">

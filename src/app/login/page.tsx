@@ -207,9 +207,6 @@ function LoginContent() {
             )}
           </button>
 
-          <p className="text-xs text-zaam-grey mt-6 text-center">
-            Tip: Use the email: <b>admin@zaam.co.uk</b> <br /> and password: <b>ChangeMe!123</b> to login.
-          </p>
         </div>
       </div>
     </div>
