@@ -863,6 +863,26 @@ export async function deleteTaxCode(id: string) {
   return status === 204;
 }
 
+export async function listPosDiscountPresets() {
+  const { data } = await axios.get(`${API_BASE}/api/pos/discount-presets`, { headers: authHeaders() });
+  return data as { data: Array<{ id: string; name: string; type: 'percent' | 'amount'; value: number; sortOrder: number; status: string }> };
+}
+
+export async function createPosDiscountPreset(payload: { name: string; type: 'percent' | 'amount'; value: number; sortOrder?: number }) {
+  const { data } = await axios.post(`${API_BASE}/api/pos/discount-presets`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updatePosDiscountPreset(id: string, payload: { name?: string; type?: 'percent' | 'amount'; value?: number; sortOrder?: number; status?: 'active' | 'inactive' }) {
+  const { data } = await axios.patch(`${API_BASE}/api/pos/discount-presets/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deletePosDiscountPreset(id: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/pos/discount-presets/${id}`, { headers: authHeaders() });
+  return data as { ok?: boolean };
+}
+
 // PRICE LISTS
 export async function listPriceLists(params?: {
   organizationId?: string;

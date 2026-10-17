@@ -5,7 +5,8 @@ import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { 
   listTaxCodes, createTaxCode, updateTaxCode, deleteTaxCode,
-  listOrganizations
+  listOrganizations,
+  listPosDiscountPresets, createPosDiscountPreset, deletePosDiscountPreset
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
@@ -64,6 +65,8 @@ export default function TaxCodesPage() {
     status: 'active' as 'active' | 'inactive'
   });
   const [confirmDel, setConfirmDel] = useState<TaxCode | null>(null);
+  const [discounts, setDiscounts] = useState<Array<{ id: string; name: string; type: 'percent' | 'amount'; value: number }>>([]);
+  const [discForm, setDiscForm] = useState({ name: '', type: 'percent' as 'percent' | 'amount', value: '10' });
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -73,12 +76,14 @@ export default function TaxCodesPage() {
     }
     (async () => {
       try {
-        const [taxCodesRes, orgsRes] = await Promise.all([
+        const [taxCodesRes, orgsRes, discRes] = await Promise.all([
           listTaxCodes({ organizationId: session?.user?.organizationId }),
-          listOrganizations()
+          listOrganizations(),
+          listPosDiscountPresets().catch(() => ({ data: [] }))
         ]);
         setItems(taxCodesRes.data || []);
         setOrganizations(orgsRes.data || []);
+        setDiscounts(discRes.data || []);
         
         if (session?.user?.organizationId) {
           setForm(prev => ({ ...prev, organizationId: session.user.organizationId }));
@@ -303,7 +308,7 @@ export default function TaxCodesPage() {
                   <Receipt className="h-8 w-8" />
                   Tax Codes
                 </h1>
-                <p className="text-muted-foreground mt-1">Manage tax and VAT codes</p>
+                <p className="text-muted-foreground mt-1">VAT codes and till discounts used by EPOS. The till offers 20% plus these organisation rates.</p>
               </div>
               {canCreate && (
               <button
@@ -317,6 +322,84 @@ export default function TaxCodesPage() {
             </div>
 
             <RichDataTable columns={columns} data={items} />
+
+            <div className="mt-8 rounded-2xl border border-border bg-card p-5 space-y-4">
+              <div>
+                <h2 className="text-xl font-semibold">EPOS discounts</h2>
+                <p className="text-sm text-muted-foreground">These buttons appear on the till Discount dialog. Sales write the amount back to POS orders in the admin panel.</p>
+              </div>
+              <ul className="divide-y divide-border">
+                {discounts.map((d) => (
+                  <li key={d.id} className="flex items-center justify-between py-2 gap-3">
+                    <span className="text-sm font-medium">{d.name}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {d.type === 'amount' ? `£${Number(d.value).toFixed(2)}` : `${Number(d.value)}%`}
+                    </span>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        className="text-sm text-red-600 hover:underline"
+                        onClick={async () => {
+                          try {
+                            await deletePosDiscountPreset(d.id);
+                            setDiscounts((prev) => prev.filter((x) => x.id !== d.id));
+                            toast.success('Discount removed');
+                          } catch (e: any) {
+                            toast.error(e?.response?.data?.error?.message ?? 'Could not delete');
+                          }
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </li>
+                ))}
+                {discounts.length === 0 && <li className="py-2 text-sm text-muted-foreground">No till discounts yet — add 5%, 10% or a pound amount.</li>}
+              </ul>
+              {canCreate && (
+                <form
+                  className="flex flex-wrap items-end gap-2"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const value = Number(discForm.value);
+                    if (!discForm.name.trim() || !Number.isFinite(value) || value <= 0) {
+                      toast.error('Name and a positive value are required');
+                      return;
+                    }
+                    try {
+                      const res = await createPosDiscountPreset({
+                        name: discForm.name.trim(),
+                        type: discForm.type,
+                        value,
+                        sortOrder: discounts.length + 1
+                      });
+                      setDiscounts((prev) => [...prev, res.data]);
+                      setDiscForm({ name: '', type: 'percent', value: '10' });
+                      toast.success('Till discount added');
+                    } catch (err: any) {
+                      toast.error(err?.response?.data?.error?.message ?? 'Could not add discount');
+                    }
+                  }}
+                >
+                  <label className="text-sm">
+                    Name
+                    <input className="mt-1 input" value={discForm.name} onChange={(e) => setDiscForm({ ...discForm, name: e.target.value })} placeholder="Staff 10%" />
+                  </label>
+                  <label className="text-sm">
+                    Type
+                    <select className="mt-1 select" value={discForm.type} onChange={(e) => setDiscForm({ ...discForm, type: e.target.value as 'percent' | 'amount' })}>
+                      <option value="percent">Percent</option>
+                      <option value="amount">Amount £</option>
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    Value
+                    <input className="mt-1 input w-28" type="number" min="0" step="0.01" value={discForm.value} onChange={(e) => setDiscForm({ ...discForm, value: e.target.value })} />
+                  </label>
+                  <button type="submit" className="btn btn-primary">Add discount</button>
+                </form>
+              )}
+            </div>
 
             {showCreate && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
