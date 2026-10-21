@@ -671,11 +671,13 @@ export async function listVariants(params?: {
   catalogItemId?: string;
   status?: string;
   search?: string;
+  limit?: number;
 }) {
   const queryParams = new URLSearchParams();
   if (params?.catalogItemId) queryParams.append('catalogItemId', params.catalogItemId);
   if (params?.status) queryParams.append('status', params.status);
   if (params?.search) queryParams.append('search', params.search);
+  if (params?.limit) queryParams.append('limit', String(params.limit));
   const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
   const { data } = await axios.get(`${API_BASE}/api/catalog/variants${query}`, { headers: authHeaders() });
   return data as { data: any[] };

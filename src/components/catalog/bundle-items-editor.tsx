@@ -23,6 +23,10 @@ type VariantOption = {
   catalogItem?: { id: string; sku: string; name: string } | null;
 };
 
+function termDelay(search: string) {
+  return search.trim() ? 250 : 0;
+}
+
 function variantLabel(v: VariantOption | BundleLine['variant']) {
   if (!v) return 'Unknown variant';
   const product = v.catalogItem?.name;
@@ -117,8 +121,7 @@ export function BundleItemsEditor({
   }, [bundle.id]);
 
   useEffect(() => {
-    const term = search.trim();
-    if (!canEdit || term.length < 2 || (picked && term === picked.variantSku)) {
+    if (!canEdit || (picked && search.trim() === picked.variantSku)) {
       setResults([]);
       return;
     }
@@ -126,14 +129,15 @@ export function BundleItemsEditor({
     const handle = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await listVariants({ search: term, status: 'active' });
-        if (!cancelled) setResults((res.data || []).slice(0, 25));
+        const term = search.trim();
+        const res = await listVariants({ status: 'active', limit: 40, ...(term ? { search: term } : {}) });
+        if (!cancelled) setResults(res.data || []);
       } catch {
         if (!cancelled) setResults([]);
       } finally {
         if (!cancelled) setSearching(false);
       }
-    }, 300);
+    }, termDelay(search));
     return () => {
       cancelled = true;
       clearTimeout(handle);
@@ -270,34 +274,37 @@ export function BundleItemsEditor({
                     setSearch(e.target.value);
                     setPicked(null);
                   }}
-                  placeholder="Search variant SKU or name (min 2 characters)"
+                  placeholder="Search by product name or SKU"
                   className="input !pl-9"
                   aria-label="Search variants"
                 />
                 {searching && (
                   <Loader2 className="h-4 w-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 )}
-                {results.length > 0 && !picked && (
-                  <ul className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+                {picked && <p className="mt-1 text-xs text-muted-foreground">Selected: {variantLabel(picked)}</p>}
+                {!picked && (
+                  <ul className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-border bg-background">
+                    {results.length === 0 && !searching && (
+                      <li className="px-3 py-2 text-sm text-muted-foreground">No products match.</li>
+                    )}
                     {results.map((v) => (
-                      <li key={v.id}>
+                      <li key={v.id} className="border-b border-border/60 last:border-0">
                         <button
                           type="button"
                           onClick={() => {
                             setPicked(v);
-                            setSearch(v.variantSku);
+                            setSearch(variantLabel(v));
                             setResults([]);
                           }}
                           className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
                         >
-                          <span className="font-mono text-xs mr-2">{v.variantSku}</span>
-                          {variantLabel(v)}
+                          <span className="font-medium">{variantLabel(v)}</span>
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">{v.variantSku}</span>
                         </button>
                       </li>
                     ))}
                   </ul>
                 )}
-                {picked && <p className="mt-1 text-xs text-muted-foreground">Selected: {variantLabel(picked)}</p>}
               </div>
               <input
                 type="number"
