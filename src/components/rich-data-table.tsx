@@ -256,7 +256,7 @@ export function RichDataTable<TData, TValue>({
             fuzzy: fuzzyFilter,
         },
         defaultColumn: {
-            filterFn: 'fuzzy',
+            filterFn: fuzzyFilter,
         },
         state: {
             sorting,
