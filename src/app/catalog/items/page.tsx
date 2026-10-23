@@ -141,6 +141,28 @@ const MANAGED_ATTRIBUTE_KEYS = ['supplierName', 'warehouseName', 'binCode', 'lot
 /** Stock/barcode fields are aggregated across variants in list responses, so only send them when edited. */
 const STOCK_SHEET_KEYS = ['barcode', 'openingQuantity', 'reorderLevel', 'reorderQuantity', 'expiryDate'] as const;
 
+/** Matches API WAREHOUSE_REQUIRED_FOR_QTY_MESSAGE — show before submit when qty/stock set without warehouse. */
+const WAREHOUSE_REQUIRED_FOR_QTY_MESSAGE =
+  'Select or update Warehouse / Location first, then set Opening Quantity (or other stock fields). Quantity was not saved.';
+
+const STOCK_VALUE_KEYS = [
+  'openingQuantity',
+  'reorderLevel',
+  'reorderQuantity',
+  'binCode',
+  'lotNumber',
+  'expiryDate'
+] as const;
+
+/** True when stock/qty fields need a warehouse and none is set (create, or stock fields changed on edit). */
+function stockNeedsWarehouse(f: ProductForm, original?: ProductForm | null): boolean {
+  if (f.warehouseName.trim()) return false;
+  const hasStockValue = STOCK_VALUE_KEYS.some((k) => f[k].trim() !== '');
+  if (!hasStockValue) return false;
+  if (!original) return true;
+  return STOCK_VALUE_KEYS.some((k) => f[k].trim() !== original[k].trim());
+}
+
 function formFromItem(item: CatalogItem): ProductForm {
   const shown = { ...(item.attributes ?? {}) } as Record<string, any>;
   MANAGED_ATTRIBUTE_KEYS.forEach((k) => delete shown[k]);
@@ -601,6 +623,10 @@ export default function CatalogItemsPage() {
       toast.error('Organization, SKU and Name are required');
       return;
     }
+    if (stockNeedsWarehouse(form)) {
+      toast.error(WAREHOUSE_REQUIRED_FOR_QTY_MESSAGE);
+      return;
+    }
     setSaving(true);
     try {
       const created = await createCatalogItem({
@@ -634,6 +660,10 @@ export default function CatalogItemsPage() {
   async function onUpdate(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
+    if (stockNeedsWarehouse(editForm, editOriginal)) {
+      toast.error(WAREHOUSE_REQUIRED_FOR_QTY_MESSAGE);
+      return;
+    }
     setSaving(true);
     try {
       const payload = buildPayload(editForm, editOriginal);

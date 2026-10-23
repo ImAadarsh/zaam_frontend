@@ -171,10 +171,25 @@ export default function StockItemsPage() {
     }
   }, [variantSearch, variants]);
 
+  const WAREHOUSE_REQUIRED_MESSAGE =
+    'Select a Warehouse first, then set Quantity. Quantity was not saved.';
+
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.variantId || !form.warehouseId || form.quantityOnHand === '') {
-      toast.error('Please fill in required fields (Variant, Warehouse, Quantity)');
+    if (!form.variantId) {
+      toast.error('Variant is required. Select a product variant before saving stock.');
+      return;
+    }
+    if (form.quantityOnHand !== '' && !form.warehouseId) {
+      toast.error(WAREHOUSE_REQUIRED_MESSAGE);
+      return;
+    }
+    if (!form.warehouseId || form.quantityOnHand === '') {
+      toast.error(
+        !form.warehouseId
+          ? WAREHOUSE_REQUIRED_MESSAGE
+          : 'Quantity On Hand is required. Enter a quantity after selecting a warehouse.'
+      );
       return;
     }
     try {
