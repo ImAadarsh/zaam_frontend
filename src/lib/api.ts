@@ -608,6 +608,7 @@ export async function createCatalogItem(payload: {
   openingQuantity?: number;
   reorderLevel?: number;
   reorderQuantity?: number;
+  warehouseId?: string;
   warehouseName?: string;
   binCode?: string;
   supplierName?: string;
@@ -651,6 +652,7 @@ export async function updateCatalogItem(id: string, payload: {
   openingQuantity?: number;
   reorderLevel?: number;
   reorderQuantity?: number;
+  warehouseId?: string;
   warehouseName?: string;
   binCode?: string;
   supplierName?: string;

@@ -13,6 +13,7 @@ import {
   listOrganizations,
   listBusinessUnits,
   listTaxCodes,
+  listWarehouses,
   listProductMedia,
   createProductMedia,
   deleteProductMedia
@@ -25,6 +26,7 @@ import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Upload, Loader2, ImageIcon, Star, RefreshCw, Settings2, Tag, Download } from 'lucide-react';
 import { MediaThumb } from '@/components/catalog/media-preview';
+import { activeWarehouses } from '@/components/inventory/location-status-badge';
 import Link from 'next/link';
 
 type CatalogItem = {
@@ -66,6 +68,7 @@ type CatalogItem = {
   openingQuantity?: number | null;
   reorderLevel?: number | null;
   reorderQuantity?: number | null;
+  warehouseId?: string | null;
   warehouseName?: string | null;
   binCode?: string | null;
   supplierName?: string | null;
@@ -92,7 +95,7 @@ type ProductForm = {
   sellingPrice: string;
   currency: string;
   taxCodeId: string;
-  warehouseName: string;
+  warehouseId: string;
   binCode: string;
   supplierName: string;
   supplierSku: string;
@@ -123,7 +126,7 @@ const emptyForm: ProductForm = {
   sellingPrice: '',
   currency: 'GBP',
   taxCodeId: '',
-  warehouseName: '',
+  warehouseId: '',
   binCode: '',
   supplierName: '',
   supplierSku: '',
@@ -154,9 +157,25 @@ const STOCK_VALUE_KEYS = [
   'expiryDate'
 ] as const;
 
-/** True when stock/qty fields need a warehouse and none is set (create, or stock fields changed on edit). */
+type WarehouseOption = {
+  id: string;
+  code?: string | null;
+  name?: string | null;
+  addressLine1?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  status?: string | null;
+};
+
+function warehouseOptionLabel(w: WarehouseOption): string {
+  const title = w.code && w.name ? `${w.code} — ${w.name}` : w.name || w.code || `Warehouse ${w.id}`;
+  const addr = [w.addressLine1, w.city, w.postalCode].filter(Boolean).join(', ');
+  return addr ? `${title} · ${addr}` : title;
+}
+
+/** True when stock/qty fields need a warehouse id and none is selected (create, or stock fields changed on edit). */
 function stockNeedsWarehouse(f: ProductForm, original?: ProductForm | null): boolean {
-  if (f.warehouseName.trim()) return false;
+  if (f.warehouseId.trim()) return false;
   const hasStockValue = STOCK_VALUE_KEYS.some((k) => f[k].trim() !== '');
   if (!hasStockValue) return false;
   if (!original) return true;
@@ -187,7 +206,7 @@ function formFromItem(item: CatalogItem): ProductForm {
     sellingPrice: numStr(item.sellingPrice),
     currency: item.currency || 'GBP',
     taxCodeId: item.taxCode?.id || '',
-    warehouseName: str(item.warehouseName),
+    warehouseId: str(item.warehouseId),
     binCode: str(item.binCode),
     supplierName: str(item.supplierName),
     supplierSku: str(item.supplierSku),
@@ -221,6 +240,7 @@ function ProductFields({
   organizations,
   businessUnits,
   taxCodes,
+  warehouses,
   onReloadTaxCodes
 }: {
   value: ProductForm;
@@ -229,9 +249,18 @@ function ProductFields({
   organizations: any[];
   businessUnits: any[];
   taxCodes: any[];
+  warehouses: WarehouseOption[];
   onReloadTaxCodes?: () => void;
 }) {
   const set = (patch: Partial<ProductForm>) => onChange({ ...value, ...patch });
+  const warehouseChoices = useMemo(() => {
+    const active = activeWarehouses(warehouses);
+    if (value.warehouseId && !active.some((w) => String(w.id) === String(value.warehouseId))) {
+      const current = warehouses.find((w) => String(w.id) === String(value.warehouseId));
+      return current ? [...active, current] : active;
+    }
+    return active;
+  }, [warehouses, value.warehouseId]);
 
   const field = (
     label: string,
@@ -394,14 +423,29 @@ function ProductFields({
           {field('Opening Quantity', 'openingQuantity', { type: 'number' })}
           {field('Reorder Level', 'reorderLevel', { type: 'number' })}
           {field('Reorder Quantity', 'reorderQuantity', { type: 'number' })}
-          {field('Warehouse / Location', 'warehouseName', { placeholder: 'Unit 1-2 Chepstow House, ST1 5AJ' })}
+          <label className="text-sm">
+            Warehouse / Location
+            <select
+              className="mt-1 select w-full"
+              value={value.warehouseId}
+              onChange={(e) => set({ warehouseId: e.target.value })}
+            >
+              <option value="">Select warehouse…</option>
+              {warehouseChoices.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {warehouseOptionLabel(w)}
+                </option>
+              ))}
+            </select>
+          </label>
           {field('Bin / Rack No.', 'binCode')}
           {field('Batch / Lot No.', 'lotNumber')}
           {field('Expiry Date', 'expiryDate', { type: 'date' })}
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Quantity and reorder values are saved on a stock row. If Warehouse is blank, the organisation&apos;s
-          default warehouse is used. Missing bins and suppliers are created automatically.
+          Quantity and reorder values are saved on a stock row for the selected warehouse. Select a warehouse
+          before setting opening quantity or other stock fields. Missing bins and suppliers are created
+          automatically.
         </p>
       </section>
 
@@ -474,6 +518,7 @@ export default function CatalogItemsPage() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [businessUnits, setBusinessUnits] = useState<any[]>([]);
   const [taxCodes, setTaxCodes] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [editing, setEditing] = useState<CatalogItem | null>(null);
   const [editForm, setEditForm] = useState<ProductForm>(emptyForm);
   const [confirmDel, setConfirmDel] = useState<CatalogItem | null>(null);
@@ -499,14 +544,16 @@ export default function CatalogItemsPage() {
     (async () => {
       try {
         const isSuper = session?.user?.roles?.includes('SUPER_ADMIN');
-        const [itemsRes, orgsRes, taxCodesRes] = await Promise.all([
+        const [itemsRes, orgsRes, taxCodesRes, warehousesRes] = await Promise.all([
           loadAllCatalogItems(isSuper ? undefined : session?.user?.organizationId).then((data) => ({ data })),
           listOrganizations(),
-          listTaxCodes({ organizationId: session?.user?.organizationId })
+          listTaxCodes({ organizationId: session?.user?.organizationId }),
+          listWarehouses({ limit: 200, status: 'active' }).catch(() => ({ data: [] as WarehouseOption[] }))
         ]);
         setItems(itemsRes.data || []);
         setOrganizations(orgsRes.data || []);
         setTaxCodes(taxCodesRes.data || []);
+        setWarehouses(warehousesRes.data || []);
         if (session?.user?.organizationId) {
           setForm((prev) => ({ ...prev, organizationId: session.user.organizationId }));
           const busRes = await listBusinessUnits(session.user.organizationId).catch(() => ({ data: [] }));
@@ -598,7 +645,7 @@ export default function CatalogItemsPage() {
       openingQuantity: num(f.openingQuantity),
       reorderLevel: num(f.reorderLevel),
       reorderQuantity: num(f.reorderQuantity),
-      warehouseName: text('warehouseName'),
+      warehouseId: f.warehouseId.trim() || undefined,
       binCode: text('binCode'),
       supplierName: text('supplierName'),
       lotNumber: text('lotNumber'),
@@ -607,6 +654,13 @@ export default function CatalogItemsPage() {
     if (original) {
       for (const key of STOCK_SHEET_KEYS) {
         if (f[key].trim() === original[key].trim()) delete payload[key];
+      }
+      // Keep warehouseId whenever any stock field is being saved so the API can attach the stock row.
+      const sendingStock = STOCK_VALUE_KEYS.some(
+        (k) => payload[k] !== undefined && String(payload[k] ?? '').trim() !== ''
+      );
+      if (!sendingStock && f.warehouseId.trim() === original.warehouseId.trim()) {
+        delete payload.warehouseId;
       }
     }
     return payload;
@@ -1016,6 +1070,7 @@ export default function CatalogItemsPage() {
                       organizations={organizations}
                       businessUnits={businessUnits}
                       taxCodes={taxCodes}
+                      warehouses={warehouses}
                       onReloadTaxCodes={reloadTaxCodes}
                     />
                     <div className="border-t pt-4 space-y-2">
@@ -1097,6 +1152,7 @@ export default function CatalogItemsPage() {
                       organizations={organizations}
                       businessUnits={businessUnits}
                       taxCodes={taxCodes}
+                      warehouses={warehouses}
                       onReloadTaxCodes={reloadTaxCodes}
                     />
 
