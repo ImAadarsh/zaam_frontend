@@ -378,7 +378,8 @@ function ProductFields({
           {field('Expiry Date', 'expiryDate', { type: 'date' })}
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Stored on this product&apos;s stock record. Missing warehouses, bins and suppliers are created automatically.
+          Quantity and reorder values are saved on a stock row. If Warehouse is blank, the organisation&apos;s
+          default warehouse is used. Missing bins and suppliers are created automatically.
         </p>
       </section>
 
@@ -635,10 +636,15 @@ export default function CatalogItemsPage() {
     if (!editing) return;
     setSaving(true);
     try {
-      await updateCatalogItem(editing.id, {
+      const payload = buildPayload(editForm, editOriginal);
+      const res = await updateCatalogItem(editing.id, {
         businessUnitId: editForm.businessUnitId || (editOriginal?.businessUnitId ? '' : undefined),
-        ...buildPayload(editForm, editOriginal)
+        ...payload
       });
+      const saved = res?.data as CatalogItem | undefined;
+      if (saved?.id) {
+        setItems((prev) => prev.map((it) => (it.id === saved.id ? { ...it, ...saved } : it)));
+      }
       await refreshItems();
       closeEdit();
       toast.success('Catalog item updated');

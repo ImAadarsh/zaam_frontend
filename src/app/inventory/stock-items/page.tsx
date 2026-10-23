@@ -173,7 +173,7 @@ export default function StockItemsPage() {
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.variantId || !form.warehouseId || !form.quantityOnHand) {
+    if (!form.variantId || !form.warehouseId || form.quantityOnHand === '') {
       toast.error('Please fill in required fields (Variant, Warehouse, Quantity)');
       return;
     }
@@ -181,7 +181,7 @@ export default function StockItemsPage() {
       const payload: any = {
         variantId: form.variantId,
         warehouseId: form.warehouseId,
-        quantityOnHand: parseInt(form.quantityOnHand),
+        quantityOnHand: parseInt(form.quantityOnHand, 10),
         status: form.status
       };
       
@@ -190,10 +190,10 @@ export default function StockItemsPage() {
       if (form.serialNumber) payload.serialNumber = form.serialNumber;
       if (form.expiryDate) payload.expiryDate = form.expiryDate;
       if (form.manufactureDate) payload.manufactureDate = form.manufactureDate;
-      if (form.costPrice) payload.costPrice = parseFloat(form.costPrice);
-      if (form.safetyStockLevel) payload.safetyStockLevel = parseInt(form.safetyStockLevel);
-      if (form.reorderPoint) payload.reorderPoint = parseInt(form.reorderPoint);
-      if (form.reorderQuantity) payload.reorderQuantity = parseInt(form.reorderQuantity);
+      if (form.costPrice !== '') payload.costPrice = parseFloat(form.costPrice);
+      if (form.safetyStockLevel !== '') payload.safetyStockLevel = parseInt(form.safetyStockLevel, 10);
+      if (form.reorderPoint !== '') payload.reorderPoint = parseInt(form.reorderPoint, 10);
+      if (form.reorderQuantity !== '') payload.reorderQuantity = parseInt(form.reorderQuantity, 10);
 
       const res = await createStockItem(payload);
       setItems(prev => [res.data, ...prev]);
@@ -214,15 +214,16 @@ export default function StockItemsPage() {
       };
       
       if (form.binId) payload.binId = form.binId;
-      if (form.quantityOnHand) payload.quantityOnHand = parseInt(form.quantityOnHand);
+      // Allow 0 — truthy checks previously dropped quantity/reorder updates of zero.
+      if (form.quantityOnHand !== '') payload.quantityOnHand = parseInt(form.quantityOnHand, 10);
       if (form.lotNumber) payload.lotNumber = form.lotNumber;
       if (form.serialNumber) payload.serialNumber = form.serialNumber;
       if (form.expiryDate) payload.expiryDate = form.expiryDate;
       if (form.manufactureDate) payload.manufactureDate = form.manufactureDate;
-      if (form.costPrice) payload.costPrice = parseFloat(form.costPrice);
-      if (form.safetyStockLevel) payload.safetyStockLevel = parseInt(form.safetyStockLevel);
-      if (form.reorderPoint) payload.reorderPoint = parseInt(form.reorderPoint);
-      if (form.reorderQuantity) payload.reorderQuantity = parseInt(form.reorderQuantity);
+      if (form.costPrice !== '') payload.costPrice = parseFloat(form.costPrice);
+      if (form.safetyStockLevel !== '') payload.safetyStockLevel = parseInt(form.safetyStockLevel, 10);
+      if (form.reorderPoint !== '') payload.reorderPoint = parseInt(form.reorderPoint, 10);
+      if (form.reorderQuantity !== '') payload.reorderQuantity = parseInt(form.reorderQuantity, 10);
 
       const res = await updateStockItem(editing.id, payload);
       setItems(prev => prev.map(item => item.id === editing.id ? res.data : item));
