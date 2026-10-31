@@ -27,7 +27,10 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Upload, Loader2, ImageIcon, Star, RefreshCw, Settings2, Tag, Download } from 'lucide-react';
 import { MediaThumb } from '@/components/catalog/media-preview';
 import { activeWarehouses } from '@/components/inventory/location-status-badge';
+import { KeyValueEditor } from '@/components/key-value-editor';
 import Link from 'next/link';
+
+const CURRENCY_OPTIONS = ['GBP', 'EUR', 'USD', 'AED', 'AUD', 'CAD', 'CHF', 'INR', 'NZD', 'SAR', 'ZAR'];
 
 type CatalogItem = {
   id: string;
@@ -381,7 +384,23 @@ function ProductFields({
         <div className="grid grid-cols-2 gap-4">
           {field('Unit Cost Price', 'costPrice', { type: 'number', step: '0.0001' })}
           {field('Unit Selling Price', 'sellingPrice', { type: 'number', step: '0.0001' })}
-          {field('Currency', 'currency', { maxLength: 3 })}
+          <label className="text-sm">
+            Currency
+            <select
+              className="mt-1 select w-full"
+              value={value.currency || 'GBP'}
+              onChange={(e) => set({ currency: e.target.value })}
+            >
+              {CURRENCY_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+              {value.currency && !CURRENCY_OPTIONS.includes(value.currency) && (
+                <option value={value.currency}>{value.currency}</option>
+              )}
+            </select>
+          </label>
           <div className="text-sm">
             <div className="flex items-center justify-between">
               <span>Tax / VAT</span>
@@ -470,16 +489,16 @@ function ProductFields({
               onChange={(e) => set({ remarks: e.target.value })}
             />
           </label>
-          <label className="text-sm">
-            Extra attributes (JSON key/value)
-            <textarea
-              className="mt-1 input w-full font-mono text-xs"
-              rows={3}
-              placeholder='{"colour":"black","hsCode":"1234.56"}'
+          <div className="text-sm space-y-1.5">
+            <span>Extra attributes</span>
+            <p className="text-xs text-muted-foreground">Add key/value pairs (saved as JSON). Example: colour → black</p>
+            <KeyValueEditor
               value={value.attributes}
-              onChange={(e) => set({ attributes: e.target.value })}
+              onChange={(json) => set({ attributes: json })}
+              placeholderKey="e.g. colour"
+              placeholderValue="e.g. black"
             />
-          </label>
+          </div>
         </div>
       </section>
     </div>
@@ -529,6 +548,13 @@ export default function CatalogItemsPage() {
   const [createImages, setCreateImages] = useState<File[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingMediaDeletes, setPendingMediaDeletes] = useState<string[]>([]);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [listFilter, setListFilter] = useState<{
+    warehouseId: string;
+    barcode: 'all' | 'with' | 'without';
+    price: 'all' | 'with' | 'without';
+  }>({ warehouseId: '', barcode: 'all', price: 'all' });
 
   async function refreshItems(organizationId?: string) {
     const isSuper = session?.user?.roles?.includes('SUPER_ADMIN');
@@ -725,6 +751,14 @@ export default function CatalogItemsPage() {
         businessUnitId: editForm.businessUnitId || (editOriginal?.businessUnitId ? '' : undefined),
         ...payload
       });
+      // Apply queued image removals only when Update is clicked (X alone does not persist).
+      for (const mediaId of pendingMediaDeletes) {
+        try {
+          await deleteProductMedia(mediaId);
+        } catch {
+          /* continue; toast below if any remain */
+        }
+      }
       const saved = res?.data as CatalogItem | undefined;
       if (saved?.id) {
         setItems((prev) => prev.map((it) => (it.id === saved.id ? { ...it, ...saved } : it)));
@@ -777,14 +811,9 @@ export default function CatalogItemsPage() {
     }
   }
 
-  async function onRemoveImage(id: string) {
-    try {
-      await deleteProductMedia(id);
-      setMedia((prev) => prev.filter((m) => m.id !== id));
-      toast.success('Image removed');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message ?? 'Failed to remove image');
-    }
+  function onRemoveImage(id: string) {
+    setPendingMediaDeletes((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setMedia((prev) => prev.filter((m) => m.id !== id));
   }
 
   function closeEdit() {
@@ -792,9 +821,11 @@ export default function CatalogItemsPage() {
     setEditOriginal(null);
     setEditVariants([]);
     setMedia([]);
+    setPendingMediaDeletes([]);
   }
 
   async function openEdit(item: CatalogItem) {
+    setPendingMediaDeletes([]);
     setEditing(item);
     const initial = formFromItem(item);
     setEditForm(initial);
@@ -1047,7 +1078,91 @@ export default function CatalogItemsPage() {
               </div>
             </div>
 
-            <RichDataTable columns={columns} data={items} />
+            <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/50 p-3">
+              <label className="text-sm">
+                Warehouse
+                <select
+                  className="mt-1 select min-w-[180px]"
+                  value={listFilter.warehouseId}
+                  onChange={(e) => setListFilter((f) => ({ ...f, warehouseId: e.target.value }))}
+                >
+                  <option value="">All warehouses</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={String(w.id)}>
+                      {w.name || w.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                Barcode
+                <select
+                  className="mt-1 select min-w-[140px]"
+                  value={listFilter.barcode}
+                  onChange={(e) => setListFilter((f) => ({ ...f, barcode: e.target.value as typeof f.barcode }))}
+                >
+                  <option value="all">All</option>
+                  <option value="with">Has barcode</option>
+                  <option value="without">No barcode</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                Selling price
+                <select
+                  className="mt-1 select min-w-[140px]"
+                  value={listFilter.price}
+                  onChange={(e) => setListFilter((f) => ({ ...f, price: e.target.value as typeof f.price }))}
+                >
+                  <option value="all">All</option>
+                  <option value="with">Has price</option>
+                  <option value="without">No selling price</option>
+                </select>
+              </label>
+              {(listFilter.warehouseId || listFilter.barcode !== 'all' || listFilter.price !== 'all') && (
+                <button
+                  type="button"
+                  className="btn btn-outline text-xs"
+                  onClick={() => setListFilter({ warehouseId: '', barcode: 'all', price: 'all' })}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+
+            <RichDataTable
+              columns={columns}
+              data={items.filter((it) => {
+                if (listFilter.warehouseId && String(it.warehouseId || '') !== listFilter.warehouseId) return false;
+                if (listFilter.barcode === 'with' && !String(it.barcode || '').trim()) return false;
+                if (listFilter.barcode === 'without' && String(it.barcode || '').trim()) return false;
+                const hasPrice = it.sellingPrice != null && Number(it.sellingPrice) > 0;
+                if (listFilter.price === 'with' && !hasPrice) return false;
+                if (listFilter.price === 'without' && hasPrice) return false;
+                return true;
+              })}
+            />
+
+            {previewImageUrl && (
+              <div
+                className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center p-4"
+                onClick={() => setPreviewImageUrl(null)}
+              >
+                <button
+                  type="button"
+                  className="absolute top-4 right-4 rounded-full bg-black/60 text-white p-2"
+                  onClick={() => setPreviewImageUrl(null)}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewImageUrl}
+                  alt="Product preview"
+                  className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            )}
 
             {showCreate && (
               <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1179,16 +1294,21 @@ export default function CatalogItemsPage() {
                               .filter(Boolean)
                               .join(', ');
                             return (
-                              <div key={v.id} className="flex items-center justify-between px-3 py-1.5">
-                                <span className="font-mono">{v.variantSku}</span>
+                              <Link
+                                key={v.id}
+                                href={`/catalog/variants?q=${encodeURIComponent(v.variantSku)}`}
+                                className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50"
+                                title="Open this variant"
+                              >
+                                <span className="font-mono text-primary underline-offset-2 hover:underline">{v.variantSku}</span>
                                 <span className="text-muted-foreground truncate mx-2">{opts || v.name || '—'}</span>
                                 <span className="capitalize">{v.status}</span>
-                              </div>
+                              </Link>
                             );
                           })}
                         </div>
                       )}
-                      <p className="text-xs text-muted-foreground">Saving this product keeps all of its variants unchanged.</p>
+                      <p className="text-xs text-muted-foreground">Saving this product keeps all of its variants unchanged. Click a variant SKU to open it on the Variants screen.</p>
                     </div>
 
                     <div className="border-t pt-4 space-y-3">
@@ -1225,7 +1345,14 @@ export default function CatalogItemsPage() {
                               key={m.id}
                               className="relative rounded-lg border overflow-hidden bg-muted/30 aspect-square"
                             >
-                              <MediaThumb url={m.url} alt={m.altText || ''} className="h-full w-full" />
+                              <button
+                                type="button"
+                                className="h-full w-full"
+                                onClick={() => setPreviewImageUrl(m.url)}
+                                title="Preview image"
+                              >
+                                <MediaThumb url={m.url} alt={m.altText || ''} className="h-full w-full" />
+                              </button>
                               {m.isPrimary && (
                                 <span className="absolute top-1 left-1 rounded bg-black/70 text-white text-[10px] px-1.5 py-0.5 inline-flex items-center gap-0.5">
                                   <Star size={10} /> Primary
@@ -1236,6 +1363,7 @@ export default function CatalogItemsPage() {
                                 type="button"
                                 onClick={() => onRemoveImage(m.id)}
                                 className="absolute top-1 right-1 rounded bg-black/70 text-white p-1 hover:bg-red-600"
+                                title="Mark for removal (saved on Update)"
                               >
                                 <X size={12} />
                               </button>
@@ -1243,6 +1371,11 @@ export default function CatalogItemsPage() {
                             </div>
                           ))}
                         </div>
+                      )}
+                      {pendingMediaDeletes.length > 0 && (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          {pendingMediaDeletes.length} image(s) marked for removal — click Update to apply, or Cancel to keep them.
+                        </p>
                       )}
                     </div>
 

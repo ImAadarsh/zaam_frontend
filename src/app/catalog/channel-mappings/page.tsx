@@ -14,6 +14,8 @@ import { useRoleCheck } from '@/hooks/use-role-check';
 import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Share2 } from 'lucide-react';
+import { KeyValueEditor } from '@/components/key-value-editor';
+import { SearchableSelect } from '@/components/searchable-select';
 
 type ChannelMapping = {
   id: string;
@@ -351,17 +353,17 @@ export default function ChannelMappingsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2">
                         <label className="block text-sm font-medium mb-1.5">Catalog Item *</label>
-                        <select
+                        <SearchableSelect
                           value={form.catalogItemId}
-                          onChange={e => setForm(prev => ({ ...prev, catalogItemId: e.target.value, variantId: '' }))}
-                          className="select"
+                          onChange={(v) => setForm((prev) => ({ ...prev, catalogItemId: v, variantId: '' }))}
                           required
-                        >
-                          <option value="">Select...</option>
-                          {catalogItems.map(item => (
-                            <option key={item.id} value={item.id}>{item.sku} - {item.name}</option>
-                          ))}
-                        </select>
+                          placeholder="Search product by SKU or name…"
+                          options={catalogItems.map((item) => ({
+                            value: String(item.id),
+                            label: `${item.sku} — ${item.name}`,
+                            searchText: `${item.sku} ${item.name}`
+                          }))}
+                        />
                       </div>
                       <div className="col-span-2">
                         <label className="block text-sm font-medium mb-1.5">Variant</label>
@@ -424,13 +426,11 @@ export default function ChannelMappingsPage() {
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="block text-sm font-medium mb-1.5">Attributes (JSON)</label>
-                        <textarea
+                        <label className="block text-sm font-medium mb-1.5">Attributes</label>
+                        <p className="text-xs text-muted-foreground mb-1.5">Channel-specific key/value pairs (saved as JSON).</p>
+                        <KeyValueEditor
                           value={form.attributes}
-                          onChange={e => setForm(prev => ({ ...prev, attributes: e.target.value }))}
-                          className="input font-mono text-xs"
-                          rows={4}
-                          placeholder='{"key": "value"}'
+                          onChange={(json) => setForm((prev) => ({ ...prev, attributes: json }))}
                         />
                       </div>
                       <div>
@@ -530,13 +530,11 @@ export default function ChannelMappingsPage() {
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="block text-sm font-medium mb-1.5">Attributes (JSON)</label>
-                        <textarea
+                        <label className="block text-sm font-medium mb-1.5">Attributes</label>
+                        <p className="text-xs text-muted-foreground mb-1.5">Channel-specific key/value pairs (saved as JSON).</p>
+                        <KeyValueEditor
                           value={editForm.attributes}
-                          onChange={e => setEditForm(prev => ({ ...prev, attributes: e.target.value }))}
-                          className="input font-mono text-xs"
-                          rows={4}
-                          placeholder='{"key": "value"}'
+                          onChange={(json) => setEditForm((prev) => ({ ...prev, attributes: json }))}
                         />
                       </div>
                       <div>

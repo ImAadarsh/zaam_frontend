@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { 
@@ -15,6 +15,7 @@ import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Tag, Loader2 } from 'lucide-react';
 import { MediaThumb } from '@/components/catalog/media-preview';
+import { SearchableSelect } from '@/components/searchable-select';
 
 type Variant = {
   id: string;
@@ -239,6 +240,8 @@ function ImagePicker({
 
 export default function VariantsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const deepLinkQ = (searchParams.get('q') || '').trim();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'SALES_REP']);
   const { can } = useApiAccess();
@@ -698,7 +701,32 @@ export default function VariantsPage() {
               )}
             </div>
 
-            <RichDataTable columns={columns} data={items} />
+            {deepLinkQ && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-sm rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200 px-3 py-2">
+                Showing variants matching <span className="font-mono font-medium">{deepLinkQ}</span>
+                <button type="button" className="btn btn-outline text-xs ml-auto" onClick={() => router.push('/catalog/variants')}>
+                  Clear
+                </button>
+              </div>
+            )}
+            <RichDataTable
+              columns={columns}
+              data={
+                deepLinkQ
+                  ? items.filter((v) => {
+                      const q = deepLinkQ.toLowerCase();
+                      return (
+                        v.variantSku?.toLowerCase().includes(q) ||
+                        v.name?.toLowerCase().includes(q) ||
+                        v.catalogItem?.sku?.toLowerCase().includes(q) ||
+                        v.catalogItem?.name?.toLowerCase().includes(q) ||
+                        String(v.id) === deepLinkQ
+                      );
+                    })
+                  : items
+              }
+              searchPlaceholder="Search variants by SKU, product…"
+            />
 
             {showCreate && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -713,17 +741,17 @@ export default function VariantsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1.5">Catalog Item *</label>
-                        <select
+                        <SearchableSelect
                           value={form.catalogItemId}
-                          onChange={e => setForm(prev => ({ ...prev, catalogItemId: e.target.value }))}
-                          className="select"
+                          onChange={(v) => setForm((prev) => ({ ...prev, catalogItemId: v }))}
                           required
-                        >
-                          <option value="">Select...</option>
-                          {catalogItems.map(item => (
-                            <option key={item.id} value={item.id}>{item.sku} - {item.name}</option>
-                          ))}
-                        </select>
+                          placeholder="Search product by SKU or name…"
+                          options={catalogItems.map((item) => ({
+                            value: String(item.id),
+                            label: `${item.sku} — ${item.name}`,
+                            searchText: `${item.sku} ${item.name}`
+                          }))}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1.5">Variant SKU *</label>

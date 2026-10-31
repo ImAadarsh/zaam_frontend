@@ -517,19 +517,6 @@ export default function OrganizationsPage() {
                 Manage organizations, business units, and locations
               </p>
             </div>
-            {isSuperAdmin && canCreateOrg && (
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setShowCreateOrg(true);
-                  setOrgFormData({ status: 'active' });
-                  setLogoFile(null);
-                  setLogoPreview(null);
-                }}
-              >
-                <Plus size={16} className="mr-2" /> New Organization
-              </button>
-            )}
           </div>
 
           {loading ? (

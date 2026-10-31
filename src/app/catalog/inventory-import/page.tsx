@@ -28,6 +28,29 @@ import {
 
 const TEMPLATE_URL = '/templates/Inventory_Import_Template.xlsx';
 
+/** Turn API / network errors into short, actionable toast copy. */
+function friendlyImportError(e: any, fallback: string): string {
+  const status = e?.response?.status as number | undefined;
+  const raw = String(e?.response?.data?.error?.message || e?.message || '').trim();
+  if (status === 413 || /too large|payload/i.test(raw)) {
+    return 'File is too large. Split the sheet or upload a smaller Excel file.';
+  }
+  if (status === 415 || /mime|content-type|not.*excel|spreadsheet/i.test(raw)) {
+    return 'That file type is not supported. Upload an .xlsx or .xls Excel workbook.';
+  }
+  if (status === 400 && raw) {
+    // Strip Zod / stack noise; keep the first sentence.
+    return raw.split('\n')[0].slice(0, 280);
+  }
+  if (status === 401 || status === 403) {
+    return 'You do not have permission to import for this organisation.';
+  }
+  if (!e?.response) {
+    return 'Could not reach the server. Check your connection and try again.';
+  }
+  return raw || fallback;
+}
+
 type PreviewData = {
   rowCount: number;
   sample: Array<Record<string, unknown>>;
@@ -135,7 +158,7 @@ export default function InventoryImportPage() {
       setPreview(res.data);
       toast.success(`Preview ready · ${res.data.rowCount} product row(s)`);
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message ?? 'Preview failed');
+      toast.error(friendlyImportError(e, 'Could not read that Excel file. Check it is .xlsx/.xls and try again.'));
       setPreview(null);
     } finally {
       setPreviewing(false);
@@ -161,7 +184,7 @@ export default function InventoryImportPage() {
         `Imported · created ${res.data.result.productsCreated}, updated ${res.data.result.productsUpdated}`
       );
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message ?? 'Import failed');
+      toast.error(friendlyImportError(e, 'Import failed. Fix the highlighted issues and try again.'));
     } finally {
       setImporting(false);
     }

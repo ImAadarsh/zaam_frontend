@@ -49,11 +49,17 @@ export default function RolesPage() {
   const [pagePermissions, setPagePermissions] = useState<Record<string, boolean>>({});
   const [permissionFilter, setPermissionFilter] = useState('');
   const [showingBuiltInPages, setShowingBuiltInPages] = useState(false);
-  // Pages whose data the role's API access covers; anything else would open as a 403 page.
-  const roleApiPages = useMemo(
-    () => new Set(selectedRole ? builtInPagesForRoles([selectedRole.code]) : []),
-    [selectedRole]
-  );
+  // Pages grantable in the editor. Super Admin may assign any panel page (custom roles have no built-ins).
+  // Read-only viewers still see the role's built-in set only.
+  const roleApiPages = useMemo(() => {
+    if (!selectedRole) return new Set<string>();
+    if (canEditPages) {
+      const keys = new Set<string>();
+      NAV_MODULES.forEach((m) => m.pages.forEach((p) => keys.add(p.key)));
+      return keys;
+    }
+    return new Set(builtInPagesForRoles([selectedRole.code]));
+  }, [selectedRole, canEditPages]);
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -255,10 +261,6 @@ export default function RolesPage() {
               <h2 className="text-2xl font-bold tracking-tight">Roles</h2>
               <p className="text-muted-foreground">Manage roles and permissions.</p>
             </div>
-            <div className="flex gap-2">
-              {canAssignRole && <button className="btn btn-outline" onClick={() => setShowAssign(true)}>Assign Role</button>}
-              {canCreateRole && <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Role</button>}
-            </div>
           </div>
 
           {loading ? (
@@ -403,9 +405,17 @@ export default function RolesPage() {
                       Read-only: only a Super Administrator can change role page permissions.
                     </p>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    Greyed-out pages are outside this role&apos;s built-in access: the API refuses their data for this role, so they cannot be granted here.
-                  </p>
+                  {!canEditPages && (
+                    <p className="text-xs text-muted-foreground">
+                      Greyed-out pages are outside this role&apos;s built-in access and cannot be granted here.
+                    </p>
+                  )}
+                  {canEditPages && (
+                    <p className="text-xs text-muted-foreground">
+                      Tick any module pages this role should open. Saving replaces built-in access with exactly the selected pages.
+                      API data access follows these page grants (users without a module page get a 403 on that API).
+                    </p>
+                  )}
                   {showingBuiltInPages && (
                     <p className="text-xs rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-3 py-2">
                       No pages are saved for this role yet, so it currently uses its built-in access. The ticked pages are the ones it can open today;

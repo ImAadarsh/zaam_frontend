@@ -72,8 +72,14 @@ function ScopesInput({
   }
 
   function addDraft() {
-    const parts = draft.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+    const parts = draft.split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
     if (parts.length === 0) return;
+    const scopeRe = /^(admin:all|(read|write):[a-z][a-z0-9_]*)$/;
+    const bad = parts.filter((s) => !scopeRe.test(s));
+    if (bad.length) {
+      toast.error(`Invalid scope(s): ${bad.join(', ')}. Use admin:all or read:<module> / write:<module> (e.g. read:crm).`);
+      return;
+    }
     onChange(Array.from(new Set([...value, ...parts])));
     setDraft('');
   }
