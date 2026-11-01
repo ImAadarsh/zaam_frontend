@@ -5801,6 +5801,39 @@ export async function getB2bDashboard(organizationId: string) {
   const { data } = await axios.get(`${API_BASE}/api/b2b/admin/dashboard`, { params: { organizationId }, headers: authHeaders() });
   return data as { data: any };
 }
+
+/** Aggregated global ERP pulse for /dashboard. Sections are role-filtered server-side. */
+export async function getGlobalDashboard(params: {
+  organizationId?: string;
+  range?: string;
+  from?: string;
+  to?: string;
+}) {
+  const { data } = await axios.get(`${API_BASE}/api/analytics/global-dashboard`, {
+    params,
+    headers: authHeaders()
+  });
+  return data as { data: GlobalDashboardPayload };
+}
+
+export type GlobalDashboardPayload = {
+  range: { preset: string; from: string; to: string; priorFrom: string; priorTo: string };
+  asOf: string;
+  headline: {
+    revenue: number | null;
+    revenueChangePct: number | null;
+    orders: number | null;
+    cash: number | null;
+    outstandingAr: number | null;
+    stockValue: number | null;
+    openPipeline: number | null;
+    netPosition: number | null;
+  };
+  sections: Record<
+    string,
+    { available: boolean; data?: any; error?: string }
+  >;
+};
 export async function getB2bSettings(organizationId: string) {
   const { data } = await axios.get(`${API_BASE}/api/b2b/admin/settings`, { params: { organizationId }, headers: authHeaders() });
   return data as { data: any };
@@ -5814,9 +5847,91 @@ export async function updateB2bSettings(payload: {
   assignedRepName?: string | null;
   assignedRepPhone?: string | null;
   assignedRepEmail?: string | null;
+  popularCategories?: Array<{
+    id: string;
+    label: string;
+    icon: string;
+    catSlug: string;
+    brandsSubtitle?: string;
+    sortOrder?: number;
+    active?: boolean;
+  }>;
 }) {
   const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/settings`, payload, { headers: authHeaders() });
   return data as { data: any };
+}
+
+export async function listB2bNotifications(params?: { organizationId?: string }) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/notifications`, { params, headers: authHeaders() });
+  return data as { data: any[] };
+}
+
+export async function createB2bNotification(payload: {
+  organizationId: string;
+  title: string;
+  message: string;
+  type?: 'promo' | 'system' | 'delivery' | 'credit';
+  actionUrl?: string | null;
+  status?: 'draft' | 'published';
+  broadcast?: boolean;
+  customerId?: string | null;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/b2b/admin/notifications`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateB2bNotification(id: string, payload: {
+  organizationId: string;
+  title?: string;
+  message?: string;
+  type?: 'promo' | 'system' | 'delivery' | 'credit';
+  actionUrl?: string | null;
+  status?: 'draft' | 'published';
+  broadcast?: boolean;
+  customerId?: string | null;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/notifications/${id}`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function deleteB2bNotification(id: string, organizationId: string) {
+  const { data } = await axios.delete(`${API_BASE}/api/b2b/admin/notifications/${id}`, {
+    params: { organizationId },
+    headers: authHeaders()
+  });
+  return data as { data: any };
+}
+
+export async function listB2bCatalogCategories(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/catalog/categories`, {
+    params: { organizationId },
+    headers: authHeaders()
+  });
+  return data as { data: Array<{ slug: string; name: string }> };
+}
+
+export async function listB2bPopularCategories(organizationId: string) {
+  const { data } = await axios.get(`${API_BASE}/api/b2b/admin/popular-categories`, {
+    params: { organizationId },
+    headers: authHeaders()
+  });
+  return data as { data: any[] };
+}
+
+export async function updateB2bPopularCategories(payload: {
+  organizationId: string;
+  tiles: Array<{
+    id: string;
+    label: string;
+    icon: string;
+    catSlug: string;
+    brandsSubtitle?: string;
+    sortOrder?: number;
+    active?: boolean;
+  }>;
+}) {
+  const { data } = await axios.put(`${API_BASE}/api/b2b/admin/popular-categories`, payload, { headers: authHeaders() });
+  return data as { data: any[] };
 }
 export async function listB2bProducts(params?: {
   organizationId?: string;
@@ -5879,11 +5994,34 @@ export async function listB2bOrders(params?: {
   const { data } = await axios.get(`${API_BASE}/api/b2b/admin/orders`, { params, headers: authHeaders() });
   return data as { data: any[]; pagination?: any };
 }
+export async function updateB2bOrderStatus(
+  id: string,
+  payload: {
+    organizationId: string;
+    status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded' | 'on_hold';
+    reason?: string | null;
+  }
+) {
+  const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/orders/${id}/status`, payload, {
+    headers: authHeaders()
+  });
+  return data as { data: any; meta?: { allowedNext?: string[] } };
+}
 export async function listB2bShipments(params?: { organizationId?: string }) {
   const { data } = await axios.get(`${API_BASE}/api/b2b/admin/shipments`, { params, headers: authHeaders() });
   return data as { data: any[] };
 }
-export async function updateB2bShipment(id: string, payload: any) {
+export async function updateB2bShipment(
+  id: string,
+  payload: {
+    organizationId?: string;
+    status?: string;
+    carrier?: string | null;
+    trackingNumber?: string | null;
+    notes?: string | null;
+    reason?: string | null;
+  }
+) {
   const { data } = await axios.patch(`${API_BASE}/api/b2b/admin/shipments/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
 }

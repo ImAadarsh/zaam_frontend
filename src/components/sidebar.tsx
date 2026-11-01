@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall, Plug, Mail, FolderKanban, Flag, ShieldCheck, PiggyBank, UserCheck, History, Paperclip, Calculator, Banknote, Building } from 'lucide-react';
+import { Shield, Users, KeySquare, FileClock, LayoutDashboard, Grid, LogOut, X, ArrowLeftRight, User, Building2, Package2, Tag, DollarSign, Receipt, Package, Share2, FileText, Image as ImageIcon, Warehouse, Boxes, ShoppingCart, Truck, PackageSearch, ClipboardList, ArrowRightLeft, TrendingUp, RotateCcw, Landmark, BookOpen, Coins, Calendar, FileText as FileTextIcon, Wallet, CreditCard, FileCheck, BarChart, Clock, Briefcase, CheckSquare, MessageSquare, Star, Megaphone, Video, Mic, Gift, Ticket, Percent, BarChart3, CalendarClock, Download, MapPin, Settings, Upload, Globe, FileSpreadsheet, Store, PenLine, Inbox, LineChart, AtSign, Target, Columns3, PhoneCall, Plug, Mail, FolderKanban, Flag, ShieldCheck, PiggyBank, UserCheck, History, Paperclip, Calculator, Banknote, Building, Bell, LayoutGrid } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/auth';
@@ -202,8 +202,10 @@ export function Sidebar() {
                   <Item href="/b2b/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/b2b/orders')} />
                   <Item href="/b2b/shipments" icon={<Truck size={18} />} label="Shipments" active={pathname?.startsWith('/b2b/shipments')} />
                   <Item href="/b2b/shipping-methods" icon={<Truck size={18} />} label="Shipping Methods" active={pathname?.startsWith('/b2b/shipping-methods')} />
-                  <Item href="/b2b/credit-referrals" icon={<DollarSign size={18} />} label="Credit & Referrals" active={pathname?.startsWith('/b2b/credit-referrals')} />
+                  <Item href="/b2b/credit" icon={<DollarSign size={18} />} label="Credit" active={pathname === '/b2b/credit' || pathname?.startsWith('/b2b/credit/')} />
                   <Item href="/marketing/affiliates?channel=b2b" icon={<Share2 size={18} />} label="Affiliates & Referrals" active={pathname?.startsWith('/marketing/affiliates')} />
+                  <Item href="/b2b/notifications" icon={<Bell size={18} />} label="Alerts & Promos" active={pathname?.startsWith('/b2b/notifications')} />
+                  <Item href="/b2b/popular-categories" icon={<LayoutGrid size={18} />} label="Popular Categories" active={pathname?.startsWith('/b2b/popular-categories')} />
                   <Item href="/b2b/pricing" icon={<DollarSign size={18} />} label="Pricing" active={pathname?.startsWith('/b2b/pricing')} />
                   <Item href="/b2b/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/b2b/settings')} />
                   <Item href="/finance/payment-dashboard" icon={<CreditCard size={18} />} label="Payment Dashboard" active={pathname?.startsWith('/finance/payment-dashboard')} />
@@ -575,8 +577,10 @@ export function Sidebar() {
                       <Item href="/b2b/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/b2b/orders')} />
                       <Item href="/b2b/shipments" icon={<Truck size={18} />} label="Shipments" active={pathname?.startsWith('/b2b/shipments')} />
                       <Item href="/b2b/shipping-methods" icon={<Truck size={18} />} label="Shipping Methods" active={pathname?.startsWith('/b2b/shipping-methods')} />
-                      <Item href="/b2b/credit-referrals" icon={<DollarSign size={18} />} label="Credit & Referrals" active={pathname?.startsWith('/b2b/credit-referrals')} />
+                      <Item href="/b2b/credit" icon={<DollarSign size={18} />} label="Credit" active={pathname === '/b2b/credit' || pathname?.startsWith('/b2b/credit/')} />
                       <Item href="/marketing/affiliates?channel=b2b" icon={<Share2 size={18} />} label="Affiliates & Referrals" active={pathname?.startsWith('/marketing/affiliates')} />
+                      <Item href="/b2b/notifications" icon={<Bell size={18} />} label="Alerts & Promos" active={pathname?.startsWith('/b2b/notifications')} />
+                      <Item href="/b2b/popular-categories" icon={<LayoutGrid size={18} />} label="Popular Categories" active={pathname?.startsWith('/b2b/popular-categories')} />
                       <Item href="/b2b/pricing" icon={<DollarSign size={18} />} label="Pricing" active={pathname?.startsWith('/b2b/pricing')} />
                       <Item href="/b2b/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/b2b/settings')} />
                       <Item href="/finance/payment-dashboard" icon={<CreditCard size={18} />} label="Payment Dashboard" active={pathname?.startsWith('/finance/payment-dashboard')} />

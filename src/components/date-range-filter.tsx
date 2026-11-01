@@ -3,11 +3,13 @@
 import React from 'react';
 
 export type DateRange = { from: string; to: string; preset: DatePreset };
-export type DatePreset = '7d' | '30d' | '90d' | 'ytd' | '12m' | 'custom';
+export type DatePreset = 'today' | '7d' | '30d' | 'mtd' | '90d' | 'ytd' | '12m' | 'custom';
 
 const PRESETS: { id: Exclude<DatePreset, 'custom'>; label: string }[] = [
+  { id: 'today', label: 'Today' },
   { id: '7d', label: '7 days' },
   { id: '30d', label: '30 days' },
+  { id: 'mtd', label: 'MTD' },
   { id: '90d', label: '90 days' },
   { id: 'ytd', label: 'Year to date' },
   { id: '12m', label: '12 months' },
@@ -17,8 +19,10 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 export function rangeForPreset(preset: Exclude<DatePreset, 'custom'>, now = new Date()): DateRange {
   const to = iso(now);
-  const start = new Date(now);
+  if (preset === 'today') return { from: to, to, preset };
+  if (preset === 'mtd') return { from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, to, preset };
   if (preset === 'ytd') return { from: `${now.getFullYear()}-01-01`, to, preset };
+  const start = new Date(now);
   if (preset === '12m') start.setFullYear(start.getFullYear() - 1);
   else start.setDate(start.getDate() - (preset === '7d' ? 6 : preset === '30d' ? 29 : 89));
   return { from: iso(start), to, preset };
@@ -60,11 +64,23 @@ export function bucketKey(value: string | Date, range: DateRange): string {
   return daily ? s.slice(0, 10) : s.slice(0, 7);
 }
 
-export function DateRangeFilter({ value, onChange }: { value: DateRange; onChange: (r: DateRange) => void }) {
+export function DateRangeFilter({
+  value,
+  onChange,
+  presets
+}: {
+  value: DateRange;
+  onChange: (r: DateRange) => void;
+  /** Restrict which presets show (defaults to all). */
+  presets?: Exclude<DatePreset, 'custom'>[];
+}) {
+  const list = presets
+    ? PRESETS.filter((p) => presets.includes(p.id))
+    : PRESETS;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="inline-flex rounded-xl border border-border bg-card/60 p-1">
-        {PRESETS.map((p) => (
+      <div className="inline-flex flex-wrap rounded-xl border border-border bg-card/60 p-1">
+        {list.map((p) => (
           <button
             key={p.id}
             type="button"

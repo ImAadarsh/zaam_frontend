@@ -13,13 +13,36 @@ import {
   listB2bOrders,
   listB2bRetailerCatalog,
   listB2bRetailers,
-  listB2bShippingMethods
+  listB2bShippingMethods,
+  updateB2bOrderStatus
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { Eye, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
 
 type DraftLine = { variantId: string; sku: string; name: string; quantity: number; unitPrice: number; vatRate: number; stock: number };
+type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded' | 'on_hold';
+
+/** Mirrors zaam-api B2B_ORDER_STATUS_TRANSITIONS */
+const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  pending: ['confirmed', 'on_hold', 'cancelled'],
+  confirmed: ['processing', 'on_hold', 'cancelled'],
+  processing: ['completed', 'on_hold', 'cancelled'],
+  on_hold: ['confirmed', 'processing', 'cancelled'],
+  completed: ['refunded'],
+  cancelled: [],
+  refunded: []
+};
+
+const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  processing: 'Processing',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  refunded: 'Refunded',
+  on_hold: 'On hold'
+};
 
 const gbp = (n: any) => `£${Number(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -45,11 +68,53 @@ export default function B2bOrdersPage() {
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'' | 'trade_credit' | 'bank_transfer' | 'pay_on_portal'>('');
   const [saving, setSaving] = useState(false);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [cancelPrompt, setCancelPrompt] = useState<{ id: string; from: OrderStatus; to: OrderStatus } | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const load = async () => {
     if (!orgId) return;
     const res = await listB2bOrders({ organizationId: orgId, limit: 200 });
     setItems(res.data || []);
+  };
+
+  const applyStatus = async (orderId: string, status: OrderStatus, reason?: string) => {
+    if (!orgId) return;
+    setStatusUpdatingId(orderId);
+    try {
+      const res = await updateB2bOrderStatus(orderId, {
+        organizationId: orgId,
+        status,
+        reason: reason || undefined
+      });
+      setItems((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...res.data } : o)));
+      toast.success(`Status updated to ${ORDER_STATUS_LABELS[status] || status}`);
+      setCancelPrompt(null);
+      setCancelReason('');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message || 'Could not update status');
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
+
+  const onStatusChange = (row: any, next: OrderStatus) => {
+    const from = row.status as OrderStatus;
+    if (next === from) return;
+    const allowed = ORDER_STATUS_TRANSITIONS[from] || [];
+    if (!allowed.includes(next)) {
+      toast.error(`Cannot change from ${from} to ${next}`);
+      return;
+    }
+    if (next === 'cancelled') {
+      setCancelReason('');
+      setCancelPrompt({ id: row.id, from, to: next });
+      return;
+    }
+    if (!window.confirm(`Change order ${row.orderNumber} from ${ORDER_STATUS_LABELS[from]} to ${ORDER_STATUS_LABELS[next]}?`)) {
+      return;
+    }
+    void applyStatus(row.id, next);
   };
 
   useEffect(() => {
@@ -199,7 +264,31 @@ export default function B2bOrdersPage() {
   const columns = useMemo<ColumnDef<any>[]>(() => [
     { accessorKey: 'orderNumber', header: 'Order' },
     { accessorFn: (r) => r.customer?.companyName || r.customerEmail, header: 'Retailer' },
-    { accessorKey: 'status', header: 'Status' },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+        const current = (row.original.status || 'pending') as OrderStatus;
+        const allowed = ORDER_STATUS_TRANSITIONS[current] || [];
+        const busy = statusUpdatingId === row.original.id;
+        const options = Array.from(new Set([current, ...allowed]));
+        return (
+          <select
+            className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background capitalize disabled:opacity-60 min-w-[8.5rem]"
+            value={current}
+            disabled={busy || allowed.length === 0}
+            title={allowed.length === 0 ? `${ORDER_STATUS_LABELS[current]} is final` : 'Change order status'}
+            onChange={(e) => onStatusChange(row.original, e.target.value as OrderStatus)}
+          >
+            {options.map((s) => (
+              <option key={s} value={s} disabled={s !== current && !allowed.includes(s)}>
+                {busy && s === current ? 'Updating…' : ORDER_STATUS_LABELS[s] || s}
+              </option>
+            ))}
+          </select>
+        );
+      }
+    },
     { accessorKey: 'paymentStatus', header: 'Payment' },
     { accessorKey: 'fulfillmentStatus', header: 'Fulfilment' },
     {
@@ -224,7 +313,7 @@ export default function B2bOrdersPage() {
         </Link>
       )
     }
-  ], []);
+  ], [statusUpdatingId]);
 
   const addresses = retailerDetail?.customer?.addresses || [];
   const creditLimit = Number(retailerDetail?.customer?.creditLimit || 0);
@@ -253,6 +342,43 @@ export default function B2bOrdersPage() {
           )}
         </main>
       </div>
+
+      {cancelPrompt && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 space-y-3">
+            <div className="flex justify-between items-center">
+              <h2 className="font-bold">Cancel order</h2>
+              <button type="button" onClick={() => setCancelPrompt(null)}><X size={18} /></button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Change from {ORDER_STATUS_LABELS[cancelPrompt.from]} to Cancelled. Open shipments will be cancelled too.
+            </p>
+            <label className="block text-xs font-medium text-muted-foreground">
+              Reason *
+              <textarea
+                className="mt-1 w-full border border-border rounded-lg px-3 py-2 bg-background text-sm text-foreground"
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Why is this order being cancelled?"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="px-4 py-2 rounded-xl border border-border text-sm" onClick={() => setCancelPrompt(null)}>
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={statusUpdatingId === cancelPrompt.id || !cancelReason.trim()}
+                className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold disabled:opacity-50"
+                onClick={() => applyStatus(cancelPrompt.id, 'cancelled', cancelReason.trim())}
+              >
+                {statusUpdatingId === cancelPrompt.id ? 'Cancelling…' : 'Confirm cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showNew && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

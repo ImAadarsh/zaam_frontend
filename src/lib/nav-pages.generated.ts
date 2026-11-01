@@ -463,9 +463,9 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "b2b.credit-referrals",
-        "path": "/b2b/credit-referrals",
-        "label": "Credit & Referrals",
+        "key": "b2b.credit",
+        "path": "/b2b/credit",
+        "label": "Credit",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -479,6 +479,26 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN"
+        ]
+      },
+      {
+        "key": "b2b.notifications",
+        "path": "/b2b/notifications",
+        "label": "Alerts & Promos",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "SALES_REP"
+        ]
+      },
+      {
+        "key": "b2b.popular-categories",
+        "path": "/b2b/popular-categories",
+        "label": "Popular Categories",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "SALES_REP"
         ]
       },
       {
