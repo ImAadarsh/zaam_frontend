@@ -236,16 +236,24 @@ export default function InventoryImportPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm">
                 Organization *
-                <select
-                  className="mt-1 select w-full"
-                  value={organizationId}
-                  onChange={(e) => setOrganizationId(e.target.value)}
-                >
-                  <option value="">Select…</option>
-                  {organizations.map((o) => (
-                    <option key={o.id} value={o.id}>{o.name}</option>
-                  ))}
-                </select>
+                {session?.user?.roles?.includes('SUPER_ADMIN') ? (
+                  <select
+                    className="mt-1 select w-full"
+                    value={organizationId}
+                    onChange={(e) => setOrganizationId(e.target.value)}
+                  >
+                    <option value="">Select…</option>
+                    {organizations.map((o) => (
+                      <option key={o.id} value={o.id}>{o.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="mt-1 input w-full"
+                    readOnly
+                    value={organizations.find((o) => String(o.id) === String(organizationId))?.name || 'Your organisation'}
+                  />
+                )}
               </label>
               <label className="text-sm">
                 Business Unit

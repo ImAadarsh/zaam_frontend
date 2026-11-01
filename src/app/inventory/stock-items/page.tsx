@@ -121,7 +121,10 @@ export default function StockItemsPage() {
       setLoading(true);
       const [stockRes, warehousesRes, variantsRes] = await Promise.all([
         listStockItems(),
-        listWarehouses(),
+        listWarehouses({
+          organizationId: session?.user?.organizationId,
+          limit: 200
+        }),
         listVariants({ status: 'active' })
       ]);
       setItems(stockRes.data || []);
@@ -492,7 +495,12 @@ export default function StockItemsPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-border bg-card">
-                <RichDataTable columns={columns} data={items} searchPlaceholder="Search stock items..." />
+                <RichDataTable
+                  columns={columns}
+                  data={items}
+                  searchPlaceholder="Search stock items..."
+                  emptyMessage="No stock rows yet. Add stock against a warehouse, or receive goods via GRN."
+                />
               </div>
             )}
 

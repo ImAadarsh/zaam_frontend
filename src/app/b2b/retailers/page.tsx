@@ -195,7 +195,12 @@ export default function B2bRetailersPage() {
             </button>
           </div>
           {loading ? <div className="text-muted-foreground">Loading...</div> : (
-            <RichDataTable data={items} columns={columns} searchPlaceholder="Search retailers..." />
+            <RichDataTable
+              data={items}
+              columns={columns}
+              searchPlaceholder="Search retailers..."
+              emptyMessage="No retailers yet. Add a B2B retailer to let them order on the wholesale portal."
+            />
           )}
         </main>
       </div>

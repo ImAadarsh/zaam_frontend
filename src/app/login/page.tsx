@@ -41,12 +41,24 @@ function LoginContent() {
       setSession(res.accessToken, res.refreshToken, res.user);
       router.replace('/modules');
     } catch (e: any) {
+      const err = e?.response?.data?.error;
+      const details = Array.isArray(err?.details) ? err.details : [];
+      const fieldHint = details
+        .map((d: any) => {
+          const path = Array.isArray(d?.path) ? d.path.join('.') : '';
+          if (path === 'password' && d?.code === 'too_small') return 'Password must be at least 6 characters';
+          if (path === 'email') return 'Enter a valid email address';
+          return d?.message;
+        })
+        .filter(Boolean)
+        .join('. ');
       const message =
-        e?.response?.data?.error?.message ??
-        e?.response?.data?.message ??
-        e?.message ??
+        fieldHint ||
+        err?.message ||
+        e?.response?.data?.message ||
+        e?.message ||
         'Login failed';
-      toast.error(message);
+      toast.error(message === 'Invalid payload' ? 'Check your email and password and try again.' : message);
     } finally {
       setLoading(false);
     }
@@ -144,6 +156,8 @@ function LoginContent() {
                   className="input pr-10"
                   type={showPassword ? 'text' : 'password'}
                   required
+                  minLength={6}
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

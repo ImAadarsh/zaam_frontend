@@ -338,7 +338,12 @@ export default function B2bOrdersPage() {
             </button>
           </div>
           {loading ? <div className="text-muted-foreground">Loading...</div> : (
-            <RichDataTable data={items} columns={columns} searchPlaceholder="Search order number or retailer..." />
+            <RichDataTable
+              data={items}
+              columns={columns}
+              searchPlaceholder="Search order number or retailer..."
+              emptyMessage="No B2B orders yet. Retailers place orders on the portal, or create one here with New B2B order."
+            />
           )}
         </main>
       </div>

@@ -244,7 +244,9 @@ function ProductFields({
   businessUnits,
   taxCodes,
   warehouses,
-  onReloadTaxCodes
+  onReloadTaxCodes,
+  categoryOptions = [],
+  subCategoryOptions = []
 }: {
   value: ProductForm;
   onChange: (next: ProductForm) => void;
@@ -254,6 +256,8 @@ function ProductFields({
   taxCodes: any[];
   warehouses: WarehouseOption[];
   onReloadTaxCodes?: () => void;
+  categoryOptions?: string[];
+  subCategoryOptions?: string[];
 }) {
   const set = (patch: Partial<ProductForm>) => onChange({ ...value, ...patch });
   const warehouseChoices = useMemo(() => {
@@ -359,8 +363,40 @@ function ProductFields({
       <section>
         <SectionTitle>Classification</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
-          {field('Category', 'category')}
-          {field('Sub-Category', 'subCategory')}
+          <label className="text-sm">
+            Category
+            <input
+              className="mt-1 input w-full"
+              list="catalog-category-suggestions"
+              value={value.category}
+              onChange={(e) => set({ category: e.target.value })}
+              placeholder="e.g. Vapes, Snacks…"
+            />
+            {categoryOptions.length > 0 && (
+              <datalist id="catalog-category-suggestions">
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            )}
+          </label>
+          <label className="text-sm">
+            Sub-Category
+            <input
+              className="mt-1 input w-full"
+              list="catalog-subcategory-suggestions"
+              value={value.subCategory}
+              onChange={(e) => set({ subCategory: e.target.value })}
+              placeholder="Optional"
+            />
+            {subCategoryOptions.length > 0 && (
+              <datalist id="catalog-subcategory-suggestions">
+                {subCategoryOptions.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            )}
+          </label>
           {field('Brand / Manufacturer', 'brand')}
           {field('Unit of Measure (UOM)', 'uom', { placeholder: 'SET, PCS, BOX…' })}
           {field('Pack Size', 'packSize', { placeholder: '1, 12x330ml…' })}
@@ -851,6 +887,22 @@ export default function CatalogItemsPage() {
     }
   }
 
+  const isSuperAdmin = !!session?.user?.roles?.includes('SUPER_ADMIN');
+  const categoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(items.map((it) => String(it.category || '').trim()).filter(Boolean))
+      ).sort((a, b) => a.localeCompare(b)),
+    [items]
+  );
+  const subCategoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(items.map((it) => String(it.subCategory || '').trim()).filter(Boolean))
+      ).sort((a, b) => a.localeCompare(b)),
+    [items]
+  );
+
   const columns = useMemo<ColumnDef<CatalogItem>[]>(
     () => [
       {
@@ -1134,6 +1186,7 @@ export default function CatalogItemsPage() {
 
             <RichDataTable
               columns={columns}
+              emptyMessage="No catalog items in this organisation yet. Add an item or import from Excel to get started."
               data={items.filter((it) => {
                 if (listFilter.warehouseId && String(it.warehouseId || '') !== listFilter.warehouseId) return false;
                 if (listFilter.barcode === 'with' && !String(it.barcode || '').trim()) return false;
@@ -1184,12 +1237,14 @@ export default function CatalogItemsPage() {
                     <ProductFields
                       value={form}
                       onChange={setForm}
-                      includeOrg
+                      includeOrg={isSuperAdmin}
                       organizations={organizations}
                       businessUnits={businessUnits}
                       taxCodes={taxCodes}
                       warehouses={warehouses}
                       onReloadTaxCodes={reloadTaxCodes}
+                      categoryOptions={categoryOptions}
+                      subCategoryOptions={subCategoryOptions}
                     />
                     <div className="border-t pt-4 space-y-2">
                       <div className="flex items-center justify-between">
@@ -1272,6 +1327,8 @@ export default function CatalogItemsPage() {
                       taxCodes={taxCodes}
                       warehouses={warehouses}
                       onReloadTaxCodes={reloadTaxCodes}
+                      categoryOptions={categoryOptions}
+                      subCategoryOptions={subCategoryOptions}
                     />
 
                     <div className="border-t pt-4 space-y-2">

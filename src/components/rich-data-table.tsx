@@ -188,6 +188,11 @@ interface RichDataTableProps<TData, TValue> {
     defaultSort?: boolean;
     /** Distinguishes several tables with identical columns on one page (state is persisted per pathname). */
     tableId?: string;
+    /**
+     * Copy shown when `data` is empty and no search/column filters are active.
+     * Filtered-empty tables still show "No results found."
+     */
+    emptyMessage?: string;
 }
 
 export function RichDataTable<TData, TValue>({
@@ -198,6 +203,7 @@ export function RichDataTable<TData, TValue>({
     initialSorting,
     defaultSort = true,
     tableId,
+    emptyMessage = 'Nothing here yet.',
 }: RichDataTableProps<TData, TValue>) {
     const pathname = usePathname();
     const [sorting, setSorting] = useState<SortingState>(initialSorting ?? []);
@@ -420,9 +426,15 @@ export function RichDataTable<TData, TValue>({
                                         colSpan={columns.length}
                                         className="h-32 text-center text-muted-foreground"
                                     >
-                                        <div className="flex flex-col items-center justify-center gap-2">
+                                        <div className="flex flex-col items-center justify-center gap-2 px-4">
                                             <Search className="h-8 w-8 opacity-20" />
-                                            <p>No results found.</p>
+                                            <p className="max-w-md text-sm">
+                                                {data.length === 0 &&
+                                                !String(globalFilter || '').trim() &&
+                                                columnFilters.length === 0
+                                                    ? emptyMessage
+                                                    : 'No results found.'}
+                                            </p>
                                         </div>
                                     </td>
                                 </tr>
@@ -456,7 +468,7 @@ export function RichDataTable<TData, TValue>({
                     </div>
                     <div className="flex items-center gap-1">
                         <span className="text-xs mr-2 whitespace-nowrap">
-                            Page {pageCount === 0 ? 0 : pageIndex + 1} of {pageCount}
+                            {pageCount === 0 ? 'Page —' : `Page ${pageIndex + 1} of ${pageCount}`}
                         </span>
                         <button
                             type="button"

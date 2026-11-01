@@ -152,7 +152,10 @@ export default function WarehousesPage() {
     (async () => {
       try {
         const [warehousesRes, locationsRes, typesRes] = await Promise.all([
-          listWarehouses(),
+          listWarehouses({
+            organizationId: session?.user?.organizationId,
+            limit: 200
+          }),
           listLocations(undefined, session?.user?.organizationId),
           listWarehouseTypes({ organizationId: session?.user?.organizationId }).catch(() => ({ data: [] as WarehouseType[] }))
         ]);
@@ -364,7 +367,11 @@ export default function WarehousesPage() {
               </div>
             </div>
 
-            <RichDataTable columns={columns} data={items} />
+            <RichDataTable
+              columns={columns}
+              data={items}
+              emptyMessage="No warehouses in this organisation yet. Add one to hold stock for catalog and B2B orders."
+            />
 
             {showCreate && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -376,6 +383,11 @@ export default function WarehousesPage() {
                     </button>
                   </div>
                   <form onSubmit={onCreate} className="space-y-4">
+                    {locations.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                        No IAM locations available. Create a business-unit location under Identity &amp; Access before adding a warehouse.
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1.5">Location *</label>
@@ -384,6 +396,7 @@ export default function WarehousesPage() {
                           onChange={e => setForm(prev => ({ ...prev, locationId: e.target.value }))}
                           className="select"
                           required
+                          disabled={locations.length === 0}
                         >
                           <option value="">Select...</option>
                           {locations.map(loc => (
