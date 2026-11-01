@@ -15,7 +15,7 @@ type Tri = 'any' | 'yes' | 'no';
 type ScoreBand = 'any' | 'low' | 'med' | 'high';
 
 type ProductFilters = {
-  eshopVisible: Tri;
+  visibleOnB2bShop: Tri;
   hasCoupon: Tri;
   hasB2bPrice: Tri;
   inStock: Tri;
@@ -25,7 +25,7 @@ type ProductFilters = {
 };
 
 const DEFAULT_FILTERS: ProductFilters = {
-  eshopVisible: 'any',
+  visibleOnB2bShop: 'any',
   hasCoupon: 'any',
   hasB2bPrice: 'any',
   inStock: 'any',
@@ -134,9 +134,9 @@ export default function B2bProductsPage() {
           if (!idSet.has(String(p.id))) return p;
           const published = publish;
           const active = p.status === 'active';
-          const eshopVisible = publishMode === 'all_active' ? active : published && active;
+          const visibleOnB2bShop = publishMode === 'all_active' ? active : published && active;
           const checks = {
-            eshopVisible,
+            visibleOnB2bShop,
             hasB2bPrice: Boolean(p.hasB2bPrice),
             hasStock: Boolean(p.hasStock),
             hasImage: Boolean(p.hasImage),
@@ -148,7 +148,7 @@ export default function B2bProductsPage() {
           return {
             ...p,
             published,
-            eshopVisible,
+            visibleOnB2bShop,
             readinessChecks: checks,
             readinessScore,
             readinessBand
@@ -182,9 +182,9 @@ export default function B2bProductsPage() {
         prev.map((p) => {
           const published = Boolean(p.published);
           const active = p.status === 'active';
-          const eshopVisible = mode === 'all_active' ? active : published && active;
+          const visibleOnB2bShop = mode === 'all_active' ? active : published && active;
           const checks = {
-            eshopVisible,
+            visibleOnB2bShop,
             hasB2bPrice: Boolean(p.hasB2bPrice),
             hasStock: Boolean(p.hasStock),
             hasImage: Boolean(p.hasImage),
@@ -193,7 +193,7 @@ export default function B2bProductsPage() {
           const passed = Object.values(checks).filter(Boolean).length;
           const readinessScore = Math.round((passed / 5) * 100);
           const readinessBand = readinessScore >= 70 ? 'high' : readinessScore >= 40 ? 'med' : 'low';
-          return { ...p, eshopVisible, readinessChecks: checks, readinessScore, readinessBand };
+          return { ...p, visibleOnB2bShop, readinessChecks: checks, readinessScore, readinessBand };
         })
       );
       toast.success(mode === 'mapped_only' ? 'Only selected products are now shown on the portal' : 'All active products are now shown on the portal');
@@ -209,9 +209,9 @@ export default function B2bProductsPage() {
 
   const tableRows = useMemo(() => {
     return items.filter((p) => {
-      const eshopVisible = p.eshopVisible ?? (publishMode === 'all_active' ? p.status === 'active' : Boolean(p.published) && p.status === 'active');
+      const visibleOnB2bShop = p.visibleOnB2bShop ?? (publishMode === 'all_active' ? p.status === 'active' : Boolean(p.published) && p.status === 'active');
       const hasOffer = Boolean(p.hasCoupon || p.hasPromo);
-      if (!triMatch(filters.eshopVisible, eshopVisible)) return false;
+      if (!triMatch(filters.visibleOnB2bShop, visibleOnB2bShop)) return false;
       if (!triMatch(filters.hasCoupon, hasOffer)) return false;
       if (!triMatch(filters.hasB2bPrice, Boolean(p.hasB2bPrice))) return false;
       if (!triMatch(filters.inStock, Boolean(p.hasStock))) return false;
@@ -245,7 +245,7 @@ export default function B2bProductsPage() {
         const band = String(row.original.readinessBand || 'low');
         const checks = row.original.readinessChecks || {};
         const tips = [
-          checks.eshopVisible ? 'On eShop' : 'Not on eShop',
+          checks.visibleOnB2bShop ? 'On B2B Shop' : 'Not on B2B Shop',
           checks.hasB2bPrice ? 'Has price' : 'No B2B price',
           checks.hasStock ? 'In stock' : 'No stock',
           checks.hasImage ? 'Has image' : 'No image',
@@ -263,10 +263,10 @@ export default function B2bProductsPage() {
     },
     {
       id: 'onPortal',
-      accessorFn: (r) => (r.eshopVisible ? 'Visible' : 'Hidden'),
-      header: 'eShop',
+      accessorFn: (r) => (r.visibleOnB2bShop ? 'Visible' : 'Hidden'),
+      header: 'B2B Shop',
       cell: ({ row }) => {
-        const visible = Boolean(row.original.eshopVisible);
+        const visible = Boolean(row.original.visibleOnB2bShop);
         const label = publishMode === 'all_active'
           ? (visible ? 'Visible (all active)' : 'Hidden (inactive)')
           : (visible ? 'Visible' : row.original.published ? 'Added (inactive item)' : 'Not added');
@@ -334,7 +334,7 @@ export default function B2bProductsPage() {
               <div>
                 <h1 className="text-xl font-bold">ERP products on B2B</h1>
                 <p className="text-sm text-muted-foreground">
-                  Filter by eShop visibility, offers, and catalog readiness — not a KPI score.
+                  Filter by B2B Shop visibility, offers, and catalog readiness — not a KPI score.
                 </p>
               </div>
             </div>
@@ -383,15 +383,15 @@ export default function B2bProductsPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <FilterChip
-                active={filters.eshopVisible !== 'any'}
+                active={filters.visibleOnB2bShop !== 'any'}
                 label={
-                  filters.eshopVisible === 'any'
-                    ? 'eShop: all'
-                    : filters.eshopVisible === 'yes'
-                      ? 'Visible on eShop'
-                      : 'Not visible on eShop'
+                  filters.visibleOnB2bShop === 'any'
+                    ? 'B2B Shop: all'
+                    : filters.visibleOnB2bShop === 'yes'
+                      ? 'Visible on B2B Shop'
+                      : 'Not visible on B2B Shop'
                 }
-                onClick={() => setFilters((f) => ({ ...f, eshopVisible: cycleTri(f.eshopVisible) }))}
+                onClick={() => setFilters((f) => ({ ...f, visibleOnB2bShop: cycleTri(f.visibleOnB2bShop) }))}
               />
               <FilterChip
                 active={filters.hasCoupon !== 'any'}
@@ -447,7 +447,7 @@ export default function B2bProductsPage() {
               />
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Ready score = checklist of eShop visible, B2B price, stock, image, barcode (20 pts each). Hover a score for the checklist.
+              Ready score = checklist of B2B Shop visible, B2B price, stock, image, barcode (20 pts each). Hover a score for the checklist.
             </p>
           </div>
 

@@ -6007,7 +6007,9 @@ export async function listB2bProducts(params?: {
   organizationId?: string;
   search?: string;
   published?: string | boolean;
-  eshopVisible?: string | boolean;
+  /** Filter products visible on the B2B Shop (wholesale portal). */
+  visibleOnB2bShop?: string | boolean;
+  b2bShopVisible?: string | boolean;
   hasCoupon?: string | boolean;
   hasB2bPrice?: string | boolean;
   inStock?: string | boolean;
