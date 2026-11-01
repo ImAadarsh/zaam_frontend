@@ -11,17 +11,85 @@ import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
 import { Package2, Plus, X } from 'lucide-react';
 
-type Visibility = 'all' | 'published' | 'hidden';
+type Tri = 'any' | 'yes' | 'no';
+type ScoreBand = 'any' | 'low' | 'med' | 'high';
 
-async function fetchAllProducts(organizationId: string, extra?: { search?: string; published?: string }) {
+type ProductFilters = {
+  eshopVisible: Tri;
+  hasCoupon: Tri;
+  hasB2bPrice: Tri;
+  inStock: Tri;
+  missingBarcode: Tri;
+  missingImage: Tri;
+  scoreBand: ScoreBand;
+};
+
+const DEFAULT_FILTERS: ProductFilters = {
+  eshopVisible: 'any',
+  hasCoupon: 'any',
+  hasB2bPrice: 'any',
+  inStock: 'any',
+  missingBarcode: 'any',
+  missingImage: 'any',
+  scoreBand: 'any'
+};
+
+async function fetchAllProducts(organizationId: string) {
   const out: any[] = [];
   for (let page = 1; page <= 50; page++) {
-    const res = await listB2bProducts({ organizationId, limit: 200, page, ...extra } as any);
+    const res = await listB2bProducts({ organizationId, limit: 200, page });
     out.push(...(res.data || []));
     const totalPages = res.pagination?.totalPages ?? 1;
     if (page >= totalPages) break;
   }
   return out;
+}
+
+function triMatch(tri: Tri, value: boolean): boolean {
+  if (tri === 'any') return true;
+  return tri === 'yes' ? value : !value;
+}
+
+function scoreTone(band: string) {
+  if (band === 'high') return 'bg-emerald-500/10 text-emerald-700';
+  if (band === 'med') return 'bg-amber-500/10 text-amber-700';
+  return 'bg-rose-500/10 text-rose-700';
+}
+
+function FilterChip({
+  active,
+  label,
+  onClick
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+        active
+          ? 'border-primary bg-primary/10 text-primary'
+          : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function cycleTri(current: Tri): Tri {
+  if (current === 'any') return 'yes';
+  if (current === 'yes') return 'no';
+  return 'any';
+}
+
+function triLabel(base: string, tri: Tri): string {
+  if (tri === 'yes') return base;
+  if (tri === 'no') return `Not ${base.charAt(0).toLowerCase()}${base.slice(1)}`;
+  return base;
 }
 
 export default function B2bProductsPage() {
@@ -31,7 +99,7 @@ export default function B2bProductsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [publishMode, setPublishMode] = useState<'all_active' | 'mapped_only'>('all_active');
-  const [visibility, setVisibility] = useState<Visibility>('all');
+  const [filters, setFilters] = useState<ProductFilters>(DEFAULT_FILTERS);
   const [showAdd, setShowAdd] = useState(false);
   const [addSearch, setAddSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -61,7 +129,32 @@ export default function B2bProductsPage() {
       if (publish) await publishB2bProducts({ organizationId: orgId, catalogItemIds: ids });
       else await unpublishB2bProducts({ organizationId: orgId, catalogItemIds: ids });
       const idSet = new Set(ids.map(String));
-      setItems((prev) => prev.map((p) => (idSet.has(String(p.id)) ? { ...p, published: publish } : p)));
+      setItems((prev) =>
+        prev.map((p) => {
+          if (!idSet.has(String(p.id))) return p;
+          const published = publish;
+          const active = p.status === 'active';
+          const eshopVisible = publishMode === 'all_active' ? active : published && active;
+          const checks = {
+            eshopVisible,
+            hasB2bPrice: Boolean(p.hasB2bPrice),
+            hasStock: Boolean(p.hasStock),
+            hasImage: Boolean(p.hasImage),
+            hasBarcode: Boolean(p.hasBarcode)
+          };
+          const passed = Object.values(checks).filter(Boolean).length;
+          const readinessScore = Math.round((passed / 5) * 100);
+          const readinessBand = readinessScore >= 70 ? 'high' : readinessScore >= 40 ? 'med' : 'low';
+          return {
+            ...p,
+            published,
+            eshopVisible,
+            readinessChecks: checks,
+            readinessScore,
+            readinessBand
+          };
+        })
+      );
       toast.success(
         publish
           ? `${ids.length} product${ids.length === 1 ? '' : 's'} added to the B2B portal`
@@ -84,18 +177,52 @@ export default function B2bProductsPage() {
     try {
       await updateB2bSettings({ organizationId: orgId, publishMode: mode });
       setPublishMode(mode);
+      // Recompute visibility / score for current rows
+      setItems((prev) =>
+        prev.map((p) => {
+          const published = Boolean(p.published);
+          const active = p.status === 'active';
+          const eshopVisible = mode === 'all_active' ? active : published && active;
+          const checks = {
+            eshopVisible,
+            hasB2bPrice: Boolean(p.hasB2bPrice),
+            hasStock: Boolean(p.hasStock),
+            hasImage: Boolean(p.hasImage),
+            hasBarcode: Boolean(p.hasBarcode)
+          };
+          const passed = Object.values(checks).filter(Boolean).length;
+          const readinessScore = Math.round((passed / 5) * 100);
+          const readinessBand = readinessScore >= 70 ? 'high' : readinessScore >= 40 ? 'med' : 'low';
+          return { ...p, eshopVisible, readinessChecks: checks, readinessScore, readinessBand };
+        })
+      );
       toast.success(mode === 'mapped_only' ? 'Only selected products are now shown on the portal' : 'All active products are now shown on the portal');
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message || 'Failed to update publish mode');
     }
   };
 
-  const isVisible = (p: any) => (publishMode === 'all_active' ? p.status === 'active' : Boolean(p.published) && p.status === 'active');
+  const filtersActive = useMemo(
+    () => Object.values(filters).some((v) => v !== 'any'),
+    [filters]
+  );
 
   const tableRows = useMemo(() => {
-    if (visibility === 'all') return items;
-    return items.filter((p) => (visibility === 'published' ? isVisible(p) : !isVisible(p)));
-  }, [items, visibility, publishMode]);
+    return items.filter((p) => {
+      const eshopVisible = p.eshopVisible ?? (publishMode === 'all_active' ? p.status === 'active' : Boolean(p.published) && p.status === 'active');
+      const hasOffer = Boolean(p.hasCoupon || p.hasPromo);
+      if (!triMatch(filters.eshopVisible, eshopVisible)) return false;
+      if (!triMatch(filters.hasCoupon, hasOffer)) return false;
+      if (!triMatch(filters.hasB2bPrice, Boolean(p.hasB2bPrice))) return false;
+      if (!triMatch(filters.inStock, Boolean(p.hasStock))) return false;
+      if (filters.missingBarcode === 'yes' && p.hasBarcode) return false;
+      if (filters.missingBarcode === 'no' && !p.hasBarcode) return false;
+      if (filters.missingImage === 'yes' && p.hasImage) return false;
+      if (filters.missingImage === 'no' && !p.hasImage) return false;
+      if (filters.scoreBand !== 'any' && (p.readinessBand || 'low') !== filters.scoreBand) return false;
+      return true;
+    });
+  }, [items, filters, publishMode]);
 
   const addCandidates = useMemo(() => {
     const q = addSearch.trim().toLowerCase();
@@ -110,16 +237,36 @@ export default function B2bProductsPage() {
     { accessorKey: 'brand', header: 'Brand' },
     { accessorKey: 'category', header: 'Category' },
     {
-      accessorKey: 'sellingPrice',
-      header: 'Selling',
-      cell: ({ row }) => row.original.sellingPrice != null ? `£${Number(row.original.sellingPrice).toFixed(2)}` : '—'
+      id: 'readinessScore',
+      accessorFn: (r) => Number(r.readinessScore ?? 0),
+      header: 'Ready',
+      cell: ({ row }) => {
+        const score = Number(row.original.readinessScore ?? 0);
+        const band = String(row.original.readinessBand || 'low');
+        const checks = row.original.readinessChecks || {};
+        const tips = [
+          checks.eshopVisible ? 'On eShop' : 'Not on eShop',
+          checks.hasB2bPrice ? 'Has price' : 'No B2B price',
+          checks.hasStock ? 'In stock' : 'No stock',
+          checks.hasImage ? 'Has image' : 'No image',
+          checks.hasBarcode ? 'Has barcode' : 'No barcode'
+        ].join(' · ');
+        return (
+          <span
+            title={tips}
+            className={`text-xs font-semibold px-2 py-1 rounded-full tabular-nums ${scoreTone(band)}`}
+          >
+            {score} · {band === 'med' ? 'Med' : band.charAt(0).toUpperCase() + band.slice(1)}
+          </span>
+        );
+      }
     },
     {
       id: 'onPortal',
-      accessorFn: (r) => (isVisible(r) ? 'Visible' : 'Hidden'),
-      header: 'On portal',
+      accessorFn: (r) => (r.eshopVisible ? 'Visible' : 'Hidden'),
+      header: 'eShop',
       cell: ({ row }) => {
-        const visible = isVisible(row.original);
+        const visible = Boolean(row.original.eshopVisible);
         const label = publishMode === 'all_active'
           ? (visible ? 'Visible (all active)' : 'Hidden (inactive)')
           : (visible ? 'Visible' : row.original.published ? 'Added (inactive item)' : 'Not added');
@@ -129,6 +276,36 @@ export default function B2bProductsPage() {
           </span>
         );
       }
+    },
+    {
+      id: 'hasCoupon',
+      accessorFn: (r) => (r.hasCoupon || r.hasPromo ? 'Yes' : 'No'),
+      header: 'Offer',
+      cell: ({ row }) => {
+        const on = Boolean(row.original.hasCoupon || row.original.hasPromo);
+        return (
+          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${on ? 'bg-sky-500/10 text-sky-700' : 'bg-muted text-muted-foreground'}`}>
+            {on ? (row.original.hasCoupon ? 'Coupon' : 'Promo') : '—'}
+          </span>
+        );
+      }
+    },
+    {
+      id: 'hasB2bPrice',
+      accessorFn: (r) => (r.hasB2bPrice ? 'Yes' : 'No'),
+      header: 'B2B price',
+      cell: ({ row }) => (row.original.hasB2bPrice ? 'Yes' : '—')
+    },
+    {
+      id: 'hasStock',
+      accessorFn: (r) => (r.hasStock ? 'Yes' : 'No'),
+      header: 'Stock',
+      cell: ({ row }) => (row.original.hasStock ? 'In stock' : 'Out')
+    },
+    {
+      accessorKey: 'sellingPrice',
+      header: 'Selling',
+      cell: ({ row }) => row.original.sellingPrice != null ? `£${Number(row.original.sellingPrice).toFixed(2)}` : '—'
     },
     {
       id: 'actions',
@@ -143,7 +320,7 @@ export default function B2bProductsPage() {
         </button>
       )
     }
-  ], [publishMode, busy, orgId]);
+  ], [publishMode, busy]);
 
   return (
     <div className="min-h-screen app-surface">
@@ -157,29 +334,16 @@ export default function B2bProductsPage() {
               <div>
                 <h1 className="text-xl font-bold">ERP products on B2B</h1>
                 <p className="text-sm text-muted-foreground">
-                  {publishMode === 'all_active'
-                    ? 'All active catalog items are visible on the wholesale site.'
-                    : 'Only the products you add here are visible on the wholesale site.'}
+                  Filter by eShop visibility, offers, and catalog readiness — not a KPI score.
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                className="border border-border rounded-lg px-3 py-2 bg-background text-sm"
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value as Visibility)}
-              >
-                <option value="all">All products</option>
-                <option value="published">Visible on portal</option>
-                <option value="hidden">Not visible</option>
-              </select>
-              <button
-                onClick={() => { setSelected(new Set()); setAddSearch(''); setShowAdd(true); }}
-                className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold"
-              >
-                <Plus size={16} /> Add products
-              </button>
-            </div>
+            <button
+              onClick={() => { setSelected(new Set()); setAddSearch(''); setShowAdd(true); }}
+              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold"
+            >
+              <Plus size={16} /> Add products
+            </button>
           </div>
 
           <div className="p-4 rounded-2xl border border-border bg-card flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -204,12 +368,108 @@ export default function B2bProductsPage() {
             )}
           </div>
 
+          <div className="p-3 rounded-2xl border border-border bg-card space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Catalog readiness filters</p>
+              {filtersActive && (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-primary hover:underline"
+                  onClick={() => setFilters(DEFAULT_FILTERS)}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <FilterChip
+                active={filters.eshopVisible !== 'any'}
+                label={
+                  filters.eshopVisible === 'any'
+                    ? 'eShop: all'
+                    : filters.eshopVisible === 'yes'
+                      ? 'Visible on eShop'
+                      : 'Not visible on eShop'
+                }
+                onClick={() => setFilters((f) => ({ ...f, eshopVisible: cycleTri(f.eshopVisible) }))}
+              />
+              <FilterChip
+                active={filters.hasCoupon !== 'any'}
+                label={
+                  filters.hasCoupon === 'any'
+                    ? 'Coupon / promo'
+                    : filters.hasCoupon === 'yes'
+                      ? 'Has coupon / promo'
+                      : 'No coupon / promo'
+                }
+                onClick={() => setFilters((f) => ({ ...f, hasCoupon: cycleTri(f.hasCoupon) }))}
+              />
+              <FilterChip
+                active={filters.hasB2bPrice !== 'any'}
+                label={triLabel('Has B2B price', filters.hasB2bPrice)}
+                onClick={() => setFilters((f) => ({ ...f, hasB2bPrice: cycleTri(f.hasB2bPrice) }))}
+              />
+              <FilterChip
+                active={filters.inStock !== 'any'}
+                label={
+                  filters.inStock === 'any'
+                    ? 'Stock'
+                    : filters.inStock === 'yes'
+                      ? 'In stock'
+                      : 'Out of stock'
+                }
+                onClick={() => setFilters((f) => ({ ...f, inStock: cycleTri(f.inStock) }))}
+              />
+              <FilterChip
+                active={filters.missingImage !== 'any'}
+                label={filters.missingImage === 'yes' ? 'Missing image' : filters.missingImage === 'no' ? 'Has image' : 'Image'}
+                onClick={() => setFilters((f) => ({ ...f, missingImage: cycleTri(f.missingImage) }))}
+              />
+              <FilterChip
+                active={filters.missingBarcode !== 'any'}
+                label={filters.missingBarcode === 'yes' ? 'Missing barcode' : filters.missingBarcode === 'no' ? 'Has barcode' : 'Barcode'}
+                onClick={() => setFilters((f) => ({ ...f, missingBarcode: cycleTri(f.missingBarcode) }))}
+              />
+              <FilterChip
+                active={filters.scoreBand === 'high'}
+                label="Ready: High"
+                onClick={() => setFilters((f) => ({ ...f, scoreBand: f.scoreBand === 'high' ? 'any' : 'high' }))}
+              />
+              <FilterChip
+                active={filters.scoreBand === 'med'}
+                label="Ready: Med"
+                onClick={() => setFilters((f) => ({ ...f, scoreBand: f.scoreBand === 'med' ? 'any' : 'med' }))}
+              />
+              <FilterChip
+                active={filters.scoreBand === 'low'}
+                label="Ready: Low"
+                onClick={() => setFilters((f) => ({ ...f, scoreBand: f.scoreBand === 'low' ? 'any' : 'low' }))}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Ready score = checklist of eShop visible, B2B price, stock, image, barcode (20 pts each). Hover a score for the checklist.
+            </p>
+          </div>
+
           {loading ? <div className="text-muted-foreground">Loading...</div> : (
             <RichDataTable
               data={tableRows}
               columns={columns}
+              tableId="b2b-products-readiness-v1"
+              defaultSort={false}
               searchPlaceholder="Search SKU, name, brand..."
-              emptyMessage="No catalog products to publish yet. Add items in Catalog, then return here to show them on the B2B portal."
+              initialColumnVisibility={{
+                brand: false,
+                category: false,
+                sellingPrice: false,
+                hasB2bPrice: true,
+                hasStock: true
+              }}
+              emptyMessage={
+                filtersActive
+                  ? 'No products match — clear filters'
+                  : 'No catalog products to publish yet. Add items in Catalog, then return here to show them on the B2B portal.'
+              }
             />
           )}
         </main>

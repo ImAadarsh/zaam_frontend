@@ -6006,12 +6006,20 @@ export async function updateB2bPopularCategories(payload: {
 export async function listB2bProducts(params?: {
   organizationId?: string;
   search?: string;
-  published?: string;
+  published?: string | boolean;
+  eshopVisible?: string | boolean;
+  hasCoupon?: string | boolean;
+  hasB2bPrice?: string | boolean;
+  inStock?: string | boolean;
+  missingBarcode?: string | boolean;
+  missingImage?: string | boolean;
+  minScore?: number;
+  scoreBand?: 'low' | 'med' | 'high';
   page?: number;
   limit?: number;
 }) {
   const { data } = await axios.get(`${API_BASE}/api/b2b/admin/products`, { params, headers: authHeaders() });
-  return data as { data: any[]; pagination?: any };
+  return data as { data: any[]; pagination?: any; meta?: { publishMode?: string } };
 }
 export async function publishB2bProducts(payload: { organizationId: string; catalogItemIds: string[] }) {
   const { data } = await axios.post(`${API_BASE}/api/b2b/admin/products/publish`, payload, { headers: authHeaders() });
