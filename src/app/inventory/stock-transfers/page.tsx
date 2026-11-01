@@ -346,7 +346,12 @@ export default function StockTransfersPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-border bg-card p-2 shadow-sm">
-                <RichDataTable columns={columns} data={items} searchPlaceholder="Search by transfer number or warehouse…" />
+                <RichDataTable
+                  columns={columns}
+                  data={items}
+                  searchPlaceholder="Search by transfer number or warehouse…"
+                  emptyMessage="No stock transfers yet. Move stock between warehouses when you have at least two sites."
+                />
               </div>
             )}
           </div>

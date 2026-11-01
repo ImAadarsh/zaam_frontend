@@ -323,7 +323,11 @@ export default function BankAccountsPage() {
               )}
             </div>
 
-            <RichDataTable data={items} columns={columns} />
+            <RichDataTable
+              data={items}
+              columns={columns}
+              emptyMessage="No bank accounts yet. Add one to reconcile payments and bank transactions."
+            />
 
             {showCreate && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

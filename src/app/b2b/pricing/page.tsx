@@ -72,19 +72,41 @@ export default function B2bPricingPage() {
           {loading ? <div className="text-muted-foreground">Loading...</div> : (
             <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
               <label className="text-sm font-medium">Default price list</label>
-              <select
-                className="w-full border border-border rounded-lg px-3 py-2 bg-background"
-                value={selected}
-                onChange={(e) => setSelected(e.target.value)}
-              >
-                <option value="">None (use selling price / tier lists)</option>
-                {lists.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name} ({l.type} · {l.code})</option>
-                ))}
-              </select>
-              <div className="flex gap-3">
-                <button onClick={save} className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold">Save</button>
-                <Link href="/catalog/price-lists" className="text-sm underline self-center">Manage price lists</Link>
+              {lists.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border p-4 space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    No price lists in this organisation yet. Create a wholesale list, then set it as the B2B default here.
+                  </p>
+                  <Link href="/catalog/price-lists" className="text-sm font-medium text-primary hover:underline">
+                    Create a price list →
+                  </Link>
+                </div>
+              ) : (
+                <select
+                  className="w-full border border-border rounded-lg px-3 py-2 bg-background"
+                  value={selected}
+                  onChange={(e) => setSelected(e.target.value)}
+                >
+                  <option value="">None (use selling price / tier lists)</option>
+                  {lists.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name} ({l.type} · {l.code})</option>
+                  ))}
+                </select>
+              )}
+              <div className="flex flex-wrap gap-3 items-center">
+                <button
+                  onClick={save}
+                  disabled={lists.length === 0}
+                  className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
+                >
+                  Save
+                </button>
+                <Link href="/catalog/price-lists" className="text-sm underline">Manage price lists</Link>
+                {selected && (
+                  <Link href={`/catalog/price-lists/${selected}`} className="text-sm font-medium text-primary hover:underline">
+                    Manage prices on this list →
+                  </Link>
+                )}
               </div>
             </div>
           )}

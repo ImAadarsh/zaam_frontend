@@ -99,12 +99,13 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "catalog.inventory-import",
-        "path": "/catalog/inventory-import",
-        "label": "Inventory Import",
+        "key": "catalog.classifications",
+        "path": "/catalog/classifications",
+        "label": "Classifications",
         "roles": [
           "ADMIN",
-          "SUPER_ADMIN"
+          "SUPER_ADMIN",
+          "WAREHOUSE_MANAGER"
         ]
       },
       {
@@ -130,9 +131,45 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "catalog.bundles",
-        "path": "/catalog/bundles",
-        "label": "Bundles",
+        "key": "catalog.price-lists",
+        "path": "/catalog/price-lists",
+        "label": "Price Lists",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "SALES_REP",
+          "FINANCE"
+        ]
+      },
+      {
+        "key": "catalog.tax-codes",
+        "path": "/catalog/tax-codes",
+        "label": "Tax Codes",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "FINANCE"
+        ]
+      },
+      {
+        "key": "catalog.compliance-documents",
+        "path": "/catalog/compliance-documents",
+        "label": "Compliance Documents",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "WAREHOUSE_MANAGER"
+        ]
+      }
+    ]
+  },
+  {
+    "module": "Channels & Integrations",
+    "pages": [
+      {
+        "key": "channels.dashboard",
+        "path": "/channels/dashboard",
+        "label": "Overview",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -172,52 +209,19 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "catalog.epos-channels",
         "path": "/catalog/epos-channels",
-        "label": "EPOS Channels",
+        "label": "EPOS / GoodTill",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN"
         ]
       },
       {
-        "key": "catalog.price-lists",
-        "path": "/catalog/price-lists",
-        "label": "Price Lists",
+        "key": "orders.channel-sync",
+        "path": "/orders/channel-sync",
+        "label": "Order Channel Sync",
         "roles": [
           "ADMIN",
-          "SUPER_ADMIN",
-          "SALES_REP",
-          "FINANCE"
-        ]
-      },
-      {
-        "key": "catalog.promotional-prices",
-        "path": "/catalog/promotional-prices",
-        "label": "Promotional Prices",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "SALES_REP",
-          "FINANCE"
-        ]
-      },
-      {
-        "key": "catalog.tax-codes",
-        "path": "/catalog/tax-codes",
-        "label": "Tax Codes",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "FINANCE"
-        ]
-      },
-      {
-        "key": "catalog.compliance-documents",
-        "path": "/catalog/compliance-documents",
-        "label": "Compliance Documents",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "WAREHOUSE_MANAGER"
+          "SUPER_ADMIN"
         ]
       }
     ]
@@ -263,6 +267,15 @@ export const NAV_MODULES: NavModule[] = [
           "ADMIN",
           "SUPER_ADMIN",
           "WAREHOUSE_MANAGER"
+        ]
+      },
+      {
+        "key": "catalog.inventory-import",
+        "path": "/catalog/inventory-import",
+        "label": "Inventory Import",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN"
         ]
       },
       {
@@ -387,15 +400,6 @@ export const NAV_MODULES: NavModule[] = [
           "SALES_REP",
           "CUSTOMER_SERVICE"
         ]
-      },
-      {
-        "key": "orders.channel-sync",
-        "path": "/orders/channel-sync",
-        "label": "Channel Sync",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN"
-        ]
       }
     ]
   },
@@ -519,15 +523,6 @@ export const NAV_MODULES: NavModule[] = [
           "ADMIN",
           "SUPER_ADMIN",
           "SALES_REP"
-        ]
-      },
-      {
-        "key": "finance.payment-dashboard",
-        "path": "/finance/payment-dashboard",
-        "label": "Payment Dashboard",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN"
         ]
       }
     ]

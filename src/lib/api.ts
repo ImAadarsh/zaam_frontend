@@ -867,6 +867,75 @@ export async function deleteTaxCode(id: string) {
   return status === 204;
 }
 
+// CATALOG CLASSIFICATIONS (org-scoped category / sub_category / brand / uom / pack_size)
+export type CatalogClassificationType = 'category' | 'sub_category' | 'brand' | 'uom' | 'pack_size';
+
+export type CatalogClassification = {
+  id: string;
+  type: CatalogClassificationType;
+  name: string;
+  status: 'active' | 'archived';
+  sortOrder?: number;
+  parent?: { id: string; name: string } | null;
+  organization?: { id: string; name: string };
+};
+
+export async function listClassifications(params?: {
+  organizationId?: string;
+  type?: CatalogClassificationType;
+  status?: string;
+  parentId?: string;
+  q?: string;
+}) {
+  const queryParams = new URLSearchParams();
+  if (params?.organizationId) queryParams.append('organizationId', params.organizationId);
+  if (params?.type) queryParams.append('type', params.type);
+  if (params?.status) queryParams.append('status', params.status);
+  if (params?.parentId !== undefined) queryParams.append('parentId', params.parentId);
+  if (params?.q) queryParams.append('q', params.q);
+  const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/catalog/classifications${query}`, { headers: authHeaders() });
+  return data as { data: CatalogClassification[] };
+}
+
+export async function createClassification(payload: {
+  organizationId?: string;
+  type: CatalogClassificationType;
+  name: string;
+  parentId?: string | null;
+  status?: 'active' | 'archived';
+  sortOrder?: number;
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/catalog/classifications`, payload, { headers: authHeaders() });
+  return data as { data: CatalogClassification; restored?: boolean };
+}
+
+export async function updateClassification(id: string, payload: {
+  name?: string;
+  parentId?: string | null;
+  status?: 'active' | 'archived';
+  sortOrder?: number;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/catalog/classifications/${id}`, payload, { headers: authHeaders() });
+  return data as { data: CatalogClassification };
+}
+
+export async function deleteClassification(id: string, opts?: { hard?: boolean }) {
+  const q = opts?.hard ? '?hard=1' : '';
+  const { data, status } = await axios.delete(`${API_BASE}/api/catalog/classifications/${id}${q}`, { headers: authHeaders() });
+  if (status === 204) return true;
+  return data as { data: CatalogClassification };
+}
+
+export async function backfillClassifications(organizationId?: string) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/catalog/classifications/backfill`,
+    organizationId ? { organizationId } : {},
+    { headers: authHeaders() }
+  );
+  return data as { data: { organizationId: string; created: Record<string, number>; skipped: Record<string, number>; parentLinksApplied: number } };
+}
+
 export async function listPosDiscountPresets() {
   const { data } = await axios.get(`${API_BASE}/api/pos/discount-presets`, { headers: authHeaders() });
   return data as { data: Array<{ id: string; name: string; type: 'percent' | 'amount'; value: number; sortOrder: number; status: string }> };
@@ -964,11 +1033,11 @@ export async function createPriceListItem(payload: {
   priceListId: string;
   variantId: string;
   price: number;
-  compareAtPrice?: number;
-  costPrice?: number;
-  minMarginPercent?: number;
+  compareAtPrice?: number | null;
+  costPrice?: number | null;
+  minMarginPercent?: number | null;
   minQuantity?: number;
-  maxQuantity?: number;
+  maxQuantity?: number | null;
 }) {
   const { data } = await axios.post(`${API_BASE}/api/catalog/price-list-items`, payload, { headers: authHeaders() });
   return data as { data: any };
@@ -976,11 +1045,11 @@ export async function createPriceListItem(payload: {
 
 export async function updatePriceListItem(id: string, payload: {
   price?: number;
-  compareAtPrice?: number;
-  costPrice?: number;
-  minMarginPercent?: number;
+  compareAtPrice?: number | null;
+  costPrice?: number | null;
+  minMarginPercent?: number | null;
   minQuantity?: number;
-  maxQuantity?: number;
+  maxQuantity?: number | null;
 }) {
   const { data } = await axios.patch(`${API_BASE}/api/catalog/price-list-items/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };

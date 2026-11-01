@@ -205,7 +205,12 @@ export default function B2bProductsPage() {
           </div>
 
           {loading ? <div className="text-muted-foreground">Loading...</div> : (
-            <RichDataTable data={tableRows} columns={columns} searchPlaceholder="Search SKU, name, brand..." />
+            <RichDataTable
+              data={tableRows}
+              columns={columns}
+              searchPlaceholder="Search SKU, name, brand..."
+              emptyMessage="No catalog products to publish yet. Add items in Catalog, then return here to show them on the B2B portal."
+            />
           )}
         </main>
       </div>

@@ -186,7 +186,10 @@ export default function B2bNotificationsPage() {
             {loading ? (
               <div className="text-muted-foreground text-sm">Loading...</div>
             ) : rows.length === 0 ? (
-              <div className="text-sm text-muted-foreground border border-dashed border-border rounded-xl p-4">No notifications yet.</div>
+              <div className="text-sm text-muted-foreground border border-dashed border-border rounded-xl p-4 space-y-1">
+                <p>No alerts or promos yet.</p>
+                <p className="text-xs">Use the form above to publish a broadcast (all retailers) or a targeted message.</p>
+              </div>
             ) : (
               rows.map((row) => (
                 <div key={row.id} className="bg-card border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-start gap-3 justify-between">

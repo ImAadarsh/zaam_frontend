@@ -498,7 +498,13 @@ export default function StockItemsPage() {
                 <RichDataTable
                   columns={columns}
                   data={items}
+                  tableId="stock-items-v2"
                   searchPlaceholder="Search stock items..."
+                  initialColumnVisibility={{
+                    bin_code: false,
+                    quantityReserved: false,
+                    expiryDate: false
+                  }}
                   emptyMessage="No stock rows yet. Add stock against a warehouse, or receive goods via GRN."
                 />
               </div>

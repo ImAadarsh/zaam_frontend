@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState, useMemo, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import {
@@ -90,8 +90,10 @@ function StatusPill({ value, tone }: { value?: string; tone: 'status' | 'payment
   );
 }
 
-export default function OrdersPage() {
+function OrdersPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const deepLinkCustomerId = (searchParams.get('customerId') || '').trim();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'CUSTOMER_SERVICE', 'WAREHOUSE_MANAGER']);
   const { can } = useApiAccess();
@@ -126,7 +128,9 @@ export default function OrdersPage() {
   const [editing, setEditing] = useState<Order | null>(null);
   const [confirmDel, setConfirmDel] = useState<Order | null>(null);
 
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(() =>
+    deepLinkCustomerId ? { customerId: deepLinkCustomerId } : ({} as Record<string, string>)
+  );
   const [search, setSearch] = useState('');
   const [summary, setSummary] = useState<{ totalValue: number; count: number }>({ totalValue: 0, count: 0 });
   const [connections, setConnections] = useState<OrderSyncConnection[]>([]);
@@ -134,6 +138,11 @@ export default function OrdersPage() {
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
 
   const orgId = session?.user?.organizationId;
+
+  useEffect(() => {
+    if (!deepLinkCustomerId) return;
+    setFilters((prev) => (prev.customerId === deepLinkCustomerId ? prev : { ...prev, customerId: deepLinkCustomerId }));
+  }, [deepLinkCustomerId]);
 
   async function onSyncChannels() {
     if (!orgId || syncing) return;
@@ -223,6 +232,16 @@ export default function OrdersPage() {
       }))
     },
     {
+      key: 'customerId',
+      label: 'Customer',
+      type: 'select',
+      primary: !!filters.customerId,
+      options: customers.map((c) => ({
+        value: String(c.id),
+        label: c.companyName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.email || c.customerNumber || String(c.id)
+      }))
+    },
+    {
       key: 'status',
       label: 'Status',
       type: 'select',
@@ -284,7 +303,7 @@ export default function OrdersPage() {
         { value: 'ASC', label: 'Ascending' }
       ]
     }
-  ], [connections]);
+  ], [connections, customers, filters.customerId]);
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -532,6 +551,33 @@ export default function OrdersPage() {
               </div>
             </div>
 
+            {filters.customerId && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card/60 px-4 py-3 text-sm">
+                <span>
+                  Showing orders for{' '}
+                  <b>
+                    {customers.find((c) => String(c.id) === String(filters.customerId))?.companyName ||
+                      customers.find((c) => String(c.id) === String(filters.customerId))?.email ||
+                      `customer #${filters.customerId}`}
+                  </b>
+                </span>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary hover:underline"
+                  onClick={() => {
+                    setFilters((prev) => {
+                      const next = { ...prev };
+                      delete next.customerId;
+                      return next;
+                    });
+                    router.replace('/orders/orders');
+                  }}
+                >
+                  Clear customer filter
+                </button>
+              </div>
+            )}
+
             <FilterBar
               fields={filterFields}
               values={filters}
@@ -584,7 +630,14 @@ export default function OrdersPage() {
                   <button
                     onClick={() => {
                       setEditing(null);
-                      setForm(emptyOrderForm());
+                      const base = emptyOrderForm();
+                      if (filters.customerId) {
+                        const c = customers.find((x) => String(x.id) === String(filters.customerId));
+                        base.customerId = String(filters.customerId);
+                        if (c?.email) base.customerEmail = c.email;
+                        if (c?.phone) base.customerPhone = c.phone;
+                      }
+                      setForm(base);
                       setShowCreate(true);
                     }}
                     className="flex items-center gap-2 px-4 py-2 bg-[#D4A017] text-white rounded-lg hover:bg-[#B89015]"
@@ -606,7 +659,27 @@ export default function OrdersPage() {
                 className={`rounded-2xl border border-border bg-card p-2 transition-opacity ${loading ? 'opacity-60' : ''}`}
                 aria-busy={loading}
               >
-                <RichDataTable columns={columns} data={items} hideSearch />
+                <RichDataTable
+                  columns={columns}
+                  data={items}
+                  hideSearch
+                  tableId="orders-list-v2"
+                  initialColumnVisibility={{
+                    store: false,
+                    fulfillmentStatus: false,
+                    customerEmail: true,
+                    channel: true,
+                    status: true,
+                    paymentStatus: true,
+                    total: true,
+                    orderDate: true
+                  }}
+                  emptyMessage={
+                    filters.customerId
+                      ? 'No orders for this customer yet. Clear the customer filter or create an order.'
+                      : 'No orders yet. Add an order, or sync from a POS / website channel.'
+                  }
+                />
               </div>
             )}
 
@@ -929,6 +1002,14 @@ export default function OrdersPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function OrdersPageSuspense() {
+  return (
+    <Suspense fallback={<div className="min-h-screen app-surface" />}>
+      <OrdersPage />
+    </Suspense>
   );
 }
 

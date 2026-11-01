@@ -189,6 +189,11 @@ interface RichDataTableProps<TData, TValue> {
     /** Distinguishes several tables with identical columns on one page (state is persisted per pathname). */
     tableId?: string;
     /**
+     * Default column visibility when no sessionStorage state exists yet.
+     * Keys with `false` are hidden; omitted/`true` stay visible.
+     */
+    initialColumnVisibility?: VisibilityState;
+    /**
      * Copy shown when `data` is empty and no search/column filters are active.
      * Filtered-empty tables still show "No results found."
      */
@@ -203,13 +208,16 @@ export function RichDataTable<TData, TValue>({
     initialSorting,
     defaultSort = true,
     tableId,
+    initialColumnVisibility,
     emptyMessage = 'Nothing here yet.',
 }: RichDataTableProps<TData, TValue>) {
     const pathname = usePathname();
     const [sorting, setSorting] = useState<SortingState>(initialSorting ?? []);
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
     const [globalFilter, setGlobalFilter] = useState('');
-    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+        () => initialColumnVisibility ?? {}
+    );
     const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
     const [rowSelection, setRowSelection] = useState({});
     const [showColumnVisibility, setShowColumnVisibility] = useState(false);
@@ -223,6 +231,7 @@ export function RichDataTable<TData, TValue>({
 
     useIsomorphicLayoutEffect(() => {
         const saved = readTableState(storageKey);
+        const fallbackVisibility = initialColumnVisibility ?? {};
         if (saved) {
             const ids = new Set((columns as ColumnDef<any, any>[]).map(columnIdOf));
             const known = <T extends { id: string }>(list: T[] | undefined) =>
@@ -234,7 +243,13 @@ export function RichDataTable<TData, TValue>({
             setSorting(saved.sorting ? known(saved.sorting) : initialSorting ?? []);
             setColumnFilters(known(saved.columnFilters));
             setGlobalFilter(typeof saved.globalFilter === 'string' ? saved.globalFilter : '');
-            setColumnVisibility(saved.columnVisibility && typeof saved.columnVisibility === 'object' ? saved.columnVisibility : {});
+            const savedVis =
+                saved.columnVisibility && typeof saved.columnVisibility === 'object'
+                    ? saved.columnVisibility
+                    : null;
+            setColumnVisibility(savedVis && Object.keys(savedVis).length > 0 ? savedVis : fallbackVisibility);
+        } else {
+            setColumnVisibility(fallbackVisibility);
         }
         prevFilterKey.current = null;
         setRestoredKey(storageKey);
@@ -337,7 +352,7 @@ export function RichDataTable<TData, TValue>({
                             <div className="absolute right-0 mt-2 w-56 rounded-xl border border-border bg-card shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-200">
                                 <div className="text-xs font-medium text-muted-foreground mb-2 px-2 uppercase tracking-wider">Toggle Columns</div>
                                 <div className="max-h-64 overflow-y-auto space-y-1">
-                                    {table.getAllLeafColumns().map((column) => {
+                                    {table.getAllLeafColumns().filter((column) => column.getCanHide()).map((column) => {
                                         return (
                                             <div key={column.id} className="flex items-center px-2 py-1.5 hover:bg-muted rounded-lg cursor-pointer transition-colors" onClick={column.getToggleVisibilityHandler()}>
                                                 <div className={`w-4 h-4 mr-2 rounded border flex items-center justify-center transition-colors ${column.getIsVisible() ? 'bg-primary border-primary' : 'border-muted-foreground'}`}>

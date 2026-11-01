@@ -1,6 +1,6 @@
 import {
   Shield, Boxes, Package2, ShoppingCart, Truck, Wallet, Landmark,
-  Users, Headset, Megaphone, Share2, BarChart3, Settings, Store, FolderKanban
+  Users, Headset, Megaphone, Share2, BarChart3, Settings, Store, FolderKanban, Plug
 } from 'lucide-react';
 
 export const modules = [
@@ -10,11 +10,15 @@ export const modules = [
   },
   {
     slug: 'catalog', name: 'Product & Catalog', icon: Package2, color: '#D4A017',
-    description: 'Products, Variants, Pricing, Channels'
+    description: 'Products, Variants, Classifications, Price Lists'
+  },
+  {
+    slug: 'channels', name: 'Channels & Integrations', icon: Plug, color: '#D4A017',
+    description: 'Channel mappings, WordPress, EPOS/GoodTill, order sync'
   },
   {
     slug: 'inventory', name: 'Inventory', icon: Boxes, color: '#0A0A0A',
-    description: 'Warehouses, Bins, Stock, ASN/GRN'
+    description: 'Warehouses, Stock, Import, ASN/GRN, Purchasing'
   },
   {
     slug: 'orders', name: 'Orders & Customers', icon: ShoppingCart, color: '#0A0A0A',

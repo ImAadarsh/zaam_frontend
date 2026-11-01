@@ -373,7 +373,11 @@ export default function ComplianceDocumentsPage() {
               </button>
             </div>
 
-            <RichDataTable columns={columns} data={items} />
+            <RichDataTable
+              columns={columns}
+              data={items}
+              emptyMessage="No compliance documents yet. Upload certificates or SDS files for products that need them."
+            />
 
             {showCreate && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">

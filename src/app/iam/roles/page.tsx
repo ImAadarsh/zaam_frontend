@@ -272,6 +272,7 @@ export default function RolesPage() {
               columns={columns}
               data={roles}
               searchPlaceholder="Search roles..."
+              emptyMessage="No roles yet. Create a role, then assign page access and users."
             />
           )}
 

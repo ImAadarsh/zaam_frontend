@@ -294,7 +294,12 @@ export function GatewayManager({ organizationId, variant = 'full' }: GatewayMana
         ) : (
           <div className="space-y-2">
             {gateways.length === 0 && (
-              <p className="text-sm text-muted-foreground">No gateways configured yet.</p>
+              <div className="rounded-xl border border-dashed border-border p-4 space-y-2">
+                <p className="text-sm text-muted-foreground">No gateways configured yet.</p>
+                <Link href="/finance/gateways" className="text-sm font-medium text-primary hover:underline">
+                  Add a payment gateway →
+                </Link>
+              </div>
             )}
             {gateways.map((g) => (
               <div key={g.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border">
@@ -350,7 +355,18 @@ export function GatewayManager({ organizationId, variant = 'full' }: GatewayMana
         <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
           <div className="space-y-2">
             {gateways.length === 0 && (
-              <p className="text-sm text-muted-foreground">No gateways configured yet.</p>
+              <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  No payment gateways yet. Add Worldpay (or another processor) so B2B and checkout can take card payments.
+                </p>
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium"
+                >
+                  <Plus size={16} /> Add gateway
+                </button>
+              </div>
             )}
             {gateways.map((g) => (
               <div

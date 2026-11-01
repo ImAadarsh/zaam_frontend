@@ -292,7 +292,12 @@ export default function StockAdjustmentsPage() {
             </div>
 
             <div className="rounded-2xl border border-border bg-card">
-              <RichDataTable columns={columns} data={items} searchPlaceholder="Search adjustments..." />
+              <RichDataTable
+                columns={columns}
+                data={items}
+                searchPlaceholder="Search adjustments..."
+                emptyMessage="No stock adjustments yet. Use adjustments for write-offs, damage, or count corrections."
+              />
             </div>
 
             {/* Create Modal */}

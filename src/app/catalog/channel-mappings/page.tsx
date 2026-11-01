@@ -338,7 +338,11 @@ export default function ChannelMappingsPage() {
               )}
             </div>
 
-            <RichDataTable columns={columns} data={items} />
+            <RichDataTable
+              columns={columns}
+              data={items}
+              emptyMessage="No channel mappings yet. Map a catalog item to Shopify, WooCommerce, or another channel to sync it."
+            />
 
             {showCreate && (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">

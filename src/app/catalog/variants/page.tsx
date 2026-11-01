@@ -285,9 +285,16 @@ function VariantsPage() {
       return;
     }
     (async () => {
+      setLoading(true);
       try {
+        // Deep-link ?q= must hit the API search — the list endpoint caps at 40 by
+        // default, so client-only filtering of that page misses most SKUs.
         const [variantsRes, catalogItemsRes] = await Promise.all([
-          listVariants(),
+          listVariants(
+            deepLinkQ
+              ? { search: deepLinkQ, limit: 100 }
+              : { limit: 100 }
+          ),
           listCatalogItems({ organizationId: session?.user?.organizationId })
         ]);
         setItems(variantsRes.data || []);
@@ -306,7 +313,7 @@ function VariantsPage() {
         setLoading(false);
       }
     })();
-  }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
+  }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId, deepLinkQ]);
 
   const parsedOptions = useMemo(
     () => optionRows.map((r) => ({ name: r.name.trim(), values: splitValues(r.values) })).filter((o) => o.values.length > 0),
@@ -726,6 +733,11 @@ function VariantsPage() {
                   : items
               }
               searchPlaceholder="Search variants by SKU, product…"
+              emptyMessage={
+                deepLinkQ
+                  ? `No variants match “${deepLinkQ}”. Try the product SKU, variant SKU, or clear the search.`
+                  : 'No variants yet. Open a catalog item and add variants, or create one here.'
+              }
             />
 
             {showCreate && (

@@ -321,7 +321,11 @@ export default function TaxCodesPage() {
               )}
             </div>
 
-            <RichDataTable columns={columns} data={items} />
+            <RichDataTable
+              columns={columns}
+              data={items}
+              emptyMessage="No tax codes yet. Add VAT/GST rates here so products and the till can pick them from a dropdown."
+            />
 
             <div className="mt-8 rounded-2xl border border-border bg-card p-5 space-y-4">
               <div>

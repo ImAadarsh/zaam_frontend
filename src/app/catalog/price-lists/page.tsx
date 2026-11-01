@@ -13,7 +13,7 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, Pencil, Trash2, Plus, X, DollarSign, Upload } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, DollarSign, Upload, ListOrdered } from 'lucide-react';
 import { PriceListImportModal } from '@/components/catalog/price-list-import-modal';
 
 type PriceList = {
@@ -227,8 +227,8 @@ export default function PriceListsPage() {
       cell: ({ row }) => (
         <button
           onClick={() => router.push(`/catalog/price-lists/${row.original.id}`)}
-          className="font-medium text-left hover:underline"
-          title="View items"
+          className="font-medium text-left text-[#8B6914] hover:underline"
+          title="Manage prices"
         >
           {row.original.name}
         </button>
@@ -290,6 +290,14 @@ export default function PriceListsPage() {
         const item = row.original;
         return (
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push(`/catalog/price-lists/${item.id}`)}
+              className="p-1 hover:bg-gray-100 rounded text-[#8B6914]"
+              title="Manage prices"
+              aria-label="Manage prices"
+            >
+              <ListOrdered className="h-4 w-4" />
+            </button>
             {canImport && (
             <button
               onClick={() => setImporting({ list: item, file: null })}
@@ -316,6 +324,7 @@ export default function PriceListsPage() {
                 });
               }}
               className="p-1 hover:bg-gray-100 rounded"
+              title="Edit price list"
             >
               <Pencil className="h-4 w-4" />
             </button>
@@ -324,6 +333,7 @@ export default function PriceListsPage() {
             <button
               onClick={() => setConfirmDel(item)}
               className="p-1 hover:bg-gray-100 rounded text-red-600"
+              title="Delete price list"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -383,7 +393,7 @@ export default function PriceListsPage() {
                   Price Lists
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                  Manage pricing tiers and lists. Use the upload icon on a row to import items from CSV or Excel.
+                  Manage pricing tiers and lists. Open a list to edit product prices, or use the upload icon to import from CSV / Excel.
                 </p>
               </div>
               {canCreate && (

@@ -439,6 +439,7 @@ export default function UsersPage() {
               columns={columns}
               data={items}
               searchPlaceholder="Search users..."
+              emptyMessage="No users yet. Create a user and assign a role so they can sign in."
             />
           )}
 

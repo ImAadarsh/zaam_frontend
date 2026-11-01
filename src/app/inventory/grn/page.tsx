@@ -321,7 +321,12 @@ export default function GRNPage() {
             </div>
 
             <div className="rounded-2xl border border-border bg-card">
-              <RichDataTable columns={columns} data={items} searchPlaceholder="Search GRN..." />
+              <RichDataTable
+                columns={columns}
+                data={items}
+                searchPlaceholder="Search GRN..."
+                emptyMessage="No goods receipts yet. Receive against an ASN to book stock into a warehouse."
+              />
             </div>
 
             {/* Create Modal */}

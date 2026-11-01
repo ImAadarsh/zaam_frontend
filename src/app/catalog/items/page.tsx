@@ -16,7 +16,11 @@ import {
   listWarehouses,
   listProductMedia,
   createProductMedia,
-  deleteProductMedia
+  deleteProductMedia,
+  listClassifications,
+  createClassification,
+  type CatalogClassification,
+  type CatalogClassificationType
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
@@ -236,6 +240,67 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+function groupClassificationNames(rows: CatalogClassification[]) {
+  const out = {
+    category: [] as string[],
+    sub_category: [] as string[],
+    brand: [] as string[],
+    uom: [] as string[],
+    pack_size: [] as string[]
+  };
+  for (const row of rows) {
+    if (row.status && row.status !== 'active') continue;
+    const bucket = out[row.type];
+    if (!bucket) continue;
+    if (!bucket.includes(row.name)) bucket.push(row.name);
+  }
+  for (const key of Object.keys(out) as (keyof typeof out)[]) {
+    out[key].sort((a, b) => a.localeCompare(b));
+  }
+  return out;
+}
+
+function ClassificationSelect({
+  label,
+  value,
+  options,
+  onChange,
+  emptyHint,
+  placeholder,
+  allowClear = true,
+  orphanOk = true
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (next: string) => void;
+  emptyHint?: React.ReactNode;
+  placeholder?: string;
+  allowClear?: boolean;
+  orphanOk?: boolean;
+}) {
+  const hasOrphan = orphanOk && !!value && !options.includes(value);
+  return (
+    <label className="text-sm">
+      {label}
+      <select
+        className="mt-1 select w-full"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {allowClear && <option value="">{placeholder || '—'}</option>}
+        {hasOrphan && <option value={value}>{value} (current)</option>}
+        {options.map((o) => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+      {options.length === 0 && emptyHint ? (
+        <p className="mt-1 text-xs text-muted-foreground">{emptyHint}</p>
+      ) : null}
+    </label>
+  );
+}
+
 function ProductFields({
   value,
   onChange,
@@ -245,8 +310,8 @@ function ProductFields({
   taxCodes,
   warehouses,
   onReloadTaxCodes,
-  categoryOptions = [],
-  subCategoryOptions = []
+  classifications,
+  onQuickCreateClassification
 }: {
   value: ProductForm;
   onChange: (next: ProductForm) => void;
@@ -256,8 +321,14 @@ function ProductFields({
   taxCodes: any[];
   warehouses: WarehouseOption[];
   onReloadTaxCodes?: () => void;
-  categoryOptions?: string[];
-  subCategoryOptions?: string[];
+  classifications: {
+    category: string[];
+    sub_category: string[];
+    brand: string[];
+    uom: string[];
+    pack_size: string[];
+  };
+  onQuickCreateClassification?: (type: CatalogClassificationType, name: string) => Promise<string | null>;
 }) {
   const set = (patch: Partial<ProductForm>) => onChange({ ...value, ...patch });
   const warehouseChoices = useMemo(() => {
@@ -363,43 +434,88 @@ function ProductFields({
       <section>
         <SectionTitle>Classification</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
-          <label className="text-sm">
-            Category
-            <input
-              className="mt-1 input w-full"
-              list="catalog-category-suggestions"
-              value={value.category}
-              onChange={(e) => set({ category: e.target.value })}
-              placeholder="e.g. Vapes, Snacks…"
-            />
-            {categoryOptions.length > 0 && (
-              <datalist id="catalog-category-suggestions">
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            )}
-          </label>
-          <label className="text-sm">
-            Sub-Category
-            <input
-              className="mt-1 input w-full"
-              list="catalog-subcategory-suggestions"
-              value={value.subCategory}
-              onChange={(e) => set({ subCategory: e.target.value })}
-              placeholder="Optional"
-            />
-            {subCategoryOptions.length > 0 && (
-              <datalist id="catalog-subcategory-suggestions">
-                {subCategoryOptions.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            )}
-          </label>
-          {field('Brand / Manufacturer', 'brand')}
-          {field('Unit of Measure (UOM)', 'uom', { placeholder: 'SET, PCS, BOX…' })}
-          {field('Pack Size', 'packSize', { placeholder: '1, 12x330ml…' })}
+          <ClassificationSelect
+            label="Category"
+            value={value.category}
+            options={classifications.category}
+            onChange={(category) => set({ category })}
+            placeholder="Select category…"
+            emptyHint={
+              <>
+                No categories yet — add in{' '}
+                <Link href="/catalog/classifications" className="text-primary hover:underline">Manage Classifications</Link>
+                {onQuickCreateClassification ? (
+                  <>
+                    {' '}or{' '}
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={async () => {
+                        const raw = window.prompt('New category name');
+                        if (!raw?.trim()) return;
+                        const created = await onQuickCreateClassification('category', raw.trim());
+                        if (created) set({ category: created });
+                      }}
+                    >
+                      add new
+                    </button>
+                  </>
+                ) : null}
+              </>
+            }
+          />
+          <ClassificationSelect
+            label="Sub-Category"
+            value={value.subCategory}
+            options={classifications.sub_category}
+            onChange={(subCategory) => set({ subCategory })}
+            placeholder="Optional"
+            emptyHint={
+              <>
+                No sub-categories yet — add in{' '}
+                <Link href="/catalog/classifications" className="text-primary hover:underline">Manage Classifications</Link>
+              </>
+            }
+          />
+          <ClassificationSelect
+            label="Brand / Manufacturer"
+            value={value.brand}
+            options={classifications.brand}
+            onChange={(brand) => set({ brand })}
+            placeholder="Select brand…"
+            emptyHint={
+              <>
+                No brands yet — add in{' '}
+                <Link href="/catalog/classifications" className="text-primary hover:underline">Manage Classifications</Link>
+              </>
+            }
+          />
+          <ClassificationSelect
+            label="Unit of Measure (UOM)"
+            value={value.uom}
+            options={classifications.uom}
+            onChange={(uom) => set({ uom })}
+            placeholder="SET, PCS, BOX…"
+            emptyHint={
+              <>
+                No UOMs yet — add in{' '}
+                <Link href="/catalog/classifications" className="text-primary hover:underline">Manage Classifications</Link>
+              </>
+            }
+          />
+          <ClassificationSelect
+            label="Pack Size"
+            value={value.packSize}
+            options={classifications.pack_size}
+            onChange={(packSize) => set({ packSize })}
+            placeholder="1, 12x330ml…"
+            emptyHint={
+              <>
+                No pack sizes yet — add in{' '}
+                <Link href="/catalog/classifications" className="text-primary hover:underline">Manage Classifications</Link>
+              </>
+            }
+          />
           <label className="text-sm">
             Status
             <select
@@ -573,6 +689,13 @@ export default function CatalogItemsPage() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [businessUnits, setBusinessUnits] = useState<any[]>([]);
   const [taxCodes, setTaxCodes] = useState<any[]>([]);
+  const [classifications, setClassifications] = useState<{
+    category: string[];
+    sub_category: string[];
+    brand: string[];
+    uom: string[];
+    pack_size: string[];
+  }>({ category: [], sub_category: [], brand: [], uom: [], pack_size: [] });
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [editing, setEditing] = useState<CatalogItem | null>(null);
   const [editForm, setEditForm] = useState<ProductForm>(emptyForm);
@@ -605,23 +728,26 @@ export default function CatalogItemsPage() {
     }
     (async () => {
       try {
-        const [itemsRes, orgsRes, taxCodesRes, warehousesRes] = await Promise.all([
-          loadAllCatalogItems(session?.user?.organizationId).then((data) => ({ data })),
+        const orgId = session?.user?.organizationId;
+        const [itemsRes, orgsRes, taxCodesRes, warehousesRes, classRes] = await Promise.all([
+          loadAllCatalogItems(orgId).then((data) => ({ data })),
           listOrganizations(),
-          listTaxCodes({ organizationId: session?.user?.organizationId }),
+          listTaxCodes({ organizationId: orgId }),
           listWarehouses({
-            organizationId: session?.user?.organizationId,
+            organizationId: orgId,
             limit: 200,
             status: 'active'
-          }).catch(() => ({ data: [] as WarehouseOption[] }))
+          }).catch(() => ({ data: [] as WarehouseOption[] })),
+          listClassifications({ organizationId: orgId, status: 'active' }).catch(() => ({ data: [] as CatalogClassification[] }))
         ]);
         setItems(itemsRes.data || []);
         setOrganizations(orgsRes.data || []);
         setTaxCodes(taxCodesRes.data || []);
         setWarehouses(warehousesRes.data || []);
-        if (session?.user?.organizationId) {
-          setForm((prev) => ({ ...prev, organizationId: session.user.organizationId }));
-          const busRes = await listBusinessUnits(session.user.organizationId).catch(() => ({ data: [] }));
+        setClassifications(groupClassificationNames(classRes.data || []));
+        if (orgId) {
+          setForm((prev) => ({ ...prev, organizationId: orgId }));
+          const busRes = await listBusinessUnits(orgId).catch(() => ({ data: [] }));
           setBusinessUnits(busRes.data || []);
         }
       } catch (e: any) {
@@ -657,6 +783,9 @@ export default function CatalogItemsPage() {
         });
       })
       .catch(() => setTaxCodes([]));
+    listClassifications({ organizationId: form.organizationId, status: 'active' })
+      .then((res) => setClassifications(groupClassificationNames(res.data || [])))
+      .catch(() => setClassifications({ category: [], sub_category: [], brand: [], uom: [], pack_size: [] }));
   }, [form.organizationId]);
 
   async function reloadTaxCodes(organizationId?: string) {
@@ -666,6 +795,29 @@ export default function CatalogItemsPage() {
       setTaxCodes(res.data || []);
     } catch {
       toast.error('Failed to load tax codes');
+    }
+  }
+
+  async function reloadClassifications(organizationId?: string) {
+    try {
+      const orgId = organizationId || form.organizationId || session?.user?.organizationId;
+      const res = await listClassifications({ organizationId: orgId, status: 'active' });
+      setClassifications(groupClassificationNames(res.data || []));
+    } catch {
+      toast.error('Failed to load classifications');
+    }
+  }
+
+  async function quickCreateClassification(type: CatalogClassificationType, name: string): Promise<string | null> {
+    try {
+      const orgId = form.organizationId || editing?.organization?.id || session?.user?.organizationId;
+      const res = await createClassification({ organizationId: orgId, type, name });
+      await reloadClassifications(orgId);
+      toast.success(`${name} added`);
+      return res.data.name;
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message ?? 'Could not add classification');
+      return null;
     }
   }
 
@@ -888,20 +1040,6 @@ export default function CatalogItemsPage() {
   }
 
   const isSuperAdmin = !!session?.user?.roles?.includes('SUPER_ADMIN');
-  const categoryOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(items.map((it) => String(it.category || '').trim()).filter(Boolean))
-      ).sort((a, b) => a.localeCompare(b)),
-    [items]
-  );
-  const subCategoryOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(items.map((it) => String(it.subCategory || '').trim()).filter(Boolean))
-      ).sort((a, b) => a.localeCompare(b)),
-    [items]
-  );
 
   const columns = useMemo<ColumnDef<CatalogItem>[]>(
     () => [
@@ -1029,6 +1167,7 @@ export default function CatalogItemsPage() {
       {
         id: 'actions',
         header: '',
+        enableHiding: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
             {canUpdate && (
@@ -1056,6 +1195,39 @@ export default function CatalogItemsPage() {
       }
     ],
     [canUpdate, canDelete]
+  );
+
+  // Default View → Toggle Columns: SKU, Name, Category, SubCategory, Brand, Opening Qty, Price.
+  // Barcode / Description and all other fields stay available to toggle on manually.
+  const defaultColumnVisibility = useMemo(
+    () => ({
+      sku: true,
+      name: true,
+      category: true,
+      subCategory: true,
+      brand: true,
+      openingQuantity: true,
+      sellingPrice: true,
+      barcode: false,
+      description: false,
+      uom: false,
+      packSize: false,
+      reorderLevel: false,
+      reorderQuantity: false,
+      costPrice: false,
+      tax: false,
+      warehouseName: false,
+      binCode: false,
+      supplierName: false,
+      supplierSku: false,
+      leadTimeDays: false,
+      lotNumber: false,
+      expiryDate: false,
+      status: false,
+      dateAdded: false,
+      remarks: false,
+    }),
+    []
   );
 
   if (!hydrated || loading) {
@@ -1186,6 +1358,8 @@ export default function CatalogItemsPage() {
 
             <RichDataTable
               columns={columns}
+              tableId="catalog-items-v2"
+              initialColumnVisibility={defaultColumnVisibility}
               emptyMessage="No catalog items in this organisation yet. Add an item or import from Excel to get started."
               data={items.filter((it) => {
                 if (listFilter.warehouseId && String(it.warehouseId || '') !== listFilter.warehouseId) return false;
@@ -1243,8 +1417,8 @@ export default function CatalogItemsPage() {
                       taxCodes={taxCodes}
                       warehouses={warehouses}
                       onReloadTaxCodes={reloadTaxCodes}
-                      categoryOptions={categoryOptions}
-                      subCategoryOptions={subCategoryOptions}
+                      classifications={classifications}
+                      onQuickCreateClassification={quickCreateClassification}
                     />
                     <div className="border-t pt-4 space-y-2">
                       <div className="flex items-center justify-between">
@@ -1327,8 +1501,8 @@ export default function CatalogItemsPage() {
                       taxCodes={taxCodes}
                       warehouses={warehouses}
                       onReloadTaxCodes={reloadTaxCodes}
-                      categoryOptions={categoryOptions}
-                      subCategoryOptions={subCategoryOptions}
+                      classifications={classifications}
+                      onQuickCreateClassification={quickCreateClassification}
                     />
 
                     <div className="border-t pt-4 space-y-2">

@@ -14,7 +14,8 @@ const socialStart = src.indexOf('function SocialNav');
 const scanned =
   (desktopEnd > 0 ? src.slice(0, desktopEnd) : src) + '\n' + (socialStart > 0 ? src.slice(socialStart) : '');
 
-const headerRe = /tracking-widest[^>]*>([^<]+)<\/div>/;
+const headerRe = /tracking-widest[^>]*>([^<{]+)<\/div>/;
+const sectionHeaderRe = /<SectionHeader\s+label="([^"]+)"/;
 const itemRe = /<Item\s+href="([^"]+)".*?\slabel="([^"]+)"/;
 const hasRoleRe = /hasRole\(\[([^\]]*)\]\)\s*&&/;
 const roleCheckRe = /useRoleCheck\(\[([^\]]*)\]/;
@@ -46,6 +47,11 @@ const byName = new Map();
 let current = 'General';
 let gateRoles = null;
 for (const line of scanned.split('\n')) {
+  const sectionH = line.match(sectionHeaderRe);
+  if (sectionH) {
+    current = sectionH[1].trim();
+    continue;
+  }
   const h = line.match(headerRe);
   if (h) {
     current = h[1].trim();
@@ -77,14 +83,16 @@ for (const line of scanned.split('\n')) {
   }
 }
 
-// A module Overview (/<module>/dashboard) is only useful to roles holding another page in that module.
+// A module Overview is only useful to roles holding another page in that NAV group
+// (path root alone is insufficient when pages keep stable URLs under another prefix).
 const allPages = groups.flatMap((g) => g.pages);
-for (const dash of allPages) {
-  const rootSeg = dash.path.split('/')[1];
-  if (dash.path !== `/${rootSeg}/dashboard`) continue;
-  const others = allPages.filter((p) => p.path.split('/')[1] === rootSeg && p.path !== dash.path);
+for (const g of groups) {
+  const dash = g.pages.find((p) => /\/dashboard$/.test(p.path) || p.label === 'Overview' || p.label === 'Dashboard');
+  if (!dash) continue;
+  const others = g.pages.filter((p) => p.key !== dash.key);
   if (others.length === 0 || others.some((p) => !p.roles)) continue;
-  const moduleRoles = Array.from(new Set(others.flatMap((p) => p.roles)));
+  const moduleRoles = Array.from(new Set(others.flatMap((p) => p.roles || [])));
+  if (moduleRoles.length === 0) continue;
   dash.roles = dash.roles ? dash.roles.filter((r) => moduleRoles.includes(r)) : moduleRoles;
 }
 

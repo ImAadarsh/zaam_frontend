@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 export type KeyValueRow = { key: string; value: string };
@@ -41,17 +42,32 @@ type Props = {
   placeholderValue?: string;
 };
 
-/** Friendly key/value editor that still stores attributes as a JSON object string. */
+/**
+ * Friendly key/value editor that still stores attributes as a JSON object string.
+ * Rows (including empty ones) live in local state so "+ Add attribute" works;
+ * empty keys are still stripped when emitting JSON to the parent (save behavior).
+ */
 export function KeyValueEditor({
   value,
   onChange,
   placeholderKey = 'key',
   placeholderValue = 'value'
 }: Props) {
-  const rows = rowsFromJsonObject(value);
+  const [rows, setRows] = useState<KeyValueRow[]>(() => rowsFromJsonObject(value));
+  /** Last JSON we emitted — skip prop→state sync for our own onChange echoes. */
+  const lastEmittedRef = useRef(value);
+
+  useEffect(() => {
+    if (value === lastEmittedRef.current) return;
+    lastEmittedRef.current = value;
+    setRows(rowsFromJsonObject(value));
+  }, [value]);
 
   function commit(next: KeyValueRow[]) {
-    onChange(jsonFromRows(next));
+    setRows(next);
+    const json = jsonFromRows(next);
+    lastEmittedRef.current = json;
+    onChange(json);
   }
 
   return (

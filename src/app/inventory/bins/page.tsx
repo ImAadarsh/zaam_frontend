@@ -273,7 +273,12 @@ export default function BinsPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-border bg-card">
-                <RichDataTable columns={columns} data={items} searchPlaceholder="Search bins..." />
+                <RichDataTable
+                  columns={columns}
+                  data={items}
+                  searchPlaceholder="Search bins..."
+                  emptyMessage="No bins yet. Create a warehouse first, then add bins for shelf locations."
+                />
               </div>
             )}
 

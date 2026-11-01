@@ -344,7 +344,12 @@ export default function CycleCountsPage() {
             </div>
 
             <div className="rounded-2xl border border-border bg-card">
-              <RichDataTable columns={columns} data={items} searchPlaceholder="Search cycle counts..." />
+              <RichDataTable
+                columns={columns}
+                data={items}
+                searchPlaceholder="Search cycle counts..."
+                emptyMessage="No cycle counts yet. Start one for a warehouse to verify on-hand quantities."
+              />
             </div>
 
             {/* Create Modal */}

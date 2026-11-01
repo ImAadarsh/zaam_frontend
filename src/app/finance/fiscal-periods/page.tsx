@@ -292,7 +292,11 @@ export default function FiscalPeriodsPage() {
               )}
             </div>
 
-            <RichDataTable data={items} columns={columns} />
+            <RichDataTable
+              data={items}
+              columns={columns}
+              emptyMessage="No fiscal periods yet. Create an open period before posting journal entries."
+            />
 
             {showCreate && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

@@ -268,7 +268,12 @@ export default function B2bShippingMethodsPage() {
             </div>
           </div>
 
-          <RichDataTable columns={columns as any} data={items} searchPlaceholder="Search shipping methods..." />
+          <RichDataTable
+            columns={columns as any}
+            data={items}
+            searchPlaceholder="Search shipping methods..."
+            emptyMessage="No shipping methods yet. Add one (e.g. Standard Delivery) so retailers can check out."
+          />
         </main>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import type { Session } from '@/lib/auth';
 import { NAV_MODULES, type NavPage } from '@/lib/nav-pages.generated';
+import { MODULE_LABEL_BY_SLUG } from '@/lib/nav-module-slugs';
 
 /**
  * Role page permissions (`roles.permissions.pages`) resolved by the API at login / GET /api/iam/me.
@@ -16,6 +17,16 @@ const ALL_PAGES: NavPage[] = (() => {
 
 /** Routes every signed-in user may open regardless of page permissions. */
 const ALWAYS_ALLOWED = ['/', '/login', '/auth', '/modules', '/profile'];
+
+function pagesForModuleSlug(moduleRoot: string): NavPage[] {
+  const label = MODULE_LABEL_BY_SLUG[moduleRoot];
+  if (label) {
+    const group = NAV_MODULES.find((m) => m.module === label);
+    if (group) return group.pages;
+  }
+  // Fallback: path-root match (covers General /dashboard and unknown slugs).
+  return ALL_PAGES.filter((p) => pathRoot(p.path) === moduleRoot);
+}
 
 /** Pages the given role codes can open through the built-in role checks (sidebar + page guards). */
 export function builtInPagesForRoles(roleCodes: string[]): string[] {
@@ -56,7 +67,7 @@ export function navPageForPath(pathname: string): NavPage | null {
 
 export function hasModuleAccess(moduleRoot: string, allowed: AllowedPages): boolean {
   if (!allowed) return true;
-  return ALL_PAGES.some((p) => pathRoot(p.path) === moduleRoot && allowed.has(p.key));
+  return pagesForModuleSlug(moduleRoot).some((p) => allowed.has(p.key));
 }
 
 export function canAccessPath(pathname: string | null | undefined, allowed: AllowedPages): boolean {
@@ -65,17 +76,22 @@ export function canAccessPath(pathname: string | null | undefined, allowed: Allo
   if (ALWAYS_ALLOWED.some((p) => (p === '/' ? path === '/' : matchesPath(path, p)))) return true;
   const page = navPageForPath(path);
   if (page) return allowed.has(page.key);
-  // Detail / sub pages without their own nav entry (e.g. /crm/deals/5) follow their module.
+  // Detail / sub pages without their own nav entry follow their hub module when known,
+  // otherwise the URL path root (legacy).
   const root = pathRoot(path);
+  const modulePages = pagesForModuleSlug(root);
+  if (modulePages.length > 0) return hasModuleAccess(root, allowed);
   const isModuleRoute = ALL_PAGES.some((p) => pathRoot(p.path) === root);
   return isModuleRoute ? hasModuleAccess(root, allowed) : true;
 }
 
 /** Best landing page inside a module: its dashboard when allowed, else the first allowed page. */
 export function firstAllowedPath(allowed: AllowedPages, moduleRoot?: string): string | null {
-  const candidates = ALL_PAGES.filter(
-    (p) => (!moduleRoot || pathRoot(p.path) === moduleRoot) && (!allowed || allowed.has(p.key))
+  const candidates = (moduleRoot ? pagesForModuleSlug(moduleRoot) : ALL_PAGES).filter(
+    (p) => !allowed || allowed.has(p.key)
   );
-  const dash = candidates.find((p) => p.path === `/${moduleRoot ?? ''}/dashboard`);
+  const dash = moduleRoot
+    ? candidates.find((p) => p.path === `/${moduleRoot}/dashboard`)
+    : undefined;
   return (dash ?? candidates[0])?.path ?? null;
 }

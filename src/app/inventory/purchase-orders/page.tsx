@@ -208,7 +208,12 @@ export default function PurchaseOrdersPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-border bg-card">
-                <RichDataTable columns={columns} data={items} searchPlaceholder="Search purchase orders..." />
+                <RichDataTable
+                  columns={columns}
+                  data={items}
+                  searchPlaceholder="Search purchase orders..."
+                  emptyMessage="No purchase orders yet. Add a supplier first, then create a PO to order stock."
+                />
               </div>
             )}
           </div>

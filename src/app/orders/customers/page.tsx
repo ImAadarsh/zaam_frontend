@@ -11,7 +11,8 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, Plus, X, User, RefreshCw } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, User, RefreshCw, ShoppingCart } from 'lucide-react';
+import Link from 'next/link';
 
 type Customer = {
   id: string;
@@ -224,6 +225,13 @@ export default function CustomersPage() {
       header: 'Actions',
       cell: ({ row }) => (
         <div className="flex gap-2">
+          <Link
+            href={`/orders/orders?customerId=${encodeURIComponent(row.original.id)}`}
+            className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
+            title="View orders"
+          >
+            <ShoppingCart className="h-4 w-4" />
+          </Link>
           {canUpdate && (
           <button
             onClick={() => {
@@ -240,12 +248,13 @@ export default function CustomersPage() {
               });
             }}
             className="p-1 hover:bg-muted rounded"
+            title="Edit"
           >
             <Pencil className="h-4 w-4" />
           </button>
           )}
           {canDelete && (
-          <button onClick={() => setConfirmDel(row.original)} className="p-1 hover:bg-muted rounded text-red-500">
+          <button onClick={() => setConfirmDel(row.original)} className="p-1 hover:bg-muted rounded text-red-500" title="Delete">
             <Trash2 className="h-4 w-4" />
           </button>
           )}
@@ -350,7 +359,12 @@ export default function CustomersPage() {
                 className={`rounded-2xl border border-border bg-card p-2 transition-opacity ${loading ? 'opacity-60' : ''}`}
                 aria-busy={loading}
               >
-                <RichDataTable columns={columns} data={items} hideSearch />
+                <RichDataTable
+                  columns={columns}
+                  data={items}
+                  hideSearch
+                  emptyMessage="No customers yet. Add a customer, or sync orders from a channel to create them automatically."
+                />
               </div>
             )}
 

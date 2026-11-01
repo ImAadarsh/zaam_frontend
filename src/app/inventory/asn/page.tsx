@@ -348,7 +348,12 @@ export default function ASNPage() {
             </div>
 
             <div className="rounded-2xl border border-border bg-card">
-              <RichDataTable columns={columns} data={items} searchPlaceholder="Search ASN..." />
+              <RichDataTable
+                columns={columns}
+                data={items}
+                searchPlaceholder="Search ASN..."
+                emptyMessage="No ASNs yet. Create one when a supplier confirms delivery (often from a purchase order)."
+              />
             </div>
 
             {/* Create Modal */}

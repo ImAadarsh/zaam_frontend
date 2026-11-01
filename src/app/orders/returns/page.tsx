@@ -430,7 +430,12 @@ export default function ReturnsPage() {
                 className={`rounded-2xl border border-border bg-card p-2 transition-opacity ${loading ? 'opacity-60' : ''}`}
                 aria-busy={loading}
               >
-                <RichDataTable columns={columns} data={items} hideSearch />
+                <RichDataTable
+                  columns={columns}
+                  data={items}
+                  hideSearch
+                  emptyMessage="No returns yet. Create a return against a completed order when a customer sends goods back."
+                />
               </div>
             )}
 

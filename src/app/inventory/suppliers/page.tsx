@@ -55,7 +55,7 @@ export default function SuppliersPage() {
   async function loadData() {
     try {
       setLoading(true);
-      const suppliersRes = await listSuppliers();
+      const suppliersRes = await listSuppliers({ organizationId: session?.user?.organizationId });
       setItems(suppliersRes.data || []);
     } catch (e: any) {
       toast.error('Failed to load suppliers');
@@ -220,7 +220,12 @@ export default function SuppliersPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-border bg-card">
-                <RichDataTable columns={columns} data={items} searchPlaceholder="Search suppliers..." />
+                <RichDataTable
+                  columns={columns}
+                  data={items}
+                  searchPlaceholder="Search suppliers..."
+                  emptyMessage="No suppliers yet. Add a supplier before creating purchase orders."
+                />
               </div>
             )}
 

@@ -479,7 +479,12 @@ export default function PaymentsPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-border bg-card p-2 shadow-sm">
-                <RichDataTable columns={columns} data={data} hideSearch />
+                <RichDataTable
+                  columns={columns}
+                  data={data}
+                  hideSearch
+                  emptyMessage="No payments yet. Payments appear when orders are paid or you record one against an invoice."
+                />
               </div>
             )}
           </div>

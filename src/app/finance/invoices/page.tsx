@@ -537,7 +537,18 @@ export default function InvoicesPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-border bg-card p-2 shadow-sm">
-                <RichDataTable columns={columns} data={data} hideSearch />
+                <RichDataTable
+                  columns={columns}
+                  data={data}
+                  hideSearch
+                  tableId="finance-invoices-v2"
+                  initialColumnVisibility={{
+                    store: false,
+                    channel: false,
+                    order: true
+                  }}
+                  emptyMessage="No invoices yet. Generate from uninvoiced orders, or open an order and create an invoice there."
+                />
               </div>
             )}
           </div>

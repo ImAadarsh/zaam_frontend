@@ -40,11 +40,12 @@ export default function InventoryDashboard() {
     (async () => {
       try {
         const settle = <T,>(p: Promise<{ data: T[] }>) => p.then((r) => r.data || []).catch(() => [] as T[]);
+        const organizationId = session?.user?.organizationId;
         const [warehouses, stockItems, suppliers, purchaseOrders, grns, adjustments, transfers] = await Promise.all([
-          settle(listWarehouses()),
+          settle(listWarehouses({ organizationId })),
           settle(listStockItems()),
-          settle(listSuppliers()),
-          settle(listPurchaseOrders()),
+          settle(listSuppliers({ organizationId })),
+          settle(listPurchaseOrders({ organizationId })),
           settle(listGRN()),
           settle(listStockAdjustments()),
           settle(listStockTransfers())

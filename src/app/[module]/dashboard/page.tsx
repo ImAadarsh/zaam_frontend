@@ -10,7 +10,7 @@ import { Header } from '@/components/header';
 import { getSession } from '@/lib/auth';
 import { StatCard } from '@/components/stat-card';
 import { listUsers, listRoles, listAuditLogs, listOrganizations, listBusinessUnits, listLocations, listApiKeys, listCatalogItems, listVariants, listPriceLists, listTaxCodes } from '@/lib/api';
-import { Users, Shield, Key, FileText, UserCog, TrendingUp, Activity, Building2, Briefcase, MapPin, Package2, Tag, DollarSign, Receipt, Truck, Package, Settings, Share2 } from 'lucide-react';
+import { Users, Shield, Key, FileText, UserCog, TrendingUp, Activity, Building2, Briefcase, MapPin, Package2, Tag, DollarSign, Receipt, Truck, Package, Settings, Share2, Globe, Upload, ShoppingCart, Download, Plug } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const COLORS = ['#D4A017', '#E5B84A', '#F0D07C', '#8B7012', '#A68A1A'];
@@ -758,6 +758,47 @@ export default function ModuleDashboardPage() {
                       <Bar dataKey="value" fill="#D4A017" radius={[0, 8, 8, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
+                </div>
+              </section>
+            </>
+          ) : params.module === 'channels' ? (
+            <>
+              <section className="rounded-2xl border border-border bg-card p-6 mb-2">
+                <div className="text-sm font-medium text-muted-foreground mb-1 uppercase tracking-wider">Channels &amp; Integrations</div>
+                <p className="text-sm text-muted-foreground max-w-2xl">
+                  Connect external sales channels, map products, and pull orders. Pick a job below — each opens the dedicated admin page.
+                </p>
+              </section>
+              <section className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                <Link href="/catalog/channel-mappings" className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all">
+                  <Share2 size={22} className="text-primary mb-3" />
+                  <div className="font-semibold">Channel Mappings</div>
+                  <div className="text-xs text-muted-foreground mt-1">Link catalog SKUs to Shopify, WooCommerce, Amazon, etc.</div>
+                </Link>
+                <Link href="/catalog/import-channels" className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all">
+                  <Upload size={22} className="text-primary mb-3" />
+                  <div className="font-semibold">Import Channels</div>
+                  <div className="text-xs text-muted-foreground mt-1">Pull products from a connected store into the catalog.</div>
+                </Link>
+                <Link href="/catalog/wordpress-channels" className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all">
+                  <Globe size={22} className="text-primary mb-3" />
+                  <div className="font-semibold">WordPress / WooCommerce</div>
+                  <div className="text-xs text-muted-foreground mt-1">API keys, sync health, and store connections.</div>
+                </Link>
+                <Link href="/catalog/epos-channels" className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all">
+                  <ShoppingCart size={22} className="text-primary mb-3" />
+                  <div className="font-semibold">EPOS / GoodTill</div>
+                  <div className="text-xs text-muted-foreground mt-1">Till credentials, push catalog, barcode labels.</div>
+                </Link>
+                <Link href="/orders/channel-sync" className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all">
+                  <Download size={22} className="text-primary mb-3" />
+                  <div className="font-semibold">Order Channel Sync</div>
+                  <div className="text-xs text-muted-foreground mt-1">Import orders and payments from POS and web stores.</div>
+                </Link>
+                <div className="p-5 rounded-2xl border border-dashed border-border bg-muted/30">
+                  <Plug size={22} className="text-muted-foreground mb-3" />
+                  <div className="font-semibold text-muted-foreground">Need a new channel?</div>
+                  <div className="text-xs text-muted-foreground mt-1">Start with WordPress or EPOS, then map products and sync orders.</div>
                 </div>
               </section>
             </>
