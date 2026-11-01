@@ -557,8 +557,8 @@ export default function CatalogItemsPage() {
   }>({ warehouseId: '', barcode: 'all', price: 'all' });
 
   async function refreshItems(organizationId?: string) {
-    const isSuper = session?.user?.roles?.includes('SUPER_ADMIN');
-    setItems(await loadAllCatalogItems(isSuper ? organizationId : (organizationId || session?.user?.organizationId)));
+    // Always scope to an org — never load every tenant's catalogue into this page.
+    setItems(await loadAllCatalogItems(organizationId || session?.user?.organizationId));
   }
 
   useEffect(() => {
@@ -569,12 +569,15 @@ export default function CatalogItemsPage() {
     }
     (async () => {
       try {
-        const isSuper = session?.user?.roles?.includes('SUPER_ADMIN');
         const [itemsRes, orgsRes, taxCodesRes, warehousesRes] = await Promise.all([
-          loadAllCatalogItems(isSuper ? undefined : session?.user?.organizationId).then((data) => ({ data })),
+          loadAllCatalogItems(session?.user?.organizationId).then((data) => ({ data })),
           listOrganizations(),
           listTaxCodes({ organizationId: session?.user?.organizationId }),
-          listWarehouses({ limit: 200, status: 'active' }).catch(() => ({ data: [] as WarehouseOption[] }))
+          listWarehouses({
+            organizationId: session?.user?.organizationId,
+            limit: 200,
+            status: 'active'
+          }).catch(() => ({ data: [] as WarehouseOption[] }))
         ]);
         setItems(itemsRes.data || []);
         setOrganizations(orgsRes.data || []);

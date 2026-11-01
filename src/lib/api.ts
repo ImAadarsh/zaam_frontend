@@ -2182,6 +2182,7 @@ export async function deleteComplianceDocument(id: string) {
 
 // WAREHOUSES
 export async function listWarehouses(params?: {
+  organizationId?: string;
   locationId?: string;
   status?: string;
   search?: string;
