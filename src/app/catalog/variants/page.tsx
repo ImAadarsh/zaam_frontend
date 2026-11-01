@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { Suspense, useEffect, useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
@@ -238,7 +238,7 @@ function ImagePicker({
   );
 }
 
-export default function VariantsPage() {
+function VariantsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deepLinkQ = (searchParams.get('q') || '').trim();
@@ -995,5 +995,13 @@ export default function VariantsPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function VariantsPageSuspense() {
+  return (
+    <Suspense fallback={<div className="min-h-screen app-surface" />}>
+      <VariantsPage />
+    </Suspense>
   );
 }
