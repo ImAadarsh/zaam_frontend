@@ -41,10 +41,15 @@ type CatalogItem = {
   sku: string;
   name: string;
   description?: string | null;
+  categoryId?: string | null;
   category?: string | null;
+  subCategoryId?: string | null;
   subCategory?: string | null;
+  brandId?: string | null;
   brand?: string | null;
+  uomId?: string | null;
   uom?: string | null;
+  packSizeId?: string | null;
   packSize?: string | null;
   costPrice?: number | null;
   sellingPrice?: number | null;
@@ -90,11 +95,12 @@ type ProductForm = {
   barcode: string;
   name: string;
   description: string;
-  category: string;
-  subCategory: string;
-  brand: string;
-  uom: string;
-  packSize: string;
+  /** Classification master ids (not display names). */
+  categoryId: string;
+  subCategoryId: string;
+  brandId: string;
+  uomId: string;
+  packSizeId: string;
   openingQuantity: string;
   reorderLevel: string;
   reorderQuantity: string;
@@ -121,11 +127,11 @@ const emptyForm: ProductForm = {
   barcode: '',
   name: '',
   description: '',
-  category: '',
-  subCategory: '',
-  brand: '',
-  uom: '',
-  packSize: '',
+  categoryId: '',
+  subCategoryId: '',
+  brandId: '',
+  uomId: '',
+  packSizeId: '',
   openingQuantity: '',
   reorderLevel: '',
   reorderQuantity: '',
@@ -201,11 +207,11 @@ function formFromItem(item: CatalogItem): ProductForm {
     barcode: str(item.barcode),
     name: item.name,
     description: str(item.description),
-    category: str(item.category),
-    subCategory: str(item.subCategory),
-    brand: str(item.brand),
-    uom: str(item.uom),
-    packSize: str(item.packSize),
+    categoryId: str(item.categoryId),
+    subCategoryId: str(item.subCategoryId),
+    brandId: str(item.brandId),
+    uomId: str(item.uomId),
+    packSizeId: str(item.packSizeId),
     openingQuantity: numStr(item.openingQuantity),
     reorderLevel: numStr(item.reorderLevel),
     reorderQuantity: numStr(item.reorderQuantity),
@@ -240,22 +246,36 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function groupClassificationNames(rows: CatalogClassification[]) {
-  const out = {
-    category: [] as string[],
-    sub_category: [] as string[],
-    brand: [] as string[],
-    uom: [] as string[],
-    pack_size: [] as string[]
-  };
+type ClassificationOption = { id: string; name: string };
+
+type ClassificationBuckets = {
+  category: ClassificationOption[];
+  sub_category: ClassificationOption[];
+  brand: ClassificationOption[];
+  uom: ClassificationOption[];
+  pack_size: ClassificationOption[];
+};
+
+const emptyClassificationBuckets = (): ClassificationBuckets => ({
+  category: [],
+  sub_category: [],
+  brand: [],
+  uom: [],
+  pack_size: []
+});
+
+function groupClassificationOptions(rows: CatalogClassification[]): ClassificationBuckets {
+  const out = emptyClassificationBuckets();
   for (const row of rows) {
     if (row.status && row.status !== 'active') continue;
     const bucket = out[row.type];
     if (!bucket) continue;
-    if (!bucket.includes(row.name)) bucket.push(row.name);
+    if (!bucket.some((o) => o.id === String(row.id))) {
+      bucket.push({ id: String(row.id), name: row.name });
+    }
   }
-  for (const key of Object.keys(out) as (keyof typeof out)[]) {
-    out[key].sort((a, b) => a.localeCompare(b));
+  for (const key of Object.keys(out) as (keyof ClassificationBuckets)[]) {
+    out[key].sort((a, b) => a.name.localeCompare(b.name));
   }
   return out;
 }
@@ -268,18 +288,20 @@ function ClassificationSelect({
   emptyHint,
   placeholder,
   allowClear = true,
-  orphanOk = true
+  orphanLabel
 }: {
   label: string;
+  /** Classification master id */
   value: string;
-  options: string[];
-  onChange: (next: string) => void;
+  options: ClassificationOption[];
+  onChange: (nextId: string) => void;
   emptyHint?: React.ReactNode;
   placeholder?: string;
   allowClear?: boolean;
-  orphanOk?: boolean;
+  /** Display name when value id is not in options (legacy / archived). */
+  orphanLabel?: string;
 }) {
-  const hasOrphan = orphanOk && !!value && !options.includes(value);
+  const hasOrphan = !!value && !options.some((o) => o.id === value);
   return (
     <label className="text-sm">
       {label}
@@ -289,9 +311,11 @@ function ClassificationSelect({
         onChange={(e) => onChange(e.target.value)}
       >
         {allowClear && <option value="">{placeholder || '—'}</option>}
-        {hasOrphan && <option value={value}>{value} (current)</option>}
+        {hasOrphan && (
+          <option value={value}>{orphanLabel || value} (current)</option>
+        )}
         {options.map((o) => (
-          <option key={o} value={o}>{o}</option>
+          <option key={o.id} value={o.id}>{o.name}</option>
         ))}
       </select>
       {options.length === 0 && emptyHint ? (
@@ -311,6 +335,7 @@ function ProductFields({
   warehouses,
   onReloadTaxCodes,
   classifications,
+  orphanLabels,
   onQuickCreateClassification
 }: {
   value: ProductForm;
@@ -321,13 +346,9 @@ function ProductFields({
   taxCodes: any[];
   warehouses: WarehouseOption[];
   onReloadTaxCodes?: () => void;
-  classifications: {
-    category: string[];
-    sub_category: string[];
-    brand: string[];
-    uom: string[];
-    pack_size: string[];
-  };
+  classifications: ClassificationBuckets;
+  /** Optional display names for orphan ids (edit form). */
+  orphanLabels?: Partial<Record<'category' | 'subCategory' | 'brand' | 'uom' | 'packSize', string>>;
   onQuickCreateClassification?: (type: CatalogClassificationType, name: string) => Promise<string | null>;
 }) {
   const set = (patch: Partial<ProductForm>) => onChange({ ...value, ...patch });
@@ -436,9 +457,10 @@ function ProductFields({
         <div className="grid grid-cols-2 gap-4">
           <ClassificationSelect
             label="Category"
-            value={value.category}
+            value={value.categoryId}
             options={classifications.category}
-            onChange={(category) => set({ category })}
+            orphanLabel={orphanLabels?.category}
+            onChange={(categoryId) => set({ categoryId })}
             placeholder="Select category…"
             emptyHint={
               <>
@@ -454,7 +476,7 @@ function ProductFields({
                         const raw = window.prompt('New category name');
                         if (!raw?.trim()) return;
                         const created = await onQuickCreateClassification('category', raw.trim());
-                        if (created) set({ category: created });
+                        if (created) set({ categoryId: created });
                       }}
                     >
                       add new
@@ -466,9 +488,10 @@ function ProductFields({
           />
           <ClassificationSelect
             label="Sub-Category"
-            value={value.subCategory}
+            value={value.subCategoryId}
             options={classifications.sub_category}
-            onChange={(subCategory) => set({ subCategory })}
+            orphanLabel={orphanLabels?.subCategory}
+            onChange={(subCategoryId) => set({ subCategoryId })}
             placeholder="Optional"
             emptyHint={
               <>
@@ -479,9 +502,10 @@ function ProductFields({
           />
           <ClassificationSelect
             label="Brand / Manufacturer"
-            value={value.brand}
+            value={value.brandId}
             options={classifications.brand}
-            onChange={(brand) => set({ brand })}
+            orphanLabel={orphanLabels?.brand}
+            onChange={(brandId) => set({ brandId })}
             placeholder="Select brand…"
             emptyHint={
               <>
@@ -492,9 +516,10 @@ function ProductFields({
           />
           <ClassificationSelect
             label="Unit of Measure (UOM)"
-            value={value.uom}
+            value={value.uomId}
             options={classifications.uom}
-            onChange={(uom) => set({ uom })}
+            orphanLabel={orphanLabels?.uom}
+            onChange={(uomId) => set({ uomId })}
             placeholder="SET, PCS, BOX…"
             emptyHint={
               <>
@@ -505,9 +530,10 @@ function ProductFields({
           />
           <ClassificationSelect
             label="Pack Size"
-            value={value.packSize}
+            value={value.packSizeId}
             options={classifications.pack_size}
-            onChange={(packSize) => set({ packSize })}
+            orphanLabel={orphanLabels?.packSize}
+            onChange={(packSizeId) => set({ packSizeId })}
             placeholder="1, 12x330ml…"
             emptyHint={
               <>
@@ -689,13 +715,10 @@ export default function CatalogItemsPage() {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [businessUnits, setBusinessUnits] = useState<any[]>([]);
   const [taxCodes, setTaxCodes] = useState<any[]>([]);
-  const [classifications, setClassifications] = useState<{
-    category: string[];
-    sub_category: string[];
-    brand: string[];
-    uom: string[];
-    pack_size: string[];
-  }>({ category: [], sub_category: [], brand: [], uom: [], pack_size: [] });
+  const [classifications, setClassifications] = useState<ClassificationBuckets>(emptyClassificationBuckets());
+  const [editOrphanLabels, setEditOrphanLabels] = useState<
+    Partial<Record<'category' | 'subCategory' | 'brand' | 'uom' | 'packSize', string>>
+  >({});
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [editing, setEditing] = useState<CatalogItem | null>(null);
   const [editForm, setEditForm] = useState<ProductForm>(emptyForm);
@@ -744,7 +767,7 @@ export default function CatalogItemsPage() {
         setOrganizations(orgsRes.data || []);
         setTaxCodes(taxCodesRes.data || []);
         setWarehouses(warehousesRes.data || []);
-        setClassifications(groupClassificationNames(classRes.data || []));
+        setClassifications(groupClassificationOptions(classRes.data || []));
         if (orgId) {
           setForm((prev) => ({ ...prev, organizationId: orgId }));
           const busRes = await listBusinessUnits(orgId).catch(() => ({ data: [] }));
@@ -784,8 +807,8 @@ export default function CatalogItemsPage() {
       })
       .catch(() => setTaxCodes([]));
     listClassifications({ organizationId: form.organizationId, status: 'active' })
-      .then((res) => setClassifications(groupClassificationNames(res.data || [])))
-      .catch(() => setClassifications({ category: [], sub_category: [], brand: [], uom: [], pack_size: [] }));
+      .then((res) => setClassifications(groupClassificationOptions(res.data || [])))
+      .catch(() => setClassifications(emptyClassificationBuckets()));
   }, [form.organizationId]);
 
   async function reloadTaxCodes(organizationId?: string) {
@@ -802,7 +825,7 @@ export default function CatalogItemsPage() {
     try {
       const orgId = organizationId || form.organizationId || session?.user?.organizationId;
       const res = await listClassifications({ organizationId: orgId, status: 'active' });
-      setClassifications(groupClassificationNames(res.data || []));
+      setClassifications(groupClassificationOptions(res.data || []));
     } catch {
       toast.error('Failed to load classifications');
     }
@@ -814,7 +837,7 @@ export default function CatalogItemsPage() {
       const res = await createClassification({ organizationId: orgId, type, name });
       await reloadClassifications(orgId);
       toast.success(`${name} added`);
-      return res.data.name;
+      return String(res.data.id);
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message ?? 'Could not add classification');
       return null;
@@ -839,16 +862,20 @@ export default function CatalogItemsPage() {
       if (v) return v;
       return original && (original[key] as string).trim() ? '' : undefined;
     };
+    const idField = (key: 'categoryId' | 'subCategoryId' | 'brandId' | 'uomId' | 'packSizeId') => {
+      const v = f[key].trim();
+      if (v) return v;
+      return original && original[key].trim() ? '' : undefined;
+    };
     const payload: Record<string, any> = {
       sku: f.sku,
       name: f.name,
       description: text('description'),
-      category: text('category'),
-      subCategory: text('subCategory'),
-      brand: text('brand'),
-      manufacturer: text('brand'),
-      uom: text('uom'),
-      packSize: text('packSize'),
+      categoryId: idField('categoryId'),
+      subCategoryId: idField('subCategoryId'),
+      brandId: idField('brandId'),
+      uomId: idField('uomId'),
+      packSizeId: idField('packSizeId'),
       costPrice: num(f.costPrice),
       sellingPrice: num(f.sellingPrice),
       currency: f.currency || undefined,
@@ -1015,9 +1042,20 @@ export default function CatalogItemsPage() {
     setPendingMediaDeletes([]);
   }
 
+  function orphanLabelsFromItem(item: CatalogItem) {
+    return {
+      category: item.category || undefined,
+      subCategory: item.subCategory || undefined,
+      brand: item.brand || undefined,
+      uom: item.uom || undefined,
+      packSize: item.packSize || undefined
+    };
+  }
+
   async function openEdit(item: CatalogItem) {
     setPendingMediaDeletes([]);
     setEditing(item);
+    setEditOrphanLabels(orphanLabelsFromItem(item));
     const initial = formFromItem(item);
     setEditForm(initial);
     setEditOriginal(initial);
@@ -1029,6 +1067,7 @@ export default function CatalogItemsPage() {
       const fresh = res.data as CatalogItem;
       const hydratedForm = formFromItem(fresh);
       setEditing(fresh);
+      setEditOrphanLabels(orphanLabelsFromItem(fresh));
       setEditForm(hydratedForm);
       setEditOriginal(hydratedForm);
       setEditVariants(fresh.variants ?? []);
@@ -1496,6 +1535,7 @@ export default function CatalogItemsPage() {
                     <ProductFields
                       value={editForm}
                       onChange={setEditForm}
+                      orphanLabels={editOrphanLabels}
                       organizations={organizations}
                       businessUnits={businessUnits}
                       taxCodes={taxCodes}
