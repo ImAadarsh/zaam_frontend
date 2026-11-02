@@ -442,17 +442,28 @@ function ProductFields({
         <SectionTitle>Identity</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
           <label className="text-sm">
-            SKU / Item Code *
+            Product SKU (catalogue) *
             <input
               className="mt-1 input w-full"
               value={value.sku}
               onChange={(e) => set({ sku: e.target.value })}
               required
             />
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Product-level code. Sellable / stock SKUs live on Variants (<code className="text-[10px]">variant_sku</code>).
+            </span>
           </label>
-          {field('Barcode / UPC', 'barcode', { placeholder: 'Optional — any barcode, EAN-13 or UPC-A' })}
+          <label className="text-sm">
+            Barcode on default variant
+            <input
+              className="mt-1 input w-full"
+              value={value.barcode}
+              onChange={(e) => set({ barcode: e.target.value })}
+              placeholder="Optional — saved on the first/default variant, not the product row"
+            />
+          </label>
           <label className="text-sm col-span-2">
-            Product Name *
+            Product name *
             <input
               className="mt-1 input w-full"
               value={value.name}
@@ -1182,12 +1193,12 @@ export default function CatalogItemsPage() {
     () => [
       {
         accessorKey: 'sku',
-        header: 'SKU / Item Code',
+        header: 'Product SKU',
         cell: ({ row }) => <span className="font-mono text-xs whitespace-nowrap">{row.original.sku}</span>
       },
       {
         accessorKey: 'barcode',
-        header: 'Barcode / UPC',
+        header: 'Barcode (variant)',
         cell: ({ row }) => <span className="font-mono text-xs">{row.original.barcode || '—'}</span>
       },
       {
