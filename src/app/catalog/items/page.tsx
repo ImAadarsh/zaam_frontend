@@ -591,8 +591,8 @@ function ProductFields({
       <section>
         <SectionTitle>Pricing &amp; Tax</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
-          {field('Default unit cost (catalogue)', 'costPrice', { type: 'number', step: '0.0001' })}
-          {field('Default sell price (catalogue)', 'sellingPrice', { type: 'number', step: '0.0001' })}
+          {field('Default unit cost (variant)', 'costPrice', { type: 'number', step: '0.0001' })}
+          {field('Default sell price (price list)', 'sellingPrice', { type: 'number', step: '0.0001' })}
           <label className="text-sm">
             Currency
             <select
