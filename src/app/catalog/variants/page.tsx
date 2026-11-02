@@ -31,6 +31,13 @@ type Variant = {
   costCurrency: string;
   imageUrl?: string | null;
   status: 'active' | 'inactive' | 'discontinued';
+  /** Sum of quantity_on_hand across warehouses for this variant. */
+  stockQty?: number;
+  stockByWarehouse?: Array<{
+    warehouseId: string;
+    warehouseName?: string | null;
+    quantityOnHand: number;
+  }>;
   catalogItem?: {
     id: string;
     sku: string;
@@ -545,7 +552,7 @@ function VariantsPage() {
     },
     {
       accessorKey: 'costPrice',
-      header: 'Cost Price',
+      header: 'Variant cost',
       cell: ({ row }) => {
         const price = row.original.costPrice;
         const numPrice = typeof price === 'number' ? price : (price != null ? parseFloat(String(price)) : NaN);
@@ -553,6 +560,33 @@ function VariantsPage() {
           <span>{row.original.costCurrency} {numPrice.toFixed(2)}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
+        );
+      }
+    },
+    {
+      id: 'stockQty',
+      header: 'Stock (by warehouse)',
+      accessorFn: (r) => r.stockQty ?? 0,
+      cell: ({ row }) => {
+        const rows = row.original.stockByWarehouse ?? [];
+        if (!rows.length) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+          <div className="text-xs space-y-0.5">
+            {rows.map((s) => (
+              <div key={s.warehouseId} className="flex gap-2 justify-between min-w-[10rem]">
+                <span className="text-muted-foreground truncate">{s.warehouseName || 'Warehouse'}</span>
+                <span className="tabular-nums font-medium">{s.quantityOnHand}</span>
+              </div>
+            ))}
+            {rows.length > 1 && (
+              <div className="text-muted-foreground border-t pt-0.5 flex justify-between">
+                <span>Total</span>
+                <span className="tabular-nums">{row.original.stockQty ?? 0}</span>
+              </div>
+            )}
+          </div>
         );
       }
     },
@@ -810,7 +844,7 @@ function VariantsPage() {
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1.5">Cost Price</label>
+                        <label className="block text-sm font-medium mb-1.5">Variant unit cost</label>
                         <input
                           type="number"
                           step="0.01"
@@ -900,7 +934,7 @@ function VariantsPage() {
                         <OptionRowsEditor rows={editOptionRows} onChange={setEditOptionRows} multiValue={false} />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1.5">Cost Price</label>
+                        <label className="block text-sm font-medium mb-1.5">Variant unit cost</label>
                         <input
                           type="number"
                           step="0.01"

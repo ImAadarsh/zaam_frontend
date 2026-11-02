@@ -77,7 +77,18 @@ type CatalogItem = {
     option3Value?: string | null;
     attributes?: Record<string, any> | null;
   }>;
+  /** Sum across variants — display only; real stock is per variant in stock_items. */
   openingQuantity?: number | null;
+  variantCount?: number;
+  variantStock?: Array<{
+    variantId: string;
+    variantSku: string;
+    variantName?: string | null;
+    warehouseId: string;
+    warehouseName?: string | null;
+    quantityOnHand: number;
+    quantityReserved?: number;
+  }>;
   reorderLevel?: number | null;
   reorderQuantity?: number | null;
   warehouseId?: string | null;
@@ -336,7 +347,10 @@ function ProductFields({
   onReloadTaxCodes,
   classifications,
   orphanLabels,
-  onQuickCreateClassification
+  onQuickCreateClassification,
+  variantCount = 0,
+  variantStock,
+  lockMultiVariantStock
 }: {
   value: ProductForm;
   onChange: (next: ProductForm) => void;
@@ -350,6 +364,12 @@ function ProductFields({
   /** Optional display names for orphan ids (edit form). */
   orphanLabels?: Partial<Record<'category' | 'subCategory' | 'brand' | 'uom' | 'packSize', string>>;
   onQuickCreateClassification?: (type: CatalogClassificationType, name: string) => Promise<string | null>;
+  /** Number of variants on this product (edit). */
+  variantCount?: number;
+  /** Per-variant stock rows from API (edit). */
+  variantStock?: CatalogItem['variantStock'];
+  /** When true, opening qty is read-only total — multi-variant products. */
+  lockMultiVariantStock?: boolean;
 }) {
   const set = (patch: Partial<ProductForm>) => onChange({ ...value, ...patch });
   const warehouseChoices = useMemo(() => {
@@ -560,8 +580,8 @@ function ProductFields({
       <section>
         <SectionTitle>Pricing &amp; Tax</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
-          {field('Unit Cost Price', 'costPrice', { type: 'number', step: '0.0001' })}
-          {field('Unit Selling Price', 'sellingPrice', { type: 'number', step: '0.0001' })}
+          {field('Default unit cost (catalogue)', 'costPrice', { type: 'number', step: '0.0001' })}
+          {field('Default sell price (catalogue)', 'sellingPrice', { type: 'number', step: '0.0001' })}
           <label className="text-sm">
             Currency
             <select
@@ -612,12 +632,29 @@ function ProductFields({
             )}
           </div>
         </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          Catalogue cost/sell are defaults. POS and B2B sell prices come from Price Lists (per variant);
+          variant-level cost on Variants overrides catalogue cost when set. Images can also be per variant.
+        </p>
       </section>
 
       <section>
         <SectionTitle>Inventory &amp; Warehouse</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
-          {field('Opening Quantity', 'openingQuantity', { type: 'number' })}
+          {lockMultiVariantStock ? (
+            <label className="text-sm">
+              Total stock (all variants)
+              <input
+                className="mt-1 input w-full bg-muted/40"
+                type="number"
+                value={value.openingQuantity}
+                readOnly
+                title="Sum of per-variant stock — not editable here"
+              />
+            </label>
+          ) : (
+            field('Opening quantity (default variant)', 'openingQuantity', { type: 'number' })
+          )}
           {field('Reorder Level', 'reorderLevel', { type: 'number' })}
           {field('Reorder Quantity', 'reorderQuantity', { type: 'number' })}
           <label className="text-sm">
@@ -626,6 +663,7 @@ function ProductFields({
               className="mt-1 select w-full"
               value={value.warehouseId}
               onChange={(e) => set({ warehouseId: e.target.value })}
+              disabled={lockMultiVariantStock}
             >
               <option value="">Select warehouse…</option>
               {warehouseChoices.map((w) => (
@@ -639,11 +677,57 @@ function ProductFields({
           {field('Batch / Lot No.', 'lotNumber')}
           {field('Expiry Date', 'expiryDate', { type: 'date' })}
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Quantity and reorder values are saved on a stock row for the selected warehouse. Select a warehouse
-          before setting opening quantity or other stock fields. Missing bins and suppliers are created
-          automatically.
-        </p>
+        {lockMultiVariantStock ? (
+          <p className="text-xs text-muted-foreground mt-2">
+            This product has {variantCount} variants. Stock is stored per variant × warehouse — the total above is
+            a sum only. Set or change qty on{' '}
+            <Link href="/inventory/stock-items" className="text-primary hover:underline">
+              Inventory → Stock Items
+            </Link>{' '}
+            or open each variant below.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground mt-2">
+            Opening quantity is saved on a stock row for the default (first) variant and selected warehouse — not
+            on the catalogue master. Select a warehouse before setting quantity. Missing bins and suppliers are
+            created automatically.
+          </p>
+        )}
+        {variantStock && variantStock.length > 0 && (
+          <div className="mt-3 rounded-lg border overflow-hidden">
+            <div className="px-3 py-1.5 text-xs font-medium bg-muted/40 border-b">Stock by variant</div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b">
+                  <th className="px-3 py-1.5 font-medium">Variant SKU</th>
+                  <th className="px-3 py-1.5 font-medium">Warehouse</th>
+                  <th className="px-3 py-1.5 font-medium text-right">Qty</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {variantStock.map((row) => (
+                  <tr key={`${row.variantId}-${row.warehouseId}`}>
+                    <td className="px-3 py-1.5 font-mono">
+                      <Link
+                        href={`/catalog/variants?q=${encodeURIComponent(row.variantSku)}`}
+                        className="text-primary hover:underline"
+                      >
+                        {row.variantSku}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-1.5">{row.warehouseName || '—'}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{row.quantityOnHand}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {lockMultiVariantStock && (!variantStock || variantStock.length === 0) && (
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+            No stock rows yet for these variants. Add quantity per variant on Stock Items.
+          </p>
+        )}
       </section>
 
       <section>
@@ -726,6 +810,7 @@ export default function CatalogItemsPage() {
   const [media, setMedia] = useState<any[]>([]);
   const [editOriginal, setEditOriginal] = useState<ProductForm | null>(null);
   const [editVariants, setEditVariants] = useState<NonNullable<CatalogItem['variants']>>([]);
+  const [editVariantStock, setEditVariantStock] = useState<NonNullable<CatalogItem['variantStock']>>([]);
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [createImages, setCreateImages] = useState<File[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
@@ -853,7 +938,11 @@ export default function CatalogItemsPage() {
     }
   }
 
-  function buildPayload(f: ProductForm, original?: ProductForm | null) {
+  function buildPayload(
+    f: ProductForm,
+    original?: ProductForm | null,
+    opts?: { multiVariant?: boolean }
+  ) {
     let attributes: Record<string, any> | undefined;
     if (f.attributes.trim()) attributes = JSON.parse(f.attributes);
     else if (original?.attributes.trim()) attributes = {};
@@ -906,6 +995,10 @@ export default function CatalogItemsPage() {
       if (!sendingStock && f.warehouseId.trim() === original.warehouseId.trim()) {
         delete payload.warehouseId;
       }
+    }
+    // Never send aggregated opening qty back when the product has multiple variants.
+    if (opts?.multiVariant) {
+      delete payload.openingQuantity;
     }
     return payload;
   }
@@ -964,7 +1057,9 @@ export default function CatalogItemsPage() {
     }
     setSaving(true);
     try {
-      const payload = buildPayload(editForm, editOriginal);
+      const payload = buildPayload(editForm, editOriginal, {
+        multiVariant: editVariants.length > 1
+      });
       const res = await updateCatalogItem(editing.id, {
         businessUnitId: editForm.businessUnitId || (editOriginal?.businessUnitId ? '' : undefined),
         ...payload
@@ -1038,6 +1133,7 @@ export default function CatalogItemsPage() {
     setEditing(null);
     setEditOriginal(null);
     setEditVariants([]);
+    setEditVariantStock([]);
     setMedia([]);
     setPendingMediaDeletes([]);
   }
@@ -1060,6 +1156,7 @@ export default function CatalogItemsPage() {
     setEditForm(initial);
     setEditOriginal(initial);
     setEditVariants(item.variants ?? []);
+    setEditVariantStock(item.variantStock ?? []);
     loadMedia(item.id);
     setLoadingEdit(true);
     try {
@@ -1071,6 +1168,7 @@ export default function CatalogItemsPage() {
       setEditForm(hydratedForm);
       setEditOriginal(hydratedForm);
       setEditVariants(fresh.variants ?? []);
+      setEditVariantStock(fresh.variantStock ?? []);
     } catch {
       toast.error('Could not refresh product details; showing list values');
     } finally {
@@ -1120,7 +1218,7 @@ export default function CatalogItemsPage() {
       { accessorKey: 'packSize', header: 'Pack Size', cell: ({ row }) => row.original.packSize || '—' },
       {
         accessorKey: 'openingQuantity',
-        header: 'Opening Qty',
+        header: 'Total stock',
         cell: ({ row }) => row.original.openingQuantity ?? '—'
       },
       { accessorKey: 'reorderLevel', header: 'Reorder Level', cell: ({ row }) => row.original.reorderLevel ?? '—' },
@@ -1131,12 +1229,12 @@ export default function CatalogItemsPage() {
       },
       {
         accessorKey: 'costPrice',
-        header: 'Unit Cost Price',
+        header: 'Default cost',
         cell: ({ row }) => (row.original.costPrice != null ? Number(row.original.costPrice).toFixed(2) : '—')
       },
       {
         accessorKey: 'sellingPrice',
-        header: 'Unit Selling Price',
+        header: 'Default sell',
         cell: ({ row }) => (row.original.sellingPrice != null ? Number(row.original.sellingPrice).toFixed(2) : '—')
       },
       {
@@ -1543,6 +1641,9 @@ export default function CatalogItemsPage() {
                       onReloadTaxCodes={reloadTaxCodes}
                       classifications={classifications}
                       onQuickCreateClassification={quickCreateClassification}
+                      variantCount={editVariants.length}
+                      variantStock={editVariantStock}
+                      lockMultiVariantStock={editVariants.length > 1}
                     />
 
                     <div className="border-t pt-4 space-y-2">
