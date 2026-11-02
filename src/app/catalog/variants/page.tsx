@@ -4,8 +4,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { 
-  listVariants, createVariant, updateVariant, deleteVariant,
-  listCatalogItems, listProductMedia, createProductMedia, deleteProductMedia
+  listVariants, createVariant, deleteVariant,
+  listCatalogItems, createProductMedia,
+  listWarehouses, listRacks, listBins
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
@@ -16,6 +17,14 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Tag, Loader2 } from 'lucide-react';
 import { MediaThumb } from '@/components/catalog/media-preview';
 import { SearchableSelect } from '@/components/searchable-select';
+import { VariantEditDialog } from '@/components/catalog/variant-edit-dialog';
+
+type VariantBarcode = {
+  id?: string;
+  barcode: string;
+  type?: string | null;
+  isPrimary?: boolean;
+};
 
 type Variant = {
   id: string;
@@ -27,16 +36,36 @@ type Variant = {
   option2Value?: string | null;
   option3Name?: string | null;
   option3Value?: string | null;
+  weightValue?: number | null;
+  weightUnit?: 'g' | 'kg' | 'lb' | 'oz' | null;
+  lengthValue?: number | null;
+  widthValue?: number | null;
+  heightValue?: number | null;
+  dimensionUnit?: 'cm' | 'm' | 'in' | 'ft' | null;
   costPrice?: number | null;
   costCurrency: string;
+  /** Sell price from active price_list_items (retail preferred). */
+  sellingPrice?: number | null;
+  /** Variant-level tags / sheet extras (post-023). */
+  attributes?: Record<string, any> | null;
   imageUrl?: string | null;
+  position?: number;
   status: 'active' | 'inactive' | 'discontinued';
+  barcodes?: VariantBarcode[];
   /** Sum of quantity_on_hand across warehouses for this variant. */
   stockQty?: number;
+  /** MAX(stock_items.reorder_point) across warehouses — UI "Reorder level". */
+  reorderLevel?: number | null;
+  /** MAX(stock_items.reorder_quantity) across warehouses. */
+  reorderQuantity?: number | null;
   stockByWarehouse?: Array<{
     warehouseId: string;
     warehouseName?: string | null;
+    binId?: string | null;
+    rackId?: string | null;
     quantityOnHand: number;
+    reorderPoint?: number;
+    reorderQuantity?: number;
   }>;
   catalogItem?: {
     id: string;
@@ -56,6 +85,8 @@ const emptyCreateForm = {
   catalogItemId: '',
   variantSku: '',
   name: '',
+  barcode: '',
+  autoGenerateBarcode: true,
   weightValue: '',
   weightUnit: 'kg' as 'g' | 'kg' | 'lb' | 'oz',
   lengthValue: '',
@@ -63,7 +94,14 @@ const emptyCreateForm = {
   heightValue: '',
   dimensionUnit: 'cm' as 'cm' | 'm' | 'in' | 'ft',
   costPrice: '',
+  sellingPrice: '',
   costCurrency: 'GBP',
+  warehouseId: '',
+  rackId: '',
+  binId: '',
+  openingQuantity: '',
+  reorderLevel: '1',
+  reorderQuantity: '',
   position: '0',
   status: 'active' as 'active' | 'inactive' | 'discontinued'
 };
@@ -97,14 +135,60 @@ function optionsToPayload(rows: OptionRow[], values: string[]) {
   };
 }
 
-function optionRowsFromVariant(v: Variant): OptionRow[] {
-  const rows: OptionRow[] = [];
+/** Structured option1–3 pairs; empty when DB columns are null. */
+function structuredOptionLabels(v: Variant): string[] {
+  const labels: string[] = [];
   for (let i = 1; i <= MAX_OPTIONS; i++) {
-    const name = (v[`option${i}Name`] as string | null) ?? '';
-    const value = (v[`option${i}Value`] as string | null) ?? '';
-    if (name || value) rows.push({ name, values: value });
+    const name = (v[`option${i}Name`] as string | null | undefined)?.trim();
+    const value = (v[`option${i}Value`] as string | null | undefined)?.trim();
+    if (!value) continue;
+    labels.push(name ? `${name}: ${value}` : value);
   }
-  return rows.length ? rows : [{ name: '', values: '' }];
+  return labels;
+}
+
+/** Flatten attributes JSON into "key: value" labels (skip empty / nested blobs). */
+function attributeLabels(attrs: Record<string, any> | null | undefined): string[] {
+  if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs)) return [];
+  return Object.entries(attrs)
+    .filter(([, val]) => val != null && val !== '' && typeof val !== 'object')
+    .map(([key, val]) => `${key}: ${String(val)}`);
+}
+
+/**
+ * Options column: prefer option1–3; if those are empty but attributes JSON has keys
+ * (common after inventory import / migration 023), surface attributes instead.
+ */
+function optionsDisplayLabels(v: Variant): string[] {
+  const structured = structuredOptionLabels(v);
+  if (structured.length) return structured;
+  return attributeLabels(v.attributes);
+}
+
+function formatWeight(v: Variant): string | null {
+  if (v.weightValue == null || v.weightValue === ('' as any)) return null;
+  const n = Number(v.weightValue);
+  if (Number.isNaN(n)) return null;
+  return `${n} ${v.weightUnit || 'kg'}`;
+}
+
+function formatDimensions(v: Variant): string | null {
+  const parts = [v.lengthValue, v.widthValue, v.heightValue]
+    .map((x) => (x == null ? null : Number(x)))
+    .filter((x): x is number => x != null && !Number.isNaN(x));
+  if (!parts.length) return null;
+  const unit = v.dimensionUnit || 'cm';
+  const [l, w, h] = [v.lengthValue, v.widthValue, v.heightValue].map((x) =>
+    x == null || Number.isNaN(Number(x)) ? '—' : String(Number(x))
+  );
+  return `${l} × ${w} × ${h} ${unit}`;
+}
+
+function barcodeLabels(v: Variant): string[] {
+  const rows = Array.isArray(v.barcodes) ? v.barcodes : [];
+  return rows
+    .map((b) => (b?.barcode || '').trim())
+    .filter(Boolean);
 }
 
 function pickImages(e: React.ChangeEvent<HTMLInputElement>): File[] {
@@ -260,30 +344,44 @@ function VariantsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Variant[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<Array<{ id: string; code?: string | null; name?: string | null; status?: string | null }>>([]);
+  const [racks, setRacks] = useState<Array<{ id: string; code: string; name?: string | null; status?: string }>>([]);
+  const [bins, setBins] = useState<Array<{ id: string; code: string; name?: string | null; status?: string; rack?: { id: string } | null }>>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyCreateForm);
   const [optionRows, setOptionRows] = useState<OptionRow[]>([{ name: '', values: '' }]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [editing, setEditing] = useState<Variant | null>(null);
-  const [editForm, setEditForm] = useState({
-    variantSku: '',
-    name: '',
-    weightValue: '',
-    weightUnit: 'kg' as 'g' | 'kg' | 'lb' | 'oz',
-    lengthValue: '',
-    widthValue: '',
-    heightValue: '',
-    dimensionUnit: 'cm' as 'cm' | 'm' | 'in' | 'ft',
-    costPrice: '',
-    costCurrency: 'GBP',
-    position: '0',
-    status: 'active' as 'active' | 'inactive' | 'discontinued'
-  });
-  const [editOptionRows, setEditOptionRows] = useState<OptionRow[]>([{ name: '', values: '' }]);
-  const [editImageFiles, setEditImageFiles] = useState<File[]>([]);
-  const [editGallery, setEditGallery] = useState<{ id: string; url: string }[]>([]);
   const [confirmDel, setConfirmDel] = useState<Variant | null>(null);
+
+  async function loadLocationOptions(warehouseId: string) {
+    if (!warehouseId) {
+      setRacks([]);
+      setBins([]);
+      return;
+    }
+    try {
+      const [racksRes, binsRes] = await Promise.all([
+        listRacks({ warehouseId, limit: 200 }),
+        listBins({ warehouseId, limit: 200 })
+      ]);
+      setRacks(racksRes.data || []);
+      setBins(binsRes.data || []);
+    } catch {
+      setRacks([]);
+      setBins([]);
+    }
+  }
+
+  useEffect(() => {
+    loadLocationOptions(form.warehouseId);
+  }, [form.warehouseId]);
+
+  const filteredBins = useMemo(() => {
+    if (!form.rackId) return bins;
+    return bins.filter((b) => String(b.rack?.id || '') === String(form.rackId));
+  }, [bins, form.rackId]);
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -296,16 +394,18 @@ function VariantsPage() {
       try {
         // Deep-link ?q= must hit the API search — the list endpoint caps at 40 by
         // default, so client-only filtering of that page misses most SKUs.
-        const [variantsRes, catalogItemsRes] = await Promise.all([
+        const [variantsRes, catalogItemsRes, warehousesRes] = await Promise.all([
           listVariants(
             deepLinkQ
               ? { search: deepLinkQ, limit: 100 }
               : { limit: 100 }
           ),
-          listCatalogItems({ organizationId: session?.user?.organizationId })
+          listCatalogItems({ organizationId: session?.user?.organizationId }),
+          listWarehouses({ organizationId: session?.user?.organizationId }).catch(() => ({ data: [] }))
         ]);
         setItems(variantsRes.data || []);
         setCatalogItems(catalogItemsRes.data || []);
+        setWarehouses((warehousesRes.data || []).filter((w: any) => w.status !== 'inactive'));
       } catch (e: any) {
         const status = e?.response?.status;
         if (status === 403) {
@@ -369,6 +469,14 @@ function VariantsPage() {
       toast.error('Every option with values needs a name (e.g., Size)');
       return;
     }
+    const stockTouched =
+      form.openingQuantity.trim() !== '' ||
+      form.reorderLevel.trim() !== '' ||
+      form.reorderQuantity.trim() !== '';
+    if (stockTouched && !form.warehouseId) {
+      toast.error('Select a warehouse before setting opening qty or reorder fields');
+      return;
+    }
     const rowsForPayload = optionRows.filter((r) => splitValues(r.values).length > 0);
     const [mainImage, ...extraImages] = imageFiles;
     setSaving(true);
@@ -377,11 +485,21 @@ function VariantsPage() {
     let galleryFailures = 0;
     for (const [idx, plan] of plannedVariants.entries()) {
       try {
+        const qty = form.openingQuantity.trim() === '' ? undefined : parseInt(form.openingQuantity, 10);
+        const reorderQty =
+          form.reorderQuantity.trim() !== ''
+            ? parseInt(form.reorderQuantity, 10)
+            : qty;
+        // One shared barcode only for a single create; multi-create uses per-SKU auto-gen when enabled.
+        const barcodeTrimmed = form.barcode.trim();
+        const useSharedBarcode = plannedVariants.length === 1 && !!barcodeTrimmed;
         const res = await createVariant({
           catalogItemId: form.catalogItemId,
           variantSku: plan.sku,
           name: plan.name || undefined,
           ...optionsToPayload(rowsForPayload, plan.values),
+          barcode: useSharedBarcode ? barcodeTrimmed : undefined,
+          autoGenerateBarcode: !useSharedBarcode && form.autoGenerateBarcode,
           weightValue: form.weightValue ? parseFloat(form.weightValue) : undefined,
           weightUnit: form.weightUnit,
           lengthValue: form.lengthValue ? parseFloat(form.lengthValue) : undefined,
@@ -389,7 +507,13 @@ function VariantsPage() {
           heightValue: form.heightValue ? parseFloat(form.heightValue) : undefined,
           dimensionUnit: form.dimensionUnit,
           costPrice: form.costPrice ? parseFloat(form.costPrice) : undefined,
+          sellingPrice: form.sellingPrice ? parseFloat(form.sellingPrice) : undefined,
           costCurrency: form.costCurrency,
+          warehouseId: form.warehouseId || undefined,
+          binId: form.binId || undefined,
+          openingQuantity: qty,
+          reorderLevel: form.reorderLevel.trim() === '' ? undefined : parseInt(form.reorderLevel, 10),
+          reorderQuantity: reorderQty,
           position: (parseInt(form.position) || 0) + idx,
           status: form.status
         }, mainImage);
@@ -417,88 +541,12 @@ function VariantsPage() {
     setImageFiles([]);
   }
 
-  async function openEdit(item: Variant) {
+  function openEdit(item: Variant) {
     setEditing(item);
-    setEditForm({
-      variantSku: item.variantSku,
-      name: item.name || '',
-      weightValue: item.weightValue != null ? String(Number(item.weightValue)) : '',
-      weightUnit: item.weightUnit || 'kg',
-      lengthValue: item.lengthValue != null ? String(Number(item.lengthValue)) : '',
-      widthValue: item.widthValue != null ? String(Number(item.widthValue)) : '',
-      heightValue: item.heightValue != null ? String(Number(item.heightValue)) : '',
-      dimensionUnit: item.dimensionUnit || 'cm',
-      costPrice: item.costPrice != null ? String(Number(item.costPrice)) : '',
-      costCurrency: item.costCurrency || 'GBP',
-      position: item.position?.toString() || '0',
-      status: item.status
-    });
-    setEditOptionRows(optionRowsFromVariant(item));
-    setEditImageFiles([]);
-    setEditGallery([]);
-    try {
-      const res = await listProductMedia({ variantId: item.id, type: 'image' });
-      setEditGallery((res.data || []).map((m: any) => ({ id: m.id, url: m.url })));
-    } catch {
-      setEditGallery([]);
-    }
   }
 
   function closeEdit() {
     setEditing(null);
-    setEditImageFiles([]);
-    setEditGallery([]);
-  }
-
-  async function onRemoveGalleryImage(id: string) {
-    try {
-      await deleteProductMedia(id);
-      setEditGallery(prev => prev.filter(m => m.id !== id));
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message ?? 'Failed to remove image');
-    }
-  }
-
-  async function onUpdate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editing) return;
-    const rows = editOptionRows.filter((r) => r.name.trim() || r.values.trim());
-    if (rows.some((r) => r.values.trim() && !r.name.trim())) {
-      toast.error('Every option with a value needs a name');
-      return;
-    }
-    const [mainImage, ...extraImages] = editImageFiles;
-    setSaving(true);
-    try {
-      const res = await updateVariant(editing.id, {
-        variantSku: editForm.variantSku,
-        name: editForm.name,
-        ...optionsToPayload(rows, rows.map((r) => r.values.trim())),
-        weightValue: editForm.weightValue ? parseFloat(editForm.weightValue) : undefined,
-        weightUnit: editForm.weightUnit,
-        lengthValue: editForm.lengthValue ? parseFloat(editForm.lengthValue) : undefined,
-        widthValue: editForm.widthValue ? parseFloat(editForm.widthValue) : undefined,
-        heightValue: editForm.heightValue ? parseFloat(editForm.heightValue) : undefined,
-        dimensionUnit: editForm.dimensionUnit,
-        costPrice: editForm.costPrice ? parseFloat(editForm.costPrice) : undefined,
-        costCurrency: editForm.costCurrency,
-        position: parseInt(editForm.position) || 0,
-        status: editForm.status
-      }, mainImage);
-      const catalogItemId = editing.catalogItem?.id ?? res.data?.catalogItem?.id;
-      let galleryFailures = 0;
-      if (extraImages.length && catalogItemId) {
-        galleryFailures = await uploadGallery(res.data, catalogItemId, extraImages, editGallery.length + 1);
-      }
-      setItems(items.map(item => item.id === editing.id ? res.data : item));
-      closeEdit();
-      toast.success('Variant updated');
-      if (galleryFailures) toast.error(`${galleryFailures} additional image(s) failed to upload`);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message ?? 'Update failed');
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function onDelete() {
@@ -520,12 +568,32 @@ function VariantsPage() {
       cell: ({ row }) => <MediaThumb url={row.original.imageUrl} className="w-10 h-10" />
     },
     {
+      id: 'variantSku',
       accessorKey: 'variantSku',
       header: 'Variant SKU',
       cell: ({ row }) => <span className="font-mono text-sm">{row.original.variantSku}</span>
     },
     {
-      accessorKey: 'catalogItem',
+      id: 'barcodes',
+      accessorFn: (r) => barcodeLabels(r).join(' '),
+      header: 'Barcode',
+      cell: ({ row }) => {
+        const codes = barcodeLabels(row.original);
+        if (!codes.length) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+          <div className="font-mono text-xs space-y-0.5">
+            {codes.map((code) => (
+              <div key={code}>{code}</div>
+            ))}
+          </div>
+        );
+      }
+    },
+    {
+      id: 'catalogItem',
+      accessorFn: (r) => `${r.catalogItem?.name ?? ''} ${r.catalogItem?.sku ?? ''}`,
       header: 'Product',
       cell: ({ row }) => (
         <div>
@@ -535,37 +603,68 @@ function VariantsPage() {
       )
     },
     {
-      accessorKey: 'options',
+      id: 'options',
+      accessorFn: (r) => optionsDisplayLabels(r).join(' '),
       header: 'Options',
       cell: ({ row }) => {
-        const v = row.original;
-        const options = [];
-        if (v.option1Value) options.push(`${v.option1Name || 'Option 1'}: ${v.option1Value}`);
-        if (v.option2Value) options.push(`${v.option2Name || 'Option 2'}: ${v.option2Value}`);
-        if (v.option3Value) options.push(`${v.option3Name || 'Option 3'}: ${v.option3Value}`);
-        return options.length > 0 ? (
-          <div className="text-sm">{options.join(', ')}</div>
-        ) : (
-          <span className="text-muted-foreground">-</span>
+        const labels = optionsDisplayLabels(row.original);
+        const fromAttrs = !structuredOptionLabels(row.original).length && labels.length > 0;
+        if (!labels.length) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+          <div className="text-sm max-w-[16rem]">
+            <div className="flex flex-wrap gap-1">
+              {labels.map((label) => (
+                <span
+                  key={label}
+                  className="inline-block rounded bg-muted px-1.5 py-0.5 text-xs"
+                  title={label}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+            {fromAttrs && (
+              <div className="text-[10px] text-muted-foreground mt-0.5">from attributes</div>
+            )}
+          </div>
         );
       }
     },
     {
-      accessorKey: 'costPrice',
-      header: 'Variant cost',
+      id: 'sellingPrice',
+      accessorKey: 'sellingPrice',
+      header: 'Selling price',
       cell: ({ row }) => {
-        const price = row.original.costPrice;
+        const price = row.original.sellingPrice;
         const numPrice = typeof price === 'number' ? price : (price != null ? parseFloat(String(price)) : NaN);
         return price != null && !isNaN(numPrice) ? (
-          <span>{row.original.costCurrency} {numPrice.toFixed(2)}</span>
+          <span className="tabular-nums">{row.original.costCurrency || 'GBP'} {numPrice.toFixed(2)}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         );
       }
     },
     {
-      id: 'stockQty',
-      header: 'Stock (by warehouse)',
+      // Explicit id must match visibility key — accessorKey alone previously mismatched
+      // persisted View-toggle state after label renames ("Cost price" vs "Variant cost").
+      id: 'costPrice',
+      accessorKey: 'costPrice',
+      header: 'Cost price',
+      cell: ({ row }) => {
+        const price = row.original.costPrice;
+        const numPrice = typeof price === 'number' ? price : (price != null ? parseFloat(String(price)) : NaN);
+        return price != null && !isNaN(numPrice) ? (
+          <span className="tabular-nums">{row.original.costCurrency} {numPrice.toFixed(2)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      }
+    },
+    {
+      id: 'stockByWarehouse',
+      header: 'Stock by warehouse',
       accessorFn: (r) => r.stockQty ?? 0,
       cell: ({ row }) => {
         const rows = row.original.stockByWarehouse ?? [];
@@ -575,22 +674,58 @@ function VariantsPage() {
         return (
           <div className="text-xs space-y-0.5">
             {rows.map((s) => (
-              <div key={s.warehouseId} className="flex gap-2 justify-between min-w-[10rem]">
-                <span className="text-muted-foreground truncate">{s.warehouseName || 'Warehouse'}</span>
-                <span className="tabular-nums font-medium">{s.quantityOnHand}</span>
+              <div key={s.warehouseId} className="min-w-[10rem]">
+                <div className="flex gap-2 justify-between">
+                  <span className="text-muted-foreground truncate">{s.warehouseName || 'Warehouse'}</span>
+                  <span className="tabular-nums font-medium">{s.quantityOnHand}</span>
+                </div>
+                {((s.reorderPoint ?? 0) > 0 || (s.reorderQuantity ?? 0) > 0) && (
+                  <div className="text-[10px] text-muted-foreground tabular-nums">
+                    RL {s.reorderPoint ?? 0} · RQ {s.reorderQuantity ?? 0}
+                  </div>
+                )}
               </div>
             ))}
-            {rows.length > 1 && (
-              <div className="text-muted-foreground border-t pt-0.5 flex justify-between">
-                <span>Total</span>
-                <span className="tabular-nums">{row.original.stockQty ?? 0}</span>
-              </div>
-            )}
           </div>
         );
       }
     },
     {
+      id: 'stockAvailable',
+      header: 'Stock available',
+      accessorFn: (r) => r.stockQty ?? 0,
+      cell: ({ row }) => (
+        <span className="tabular-nums font-medium">{row.original.stockQty ?? 0}</span>
+      )
+    },
+    {
+      id: 'reorderLevel',
+      header: 'Reorder level',
+      accessorFn: (r) => r.reorderLevel ?? null,
+      cell: ({ row }) => {
+        const val = row.original.reorderLevel;
+        return val != null ? (
+          <span className="tabular-nums">{val}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      }
+    },
+    {
+      id: 'reorderQuantity',
+      header: 'Reorder quantity',
+      accessorFn: (r) => r.reorderQuantity ?? null,
+      cell: ({ row }) => {
+        const val = row.original.reorderQuantity;
+        return val != null ? (
+          <span className="tabular-nums">{val}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      }
+    },
+    {
+      id: 'status',
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
@@ -608,7 +743,61 @@ function VariantsPage() {
       }
     },
     {
+      id: 'name',
+      accessorKey: 'name',
+      header: 'Variant name',
+      cell: ({ row }) => (
+        <span className="text-sm">{row.original.name || <span className="text-muted-foreground">—</span>}</span>
+      )
+    },
+    {
+      id: 'attributes',
+      accessorFn: (r) => attributeLabels(r.attributes).join(' '),
+      header: 'Attributes',
+      cell: ({ row }) => {
+        const labels = attributeLabels(row.original.attributes);
+        if (!labels.length) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+          <div className="text-xs space-y-0.5 max-w-[14rem]">
+            {labels.map((label) => (
+              <div key={label} className="truncate" title={label}>{label}</div>
+            ))}
+          </div>
+        );
+      }
+    },
+    {
+      id: 'weight',
+      accessorFn: (r) => formatWeight(r) ?? '',
+      header: 'Weight',
+      cell: ({ row }) => {
+        const text = formatWeight(row.original);
+        return text ? <span className="text-sm tabular-nums">{text}</span> : <span className="text-muted-foreground">—</span>;
+      }
+    },
+    {
+      id: 'dimensions',
+      accessorFn: (r) => formatDimensions(r) ?? '',
+      header: 'Dimensions',
+      cell: ({ row }) => {
+        const text = formatDimensions(row.original);
+        return text ? <span className="text-sm tabular-nums whitespace-nowrap">{text}</span> : <span className="text-muted-foreground">—</span>;
+      }
+    },
+    {
+      id: 'position',
+      accessorKey: 'position',
+      header: 'Position',
+      cell: ({ row }) => (
+        <span className="tabular-nums text-sm">{row.original.position ?? 0}</span>
+      )
+    },
+    {
       id: 'actions',
+      header: 'Actions',
+      enableHiding: false,
       cell: ({ row }) => {
         const item = row.original;
         return (
@@ -636,8 +825,34 @@ function VariantsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [canUpdate, canDelete]);
 
+  // Defaults match the requested catalog view; Reorder + Attributes stay toggle-only.
+  const defaultColumnVisibility = useMemo(
+    () => ({
+      image: true,
+      variantSku: true,
+      barcodes: true,
+      catalogItem: true,
+      options: true,
+      sellingPrice: true,
+      costPrice: true,
+      stockByWarehouse: true,
+      stockAvailable: true,
+      status: true,
+      actions: true,
+      // Hidden by default — available in View → Toggle columns
+      reorderLevel: false,
+      reorderQuantity: false,
+      name: false,
+      attributes: false,
+      weight: false,
+      dimensions: false,
+      position: false
+    }),
+    []
+  );
+
   const physicalFields = (
-    f: typeof editForm | typeof form,
+    f: typeof form,
     set: (patch: Partial<typeof emptyCreateForm>) => void
   ) => (
     <div className="border-t border-border pt-4 mt-4">
@@ -761,12 +976,16 @@ function VariantsPage() {
                         v.name?.toLowerCase().includes(q) ||
                         v.catalogItem?.sku?.toLowerCase().includes(q) ||
                         v.catalogItem?.name?.toLowerCase().includes(q) ||
+                        barcodeLabels(v).some((c) => c.toLowerCase().includes(q)) ||
+                        optionsDisplayLabels(v).some((l) => l.toLowerCase().includes(q)) ||
                         String(v.id) === deepLinkQ
                       );
                     })
                   : items
               }
-              searchPlaceholder="Search variants by SKU, product…"
+              tableId="variants-cols-v4"
+              initialColumnVisibility={defaultColumnVisibility}
+              searchPlaceholder="Search variants by SKU, product, barcode, options…"
               emptyMessage={
                 deepLinkQ
                   ? `No variants match “${deepLinkQ}”. Try the product SKU, variant SKU, or clear the search.`
@@ -843,13 +1062,52 @@ function VariantsPage() {
                           </div>
                         )}
                       </div>
+                      <div className="col-span-2 space-y-2">
+                        <div>
+                          <label className="block text-sm font-medium mb-1.5">Barcode</label>
+                          <input
+                            type="text"
+                            value={form.barcode}
+                            onChange={e => setForm(prev => ({ ...prev, barcode: e.target.value }))}
+                            className="select"
+                            placeholder="Optional — leave empty to auto-generate"
+                          />
+                        </div>
+                        <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={form.autoGenerateBarcode}
+                            disabled={!!form.barcode.trim() && plannedVariants.length === 1}
+                            onChange={e => setForm(prev => ({ ...prev, autoGenerateBarcode: e.target.checked }))}
+                          />
+                          <span>
+                            <span className="font-medium">Auto-generate barcode if empty</span>
+                            <span className="block text-xs text-muted-foreground mt-0.5">
+                              {plannedVariants.length > 1
+                                ? `Creates a unique internal EAN-13 per variant SKU (${plannedVariants.length} variants).`
+                                : 'Creates a unique internal EAN-13 from the variant SKU when no barcode is entered.'}
+                            </span>
+                          </span>
+                        </label>
+                      </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1.5">Variant unit cost</label>
+                        <label className="block text-sm font-medium mb-1.5">Cost price</label>
                         <input
                           type="number"
                           step="0.01"
                           value={form.costPrice}
                           onChange={e => setForm(prev => ({ ...prev, costPrice: e.target.value }))}
+                          className="select"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Selling price</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={form.sellingPrice}
+                          onChange={e => setForm(prev => ({ ...prev, sellingPrice: e.target.value }))}
                           className="select"
                         />
                       </div>
@@ -864,6 +1122,84 @@ function VariantsPage() {
                           <option value="USD">USD</option>
                           <option value="EUR">EUR</option>
                         </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Warehouse</label>
+                        <SearchableSelect
+                          value={form.warehouseId}
+                          onChange={(warehouseId) =>
+                            setForm((prev) => ({ ...prev, warehouseId, rackId: '', binId: '' }))
+                          }
+                          placeholder="Search warehouse…"
+                          emptyLabel="Select if setting stock…"
+                          options={warehouses.map((w) => ({
+                            value: String(w.id),
+                            label: w.code && w.name ? `${w.code} — ${w.name}` : w.name || w.code || String(w.id),
+                            searchText: `${w.code || ''} ${w.name || ''}`
+                          }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Rack</label>
+                        <SearchableSelect
+                          value={form.rackId}
+                          onChange={(rackId) => setForm((prev) => ({ ...prev, rackId, binId: '' }))}
+                          disabled={!form.warehouseId}
+                          placeholder="Search rack…"
+                          emptyLabel="All racks"
+                          options={racks
+                            .filter((r) => r.status !== 'inactive' || r.id === form.rackId)
+                            .map((r) => ({
+                              value: String(r.id),
+                              label: r.name && r.name !== r.code ? `${r.code} — ${r.name}` : r.code,
+                              searchText: `${r.code || ''} ${r.name || ''}`
+                            }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Bin</label>
+                        <SearchableSelect
+                          value={form.binId}
+                          onChange={(binId) => setForm((prev) => ({ ...prev, binId }))}
+                          disabled={!form.warehouseId}
+                          placeholder="Search bin…"
+                          emptyLabel="No bin"
+                          options={filteredBins
+                            .filter((b) => b.status !== 'inactive' || b.id === form.binId)
+                            .map((b) => ({
+                              value: String(b.id),
+                              label: b.name && b.name !== b.code ? `${b.code} — ${b.name}` : b.code,
+                              searchText: `${b.code || ''} ${b.name || ''}`
+                            }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Opening qty</label>
+                        <input
+                          type="number"
+                          value={form.openingQuantity}
+                          onChange={e => setForm(prev => ({ ...prev, openingQuantity: e.target.value }))}
+                          className="select"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Reorder level</label>
+                        <input
+                          type="number"
+                          value={form.reorderLevel}
+                          onChange={e => setForm(prev => ({ ...prev, reorderLevel: e.target.value }))}
+                          className="select"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Reorder quantity</label>
+                        <input
+                          type="number"
+                          value={form.reorderQuantity}
+                          onChange={e => setForm(prev => ({ ...prev, reorderQuantity: e.target.value }))}
+                          className="select"
+                          placeholder="Defaults to opening qty"
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1.5">Position</label>
@@ -901,118 +1237,20 @@ function VariantsPage() {
             )}
 
             {editing && (
-              <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="w-full max-w-2xl rounded-2xl bg-card shadow-2xl border border-border p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Edit Variant</h3>
-                    <button onClick={closeEdit} className="p-1 hover:bg-muted rounded-lg transition-colors">
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-                  <form onSubmit={onUpdate} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1.5">Variant SKU *</label>
-                        <input
-                          type="text"
-                          value={editForm.variantSku}
-                          onChange={e => setEditForm(prev => ({ ...prev, variantSku: e.target.value }))}
-                          className="select"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1.5">Name</label>
-                        <input
-                          type="text"
-                          value={editForm.name}
-                          onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                          className="select"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <OptionRowsEditor rows={editOptionRows} onChange={setEditOptionRows} multiValue={false} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1.5">Variant unit cost</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={editForm.costPrice}
-                          onChange={e => setEditForm(prev => ({ ...prev, costPrice: e.target.value }))}
-                          className="select"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1.5">Currency</label>
-                        <select
-                          value={editForm.costCurrency}
-                          onChange={e => setEditForm(prev => ({ ...prev, costCurrency: e.target.value }))}
-                          className="select"
-                        >
-                          <option value="GBP">GBP</option>
-                          <option value="USD">USD</option>
-                          <option value="EUR">EUR</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1.5">Position</label>
-                        <input
-                          type="number"
-                          value={editForm.position}
-                          onChange={e => setEditForm(prev => ({ ...prev, position: e.target.value }))}
-                          className="select"
-                          placeholder="0"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1.5">Status</label>
-                        <select
-                          value={editForm.status}
-                          onChange={e => setEditForm(prev => ({ ...prev, status: e.target.value as any }))}
-                          className="select"
-                        >
-                          <option value="active">Active</option>
-                          <option value="inactive">Inactive</option>
-                          <option value="discontinued">Discontinued</option>
-                        </select>
-                      </div>
-                    </div>
-                    {physicalFields(editForm, (patch) => setEditForm(prev => ({ ...prev, ...patch })))}
-                    {editing.imageUrl && (
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Current main image (choosing new images replaces it with the first one):</p>
-                        <MediaThumb url={editing.imageUrl} className="w-24 h-24" />
-                      </div>
-                    )}
-                    {canAddMedia && (
-                    <ImagePicker
-                      files={editImageFiles}
-                      onChange={setEditImageFiles}
-                      existing={editGallery}
-                      onRemoveExisting={canDeleteMedia ? onRemoveGalleryImage : undefined}
-                    />
-                    )}
-                    <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                      <button
-                        type="button"
-                        onClick={closeEdit}
-                        className="btn btn-outline"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={saving}
-                        className="btn btn-primary inline-flex items-center gap-2"
-                      >
-                        {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                        Update
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
+              <VariantEditDialog
+                variant={editing}
+                warehouses={warehouses}
+                canAddMedia={canAddMedia}
+                canDeleteMedia={canDeleteMedia}
+                onClose={closeEdit}
+                onSaved={(saved) => {
+                  setItems((prev) =>
+                    prev.map((item) =>
+                      item.id === saved.id ? ({ ...item, ...saved } as Variant) : item
+                    )
+                  );
+                }}
+              />
             )}
 
             {confirmDel && (

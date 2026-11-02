@@ -454,9 +454,15 @@ export async function adminResetPassword(userId: string, password: string) {
 }
 
 // BUSINESS UNITS
-export async function listBusinessUnits(organizationId?: string) {
-  const params = organizationId ? `?organizationId=${organizationId}` : '';
-  const { data } = await axios.get(`${API_BASE}/api/iam/business-units${params}`, { headers: authHeaders() });
+/** Defaults to active-only for pickers. Pass `{ activeOnly: false }` on the IAM admin page to include disabled units. */
+export async function listBusinessUnits(organizationId?: string, opts?: { activeOnly?: boolean; status?: string }) {
+  const params = new URLSearchParams();
+  if (organizationId) params.append('organizationId', organizationId);
+  const activeOnly = opts?.activeOnly !== false && !opts?.status;
+  if (activeOnly) params.append('activeOnly', '1');
+  if (opts?.status) params.append('status', opts.status);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const { data } = await axios.get(`${API_BASE}/api/iam/business-units${query}`, { headers: authHeaders() });
   return data as { data: any[] };
 }
 export async function getBusinessUnit(id: string) {
@@ -486,16 +492,30 @@ export async function updateBusinessUnit(id: string, payload: {
   const { data } = await axios.patch(`${API_BASE}/api/iam/business-units/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
 }
+/** Soft-disable (or enable) a business unit. Never hard-deletes. */
+export async function setBusinessUnitActive(id: string, active: boolean) {
+  const { data } = await axios.patch(
+    `${API_BASE}/api/iam/business-units/${id}`,
+    { status: active ? 'active' : 'inactive' },
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+/** @deprecated Prefer setBusinessUnitActive — DELETE now soft-disables. */
 export async function deleteBusinessUnit(id: string) {
-  const { status } = await axios.delete(`${API_BASE}/api/iam/business-units/${id}`, { headers: authHeaders() });
-  return status === 204;
+  const { data } = await axios.delete(`${API_BASE}/api/iam/business-units/${id}`, { headers: authHeaders() });
+  return data as { data: any; softDisabled?: boolean };
 }
 
 // LOCATIONS
-export async function listLocations(businessUnitId?: string, organizationId?: string) {
+/** Defaults to active-only for pickers. Pass `{ activeOnly: false }` on the IAM admin page to include disabled locations. */
+export async function listLocations(businessUnitId?: string, organizationId?: string, opts?: { activeOnly?: boolean; status?: string }) {
   const params = new URLSearchParams();
   if (businessUnitId) params.append('businessUnitId', businessUnitId);
   if (organizationId) params.append('organizationId', organizationId);
+  const activeOnly = opts?.activeOnly !== false && !opts?.status;
+  if (activeOnly) params.append('activeOnly', '1');
+  if (opts?.status) params.append('status', opts.status);
   const query = params.toString() ? `?${params.toString()}` : '';
   const { data } = await axios.get(`${API_BASE}/api/iam/locations${query}`, { headers: authHeaders() });
   return data as { data: any[] };
@@ -547,9 +567,19 @@ export async function updateLocation(id: string, payload: {
   const { data } = await axios.patch(`${API_BASE}/api/iam/locations/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
 }
+/** Soft-disable (or enable) a location. Never hard-deletes. */
+export async function setLocationActive(id: string, active: boolean) {
+  const { data } = await axios.patch(
+    `${API_BASE}/api/iam/locations/${id}`,
+    { status: active ? 'active' : 'inactive' },
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+/** @deprecated Prefer setLocationActive — DELETE now soft-disables. */
 export async function deleteLocation(id: string) {
-  const { status } = await axios.delete(`${API_BASE}/api/iam/locations/${id}`, { headers: authHeaders() });
-  return status === 204;
+  const { data } = await axios.delete(`${API_BASE}/api/iam/locations/${id}`, { headers: authHeaders() });
+  return data as { data: any; softDisabled?: boolean };
 }
 
 // ============================================================================
@@ -581,12 +611,18 @@ export async function createCatalogItem(payload: {
   name: string;
   description?: string;
   longDescription?: string;
+  categoryId?: string | null;
   category?: string;
+  subCategoryId?: string | null;
   subCategory?: string;
+  brandId?: string | null;
   brand?: string;
   manufacturer?: string;
+  uomId?: string | null;
   uom?: string;
+  packSizeId?: string | null;
   packSize?: string;
+  /** Legacy create still accepted by API for default-variant seed — prefer Variants UI. */
   costPrice?: number;
   sellingPrice?: number;
   currency?: string;
@@ -596,24 +632,7 @@ export async function createCatalogItem(payload: {
   hsCode?: string;
   countryOfOrigin?: string;
   taxCodeId?: string;
-  weightValue?: number;
-  weightUnit?: 'g' | 'kg' | 'lb' | 'oz';
-  lengthValue?: number;
-  widthValue?: number;
-  heightValue?: number;
-  dimensionUnit?: 'cm' | 'm' | 'in' | 'ft';
-  attributes?: Record<string, any>;
   status?: 'active' | 'inactive' | 'discontinued';
-  barcode?: string;
-  openingQuantity?: number;
-  reorderLevel?: number;
-  reorderQuantity?: number;
-  warehouseId?: string;
-  warehouseName?: string;
-  binCode?: string;
-  supplierName?: string;
-  lotNumber?: string;
-  expiryDate?: string;
 }) {
   const { data } = await axios.post(`${API_BASE}/api/catalog/items`, payload, { headers: authHeaders() });
   return data as { data: any };
@@ -625,14 +644,17 @@ export async function updateCatalogItem(id: string, payload: {
   name?: string;
   description?: string;
   longDescription?: string;
+  categoryId?: string | null;
   category?: string;
+  subCategoryId?: string | null;
   subCategory?: string;
+  brandId?: string | null;
   brand?: string;
   manufacturer?: string;
+  uomId?: string | null;
   uom?: string;
+  packSizeId?: string | null;
   packSize?: string;
-  costPrice?: number;
-  sellingPrice?: number;
   currency?: string;
   supplierSku?: string;
   leadTimeDays?: number;
@@ -640,24 +662,7 @@ export async function updateCatalogItem(id: string, payload: {
   hsCode?: string;
   countryOfOrigin?: string;
   taxCodeId?: string;
-  weightValue?: number;
-  weightUnit?: 'g' | 'kg' | 'lb' | 'oz';
-  lengthValue?: number;
-  widthValue?: number;
-  heightValue?: number;
-  dimensionUnit?: 'cm' | 'm' | 'in' | 'ft';
-  attributes?: Record<string, any>;
   status?: 'active' | 'inactive' | 'discontinued';
-  barcode?: string;
-  openingQuantity?: number;
-  reorderLevel?: number;
-  reorderQuantity?: number;
-  warehouseId?: string;
-  warehouseName?: string;
-  binCode?: string;
-  supplierName?: string;
-  lotNumber?: string;
-  expiryDate?: string;
 }) {
   const { data } = await axios.patch(`${API_BASE}/api/catalog/items/${id}`, payload, { headers: authHeaders() });
   return data as { data: any };
@@ -690,6 +695,18 @@ export async function getVariant(id: string) {
   return data as { data: any };
 }
 
+function appendVariantFormFields(formData: FormData, payload: Record<string, unknown>) {
+  Object.keys(payload).forEach((key) => {
+    const value = payload[key];
+    if (value === undefined || value === null) return;
+    if (typeof value === 'object') {
+      formData.append(key, JSON.stringify(value));
+      return;
+    }
+    formData.append(key, String(value));
+  });
+}
+
 export async function createVariant(payload: {
   catalogItemId: string;
   variantSku: string;
@@ -700,6 +717,9 @@ export async function createVariant(payload: {
   option2Value?: string;
   option3Name?: string;
   option3Value?: string;
+  barcode?: string;
+  /** When true and barcode is empty, API allocates a unique EAN-13 from the variant SKU. */
+  autoGenerateBarcode?: boolean;
   weightValue?: number;
   weightUnit?: 'g' | 'kg' | 'lb' | 'oz';
   lengthValue?: number;
@@ -707,7 +727,16 @@ export async function createVariant(payload: {
   heightValue?: number;
   dimensionUnit?: 'cm' | 'm' | 'in' | 'ft';
   costPrice?: number;
+  sellingPrice?: number;
   costCurrency?: string;
+  attributes?: Record<string, any>;
+  warehouseId?: string;
+  binId?: string;
+  binCode?: string;
+  rackCode?: string;
+  openingQuantity?: number;
+  reorderLevel?: number;
+  reorderQuantity?: number;
   imageUrl?: string;
   position?: number;
   status?: 'active' | 'inactive' | 'discontinued';
@@ -716,17 +745,10 @@ export async function createVariant(payload: {
   if (imageFile) {
     formData.append('image', imageFile);
   }
-  Object.keys(payload).forEach(key => {
-    const value = payload[key as keyof typeof payload];
-    if (value !== undefined && value !== null) {
-      formData.append(key, String(value));
-    }
-  });
+  appendVariantFormFields(formData, payload as Record<string, unknown>);
+  // Do not set Content-Type manually — axios must add the multipart boundary.
   const { data } = await axios.post(`${API_BASE}/api/catalog/variants`, formData, {
-    headers: {
-      ...authHeaders(),
-      'Content-Type': 'multipart/form-data'
-    }
+    headers: authHeaders()
   });
   return data as { data: any };
 }
@@ -740,6 +762,9 @@ export async function updateVariant(id: string, payload: {
   option2Value?: string;
   option3Name?: string;
   option3Value?: string;
+  barcode?: string;
+  /** When true and barcode is empty (and variant has none), API allocates a unique EAN-13. */
+  autoGenerateBarcode?: boolean;
   weightValue?: number;
   weightUnit?: 'g' | 'kg' | 'lb' | 'oz';
   lengthValue?: number;
@@ -747,7 +772,16 @@ export async function updateVariant(id: string, payload: {
   heightValue?: number;
   dimensionUnit?: 'cm' | 'm' | 'in' | 'ft';
   costPrice?: number;
+  sellingPrice?: number;
   costCurrency?: string;
+  attributes?: Record<string, any>;
+  warehouseId?: string;
+  binId?: string;
+  binCode?: string;
+  rackCode?: string;
+  openingQuantity?: number;
+  reorderLevel?: number;
+  reorderQuantity?: number;
   imageUrl?: string | null;
   position?: number;
   status?: 'active' | 'inactive' | 'discontinued';
@@ -756,17 +790,10 @@ export async function updateVariant(id: string, payload: {
   if (imageFile) {
     formData.append('image', imageFile);
   }
-  Object.keys(payload).forEach(key => {
-    const value = payload[key as keyof typeof payload];
-    if (value !== undefined && value !== null) {
-      formData.append(key, value === null ? '' : String(value));
-    }
-  });
+  appendVariantFormFields(formData, payload as Record<string, unknown>);
+  // Do not set Content-Type manually — axios must add the multipart boundary.
   const { data } = await axios.patch(`${API_BASE}/api/catalog/variants/${id}`, formData, {
-    headers: {
-      ...authHeaders(),
-      'Content-Type': 'multipart/form-data'
-    }
+    headers: authHeaders()
   });
   return data as { data: any };
 }
@@ -1096,11 +1123,9 @@ export async function createProductMedia(payload: {
       formData.append(key, String(value));
     }
   });
+  // Do not set Content-Type manually — axios must add the multipart boundary.
   const { data } = await axios.post(`${API_BASE}/api/catalog/media`, formData, {
-    headers: {
-      ...authHeaders(),
-      'Content-Type': 'multipart/form-data'
-    }
+    headers: authHeaders()
   });
   return data as { data: any };
 }
@@ -1123,10 +1148,7 @@ export async function updateProductMedia(id: string, payload: {
     }
   });
   const { data } = await axios.patch(`${API_BASE}/api/catalog/media/${id}`, formData, {
-    headers: {
-      ...authHeaders(),
-      'Content-Type': 'multipart/form-data'
-    }
+    headers: authHeaders()
   });
   return data as { data: any };
 }
@@ -2115,12 +2137,18 @@ export async function previewInventoryExcelImport(file: File) {
   });
   return data as {
     data: {
+      mode?: 'legacy' | 'catalog_variant';
       rowCount: number;
+      catalogCount?: number;
+      variantCount?: number;
+      catalogSample?: Array<Record<string, unknown>>;
+      variantSample?: Array<Record<string, unknown>>;
       sample: Array<Record<string, unknown>>;
       categories: string[];
       warehouses: string[];
       suppliers: string[];
       warnings: string[];
+      warningCount?: number;
     };
   };
 }
@@ -2308,9 +2336,46 @@ export async function deleteWarehouse(id: string) {
   return status === 204;
 }
 
+// RACKS
+export async function listRacks(params?: {
+  warehouseId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  return getPaginatedList('/api/inventory/racks', params);
+}
+
+export async function createRack(payload: {
+  warehouseId: string;
+  code: string;
+  name?: string;
+  status?: 'active' | 'inactive';
+}) {
+  const { data } = await axios.post(`${API_BASE}/api/inventory/racks`, payload, { headers: authHeaders() });
+  return data as { data: any };
+}
+
+export async function updateRack(
+  id: string,
+  payload: { code?: string; name?: string | null; status?: 'active' | 'inactive' }
+) {
+  const { data } = await axios.patch(`${API_BASE}/api/inventory/racks/${id}`, payload, {
+    headers: authHeaders()
+  });
+  return data as { data: any };
+}
+
+export async function deleteRack(id: string) {
+  const { status } = await axios.delete(`${API_BASE}/api/inventory/racks/${id}`, { headers: authHeaders() });
+  return status === 204;
+}
+
 // BINS
 export async function listBins(params?: {
   warehouseId?: string;
+  rackId?: string;
   status?: string;
   search?: string;
   page?: number;
@@ -2330,7 +2395,8 @@ export async function createBin(payload: {
   name?: string;
   zone?: string;
   aisle?: string;
-  rack?: string;
+  rackId?: string | null;
+  rackCode?: string;
   shelf?: string;
   binType?: 'standard' | 'bulk' | 'cold_storage' | 'hazmat' | 'quarantine' | 'staging' | 'returns';
   capacityCubicMeters?: number;
@@ -2347,7 +2413,8 @@ export async function updateBin(id: string, payload: {
   name?: string;
   zone?: string;
   aisle?: string;
-  rack?: string;
+  rackId?: string | null;
+  rackCode?: string;
   shelf?: string;
   binType?: 'standard' | 'bulk' | 'cold_storage' | 'hazmat' | 'quarantine' | 'staging' | 'returns';
   capacityCubicMeters?: number;
