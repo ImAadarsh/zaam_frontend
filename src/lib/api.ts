@@ -733,6 +733,7 @@ export async function createVariant(payload: {
   warehouseId?: string;
   binId?: string;
   binCode?: string;
+  rackId?: string;
   rackCode?: string;
   openingQuantity?: number;
   reorderLevel?: number;
@@ -778,6 +779,7 @@ export async function updateVariant(id: string, payload: {
   warehouseId?: string;
   binId?: string;
   binCode?: string;
+  rackId?: string;
   rackCode?: string;
   openingQuantity?: number;
   reorderLevel?: number;
@@ -6121,8 +6123,15 @@ export async function createB2bRetailer(payload: {
   return data as { data: any };
 }
 export async function updateB2bRetailer(id: string, payload: {
+  organizationId?: string;
   status?: 'active' | 'invited' | 'disabled';
   password?: string;
+  email?: string;
+  companyName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  taxId?: string | null;
   creditLimit?: number;
   creditUsed?: number;
   paymentTerms?: string | null;

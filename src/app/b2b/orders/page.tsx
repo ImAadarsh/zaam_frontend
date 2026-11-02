@@ -49,7 +49,7 @@ const gbp = (n: any) => `£${Number(n || 0).toLocaleString('en-GB', { minimumFra
 export default function B2bOrdersPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const orgId = session?.user?.organizationId;

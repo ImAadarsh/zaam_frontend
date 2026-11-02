@@ -44,10 +44,19 @@ type User = {
   [key: string]: any;
 };
 
+function sessionRoleCodes(session: { user?: { roles?: any[] } } | null): string[] {
+  const roles = session?.user?.roles || [];
+  return roles
+    .map((r: any) => (typeof r === 'string' ? r : r?.code || r?.name || ''))
+    .map((r: string) => String(r).toUpperCase())
+    .filter(Boolean);
+}
+
 export default function UsersPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN']);
+  const isPlatformSuperAdmin = sessionRoleCodes(session).includes('SUPER_ADMIN');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<User[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -66,6 +75,7 @@ export default function UsersPage() {
   const [businessUnits, setBusinessUnits] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
+
   const [editing, setEditing] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({
     email: '',
@@ -83,6 +93,21 @@ export default function UsersPage() {
   const [confirmDel, setConfirmDel] = useState<User | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [resetPassword, setResetPassword] = useState('');
+
+  // ADMIN cannot pick SUPER_ADMIN. Do not filter by role.organization — catalog may live under platform org.
+  const createRoles = useMemo(() => {
+    return (roles || []).filter((r) => {
+      if (!isPlatformSuperAdmin && String(r.code).toUpperCase() === 'SUPER_ADMIN') return false;
+      return true;
+    });
+  }, [roles, isPlatformSuperAdmin]);
+
+  const editRoles = useMemo(() => {
+    return (roles || []).filter((r) => {
+      if (!isPlatformSuperAdmin && String(r.code).toUpperCase() === 'SUPER_ADMIN') return false;
+      return true;
+    });
+  }, [roles, isPlatformSuperAdmin]);
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -498,7 +523,7 @@ export default function UsersPage() {
                         value={form.roleId} 
                         onChange={(e) => setForm({ ...form, roleId: e.target.value })}>
                         <option value="">Select role</option>
-                        {roles.map((role) => (
+                        {createRoles.map((role) => (
                           <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
                         ))}
                       </select>
@@ -693,7 +718,7 @@ export default function UsersPage() {
                         value={editForm.roleId} 
                         onChange={(e) => setEditForm({ ...editForm, roleId: e.target.value })}>
                         <option value="">Select role</option>
-                        {roles.map((role) => (
+                        {editRoles.map((role) => (
                           <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
                         ))}
                       </select>

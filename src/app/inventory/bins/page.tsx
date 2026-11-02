@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listBins, createBin, updateBin, deleteBin, listWarehouses } from '@/lib/api';
+import { listBins, createBin, updateBin, deleteBin, listWarehouses, listRacks, createRack } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichDataTable } from '@/components/rich-data-table';
 import { useSession } from '@/hooks/use-session';
@@ -12,6 +12,7 @@ import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Package } from 'lucide-react';
 import { LocationStatusBadge, activeWarehouses } from '@/components/inventory/location-status-badge';
+import { SearchableSelect } from '@/components/searchable-select';
 
 type Bin = {
   id: string;
@@ -20,12 +21,14 @@ type Bin = {
   warehouse?: { id: string; name: string; status?: string };
   zone?: string;
   aisle?: string;
-  rack?: string;
+  rack?: { id: string; code: string; name?: string | null } | null;
   shelf?: string;
   binType?: string;
   status?: string;
   [key: string]: any;
 };
+
+type RackOption = { id: string; code: string; name?: string | null; status?: string };
 
 export default function BinsPage() {
   const router = useRouter();
@@ -38,6 +41,7 @@ export default function BinsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Bin[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [racks, setRacks] = useState<RackOption[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     warehouseId: '',
@@ -45,13 +49,40 @@ export default function BinsPage() {
     name: '',
     zone: '',
     aisle: '',
-    rack: '',
+    rackId: '',
+    rackCode: '',
     shelf: '',
     binType: 'standard' as 'standard' | 'bulk' | 'cold_storage' | 'hazmat' | 'quarantine' | 'staging' | 'returns',
     status: 'active' as 'active' | 'inactive' | 'full' | 'maintenance'
   });
   const [editing, setEditing] = useState<Bin | null>(null);
   const [confirmDel, setConfirmDel] = useState<Bin | null>(null);
+
+  const emptyForm = {
+    warehouseId: '',
+    code: '',
+    name: '',
+    zone: '',
+    aisle: '',
+    rackId: '',
+    rackCode: '',
+    shelf: '',
+    binType: 'standard' as const,
+    status: 'active' as const
+  };
+
+  async function loadRacks(warehouseId: string) {
+    if (!warehouseId) {
+      setRacks([]);
+      return;
+    }
+    try {
+      const res = await listRacks({ warehouseId, limit: 200 });
+      setRacks(res.data || []);
+    } catch {
+      setRacks([]);
+    }
+  }
 
   useEffect(() => {
     if (!hydrated || !hasAccess) return;
@@ -61,6 +92,11 @@ export default function BinsPage() {
     }
     loadData();
   }, [hydrated, hasAccess, router, session?.accessToken]);
+
+  useEffect(() => {
+    if (form.warehouseId) loadRacks(form.warehouseId);
+    else setRacks([]);
+  }, [form.warehouseId]);
 
   async function loadData() {
     try {
@@ -85,20 +121,35 @@ export default function BinsPage() {
       return;
     }
     try {
-      const res = await createBin(form);
+      // Custom rack text → create rack first when not an existing id
+      let rackId = form.rackId || undefined;
+      let rackCode = form.rackCode.trim() || undefined;
+      if (!rackId && rackCode) {
+        const known = racks.find(
+          (r) => r.code.toLowerCase() === rackCode!.toLowerCase() || (r.name || '').toLowerCase() === rackCode!.toLowerCase()
+        );
+        if (known) rackId = known.id;
+        else {
+          const created = await createRack({ warehouseId: form.warehouseId, code: rackCode, name: rackCode });
+          rackId = created.data.id;
+          setRacks((prev) => [...prev, created.data]);
+          rackCode = undefined;
+        }
+      }
+      const res = await createBin({
+        warehouseId: form.warehouseId,
+        code: form.code,
+        name: form.name || undefined,
+        zone: form.zone || undefined,
+        aisle: form.aisle || undefined,
+        shelf: form.shelf || undefined,
+        binType: form.binType,
+        status: form.status,
+        ...(rackId ? { rackId } : rackCode ? { rackCode } : { rackId: null })
+      });
       setItems(prev => [res.data, ...prev]);
       setShowCreate(false);
-      setForm({
-        warehouseId: '',
-        code: '',
-        name: '',
-        zone: '',
-        aisle: '',
-        rack: '',
-        shelf: '',
-        binType: 'standard',
-        status: 'active'
-      });
+      setForm({ ...emptyForm });
       toast.success('Bin created');
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message || 'Failed to create bin');
@@ -109,7 +160,30 @@ export default function BinsPage() {
     e.preventDefault();
     if (!editing) return;
     try {
-      const res = await updateBin(editing.id, form);
+      let rackId = form.rackId || undefined;
+      let rackCode = form.rackCode.trim() || undefined;
+      if (!rackId && rackCode && form.warehouseId) {
+        const known = racks.find(
+          (r) => r.code.toLowerCase() === rackCode!.toLowerCase() || (r.name || '').toLowerCase() === rackCode!.toLowerCase()
+        );
+        if (known) rackId = known.id;
+        else {
+          const created = await createRack({ warehouseId: form.warehouseId, code: rackCode, name: rackCode });
+          rackId = created.data.id;
+          setRacks((prev) => [...prev, created.data]);
+          rackCode = undefined;
+        }
+      }
+      const res = await updateBin(editing.id, {
+        code: form.code,
+        name: form.name || undefined,
+        zone: form.zone || undefined,
+        aisle: form.aisle || undefined,
+        shelf: form.shelf || undefined,
+        binType: form.binType,
+        status: form.status,
+        ...(rackId ? { rackId } : rackCode ? { rackCode } : { rackId: null })
+      });
       setItems(prev => prev.map(item => item.id === editing.id ? res.data : item));
       setEditing(null);
       toast.success('Bin updated');
@@ -155,6 +229,15 @@ export default function BinsPage() {
         );
       }
     },
+    {
+      id: 'rack',
+      header: 'Rack',
+      cell: ({ row }) => {
+        const rack = row.original.rack;
+        if (!rack) return <span className="text-muted-foreground">—</span>;
+        return <span className="text-sm">{rack.code}{rack.name && rack.name !== rack.code ? ` — ${rack.name}` : ''}</span>;
+      }
+    },
     { accessorKey: 'zone', header: 'Zone' },
     { accessorKey: 'binType', header: 'Type' },
     {
@@ -188,7 +271,8 @@ export default function BinsPage() {
                 name: row.original.name || '',
                 zone: row.original.zone || '',
                 aisle: row.original.aisle || '',
-                rack: row.original.rack || '',
+                rackId: row.original.rack?.id || '',
+                rackCode: '',
                 shelf: row.original.shelf || '',
                 binType: (row.original.binType || 'standard') as any,
                 status: (row.original.status || 'active') as any
@@ -296,17 +380,20 @@ export default function BinsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1.5">Warehouse *</label>
-                        <select
+                        <SearchableSelect
                           value={form.warehouseId}
-                          onChange={e => setForm(prev => ({ ...prev, warehouseId: e.target.value }))}
-                          className="select"
+                          onChange={(warehouseId) =>
+                            setForm((prev) => ({ ...prev, warehouseId, rackId: '', rackCode: '' }))
+                          }
                           required
-                        >
-                          <option value="">Select...</option>
-                          {activeWarehouses(warehouses).map(w => (
-                            <option key={w.id} value={w.id}>{w.name}</option>
-                          ))}
-                        </select>
+                          placeholder="Search warehouse…"
+                          emptyLabel="Select…"
+                          options={activeWarehouses(warehouses).map((w) => ({
+                            value: String(w.id),
+                            label: w.name,
+                            searchText: `${w.code || ''} ${w.name || ''}`
+                          }))}
+                        />
                         <p className="mt-1 text-xs text-muted-foreground">Only active warehouses are listed.</p>
                       </div>
                       <div>
@@ -327,6 +414,30 @@ export default function BinsPage() {
                           onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
                           className="input"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Rack</label>
+                        <SearchableSelect
+                          value={form.rackId || form.rackCode}
+                          onChange={(value) => {
+                            const known = racks.find((r) => String(r.id) === value);
+                            setForm((prev) =>
+                              known
+                                ? { ...prev, rackId: String(known.id), rackCode: '' }
+                                : { ...prev, rackId: '', rackCode: value }
+                            );
+                          }}
+                          allowCustomValue
+                          disabled={!form.warehouseId}
+                          placeholder="Search or type rack…"
+                          emptyLabel="No rack"
+                          options={racks.map((r) => ({
+                            value: String(r.id),
+                            label: r.name && r.name !== r.code ? `${r.code} — ${r.name}` : r.code,
+                            searchText: `${r.code || ''} ${r.name || ''}`
+                          }))}
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">Pick an existing rack or type a new code.</p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1.5">Type</label>
@@ -418,6 +529,29 @@ export default function BinsPage() {
                           value={form.name}
                           onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
                           className="input"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Rack</label>
+                        <SearchableSelect
+                          value={form.rackId || form.rackCode}
+                          onChange={(value) => {
+                            const known = racks.find((r) => String(r.id) === value);
+                            setForm((prev) =>
+                              known
+                                ? { ...prev, rackId: String(known.id), rackCode: '' }
+                                : { ...prev, rackId: '', rackCode: value }
+                            );
+                          }}
+                          allowCustomValue
+                          disabled={!form.warehouseId}
+                          placeholder="Search or type rack…"
+                          emptyLabel="No rack"
+                          options={racks.map((r) => ({
+                            value: String(r.id),
+                            label: r.name && r.name !== r.code ? `${r.code} — ${r.name}` : r.code,
+                            searchText: `${r.code || ''} ${r.name || ''}`
+                          }))}
                         />
                       </div>
                       <div>

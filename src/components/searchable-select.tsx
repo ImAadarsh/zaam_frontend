@@ -13,6 +13,8 @@ type Props = {
   required?: boolean;
   className?: string;
   emptyLabel?: string;
+  /** When true, typing a value not in the list offers “Use …” to set a custom value. */
+  allowCustomValue?: boolean;
 };
 
 /** Combobox-style select: type to filter a long option list (Select2-like). */
@@ -24,7 +26,8 @@ export function SearchableSelect({
   disabled,
   required,
   className = '',
-  emptyLabel = 'Select…'
+  emptyLabel = 'Select…',
+  allowCustomValue = false
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -38,6 +41,17 @@ export function SearchableSelect({
       .slice(0, 100);
   }, [options, query]);
 
+  const customCandidate = allowCustomValue ? query.trim() : '';
+  const showCustom =
+    !!customCandidate &&
+    !options.some(
+      (o) =>
+        o.value.toLowerCase() === customCandidate.toLowerCase() ||
+        o.label.toLowerCase() === customCandidate.toLowerCase()
+    );
+
+  const displayClosed = selected?.label || (allowCustomValue && value ? value : '');
+
   return (
     <div className={`relative ${className}`}>
       <input
@@ -45,8 +59,8 @@ export function SearchableSelect({
         className="input w-full"
         disabled={disabled}
         required={required && !value}
-        placeholder={selected ? selected.label : placeholder}
-        value={open ? query : selected?.label || ''}
+        placeholder={displayClosed || placeholder}
+        value={open ? query : displayClosed}
         onFocus={() => {
           setOpen(true);
           setQuery('');
@@ -61,7 +75,7 @@ export function SearchableSelect({
         }}
         autoComplete="off"
       />
-      {!open && !selected && (
+      {!open && !displayClosed && (
         <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
           {emptyLabel}
         </span>
@@ -80,7 +94,21 @@ export function SearchableSelect({
           >
             {emptyLabel}
           </button>
-          {filtered.length === 0 ? (
+          {showCustom && (
+            <button
+              type="button"
+              className="w-full px-3 py-2 text-left text-sm hover:bg-primary/10 text-primary"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange(customCandidate);
+                setQuery('');
+                setOpen(false);
+              }}
+            >
+              Use “{customCandidate}”
+            </button>
+          )}
+          {filtered.length === 0 && !showCustom ? (
             <div className="px-3 py-2 text-sm text-muted-foreground">No matches</div>
           ) : (
             filtered.map((o) => (

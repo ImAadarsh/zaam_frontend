@@ -23,7 +23,7 @@ const countsTowardRevenue = (o: any) => !['cancelled', 'refunded'].includes(o.st
 export default function B2bDashboard() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     catalogProducts: 0,

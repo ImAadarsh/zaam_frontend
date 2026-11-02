@@ -35,7 +35,7 @@ const emptyForm: FormState = {
 export default function B2bNotificationsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<FormState>(emptyForm);

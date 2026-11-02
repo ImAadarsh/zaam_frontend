@@ -364,9 +364,11 @@ export function VariantEditDialog({
     const stockTouched =
       form.openingQuantity.trim() !== '' ||
       form.reorderLevel.trim() !== '' ||
-      form.reorderQuantity.trim() !== '';
+      form.reorderQuantity.trim() !== '' ||
+      !!form.rackId ||
+      !!form.binId;
     if (stockTouched && !form.warehouseId) {
-      toast.error('Select a warehouse before setting opening qty or reorder fields');
+      toast.error('Select a warehouse before setting rack, bin, opening qty, or reorder fields');
       return;
     }
     const [mainImage, ...extraImages] = imageFiles;
@@ -394,6 +396,7 @@ export function VariantEditDialog({
           sellingPrice: form.sellingPrice ? parseFloat(form.sellingPrice) : undefined,
           costCurrency: form.costCurrency,
           warehouseId: form.warehouseId || undefined,
+          rackId: form.rackId || undefined,
           binId: form.binId || undefined,
           openingQuantity: qty,
           reorderLevel: form.reorderLevel.trim() === '' ? undefined : parseInt(form.reorderLevel, 10),
@@ -450,7 +453,7 @@ export function VariantEditDialog({
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5">Variant SKU *</label>
+              <label className="block text-sm font-medium mb-1.5">Variant SKU <span className="text-destructive">*</span></label>
               <input
                 type="text"
                 value={form.variantSku}
@@ -537,7 +540,14 @@ export function VariantEditDialog({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Warehouse</label>
+              <label className="block text-sm font-medium mb-1.5">
+                Warehouse
+                {(form.openingQuantity.trim() !== '' ||
+                  form.reorderLevel.trim() !== '' ||
+                  form.reorderQuantity.trim() !== '' ||
+                  !!form.rackId ||
+                  !!form.binId) && <span className="text-destructive"> *</span>}
+              </label>
               <SearchableSelect
                 value={form.warehouseId}
                 onChange={(warehouseId) => set({ warehouseId, rackId: '', binId: '' })}
@@ -554,7 +564,18 @@ export function VariantEditDialog({
               <label className="block text-sm font-medium mb-1.5">Rack</label>
               <SearchableSelect
                 value={form.rackId}
-                onChange={(rackId) => set({ rackId, binId: '' })}
+                onChange={(rackId) => {
+                  // Keep bin when it already belongs to the newly selected rack; otherwise clear.
+                  const keepBin =
+                    !!form.binId &&
+                    (!rackId ||
+                      bins.some(
+                        (b) =>
+                          String(b.id) === String(form.binId) &&
+                          String(b.rack?.id || '') === String(rackId)
+                      ));
+                  set({ rackId, binId: keepBin ? form.binId : '' });
+                }}
                 disabled={!form.warehouseId}
                 placeholder="Search rack…"
                 emptyLabel="All racks"

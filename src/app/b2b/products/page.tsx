@@ -95,7 +95,7 @@ function triLabel(base: string, tri: Tri): string {
 export default function B2bProductsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [publishMode, setPublishMode] = useState<'all_active' | 'mapped_only'>('all_active');

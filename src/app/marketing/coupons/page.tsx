@@ -18,15 +18,17 @@ export default function CouponsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({
+  const emptyForm = () => ({
     couponCode: '',
     couponName: '',
     discountType: 'percentage',
     discountValue: 0,
     minimumPurchase: 0,
-    usageLimit: 0,
+    usageLimit: 0 as number | null,
+    usageLimitPerCustomer: 1,
     isActive: true
   });
+  const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<any>(null);
   const [confirmDel, setConfirmDel] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -64,7 +66,7 @@ export default function CouponsPage() {
       }
       setShowCreate(false);
       setEditing(null);
-      setForm({ couponCode: '', couponName: '', discountType: 'percentage', discountValue: 0, minimumPurchase: 0, usageLimit: 0, isActive: true });
+      setForm(emptyForm());
       loadData();
     } catch (error: any) {
       toast.error(error.response?.data?.error?.message || 'Error saving coupon');
@@ -92,7 +94,22 @@ export default function CouponsPage() {
     { accessorKey: 'couponName', header: 'Name' },
     { accessorKey: 'discountType', header: 'Type' },
     { accessorKey: 'discountValue', header: 'Value' },
-    { accessorKey: 'usageCount', header: 'Used' },
+    {
+      accessorKey: 'usageCount',
+      header: 'Used / Limit',
+      cell: ({ row }) => {
+        const used = Number(row.original.usageCount || 0);
+        const lim = row.original.usageLimit;
+        const per = row.original.usageLimitPerCustomer;
+        const limLabel = lim == null || Number(lim) <= 0 ? '∞' : String(lim);
+        return (
+          <span className="text-sm">
+            {used}/{limLabel}
+            <span className="text-muted-foreground text-xs ml-1">(per cust: {per == null || Number(per) <= 0 ? '∞' : per})</span>
+          </span>
+        );
+      }
+    },
     { 
       accessorKey: 'isActive', 
       header: 'Active',
@@ -116,7 +133,8 @@ export default function CouponsPage() {
                 discountType: row.original.discountType,
                 discountValue: Number(row.original.discountValue || 0),
                 minimumPurchase: Number(row.original.minimumPurchase || 0),
-                usageLimit: Number(row.original.usageLimit || 0),
+                usageLimit: row.original.usageLimit == null ? 0 : Number(row.original.usageLimit),
+                usageLimitPerCustomer: Number(row.original.usageLimitPerCustomer ?? 1),
                 isActive: row.original.isActive
               });
               setShowCreate(true);
@@ -183,7 +201,7 @@ export default function CouponsPage() {
             <button
               onClick={() => {
                 setEditing(null);
-                setForm({ couponCode: '', couponName: '', discountType: 'percentage', discountValue: 0, minimumPurchase: 0, usageLimit: 0, isActive: true });
+                setForm(emptyForm());
                 setShowCreate(true);
               }}
               className="inline-flex items-center gap-2 rounded-xl bg-[#D4A017] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#B89015]"
@@ -200,7 +218,7 @@ export default function CouponsPage() {
                 type="button"
                 onClick={() => {
                   setEditing(null);
-                  setForm({ couponCode: '', couponName: '', discountType: 'percentage', discountValue: 0, minimumPurchase: 0, usageLimit: 0, isActive: true });
+                  setForm(emptyForm());
                   setShowCreate(true);
                 }}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#D4A017] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#B89015] mx-auto"
@@ -266,6 +284,41 @@ export default function CouponsPage() {
                         step="0.01"
                         value={form.discountValue}
                         onChange={e => setForm({ ...form, discountValue: parseFloat(e.target.value) })}
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none transition-shadow"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Global usage limit</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.usageLimit ?? 0}
+                        onChange={e => setForm({ ...form, usageLimit: parseInt(e.target.value, 10) || 0 })}
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none transition-shadow"
+                      />
+                      <p className="text-xs text-muted-foreground">0 = unlimited across all customers</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Per-customer limit</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.usageLimitPerCustomer}
+                        onChange={e => setForm({ ...form, usageLimitPerCustomer: parseInt(e.target.value, 10) || 0 })}
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none transition-shadow"
+                      />
+                      <p className="text-xs text-muted-foreground">0 = unlimited per customer (default 1)</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Minimum purchase</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.minimumPurchase}
+                        onChange={e => setForm({ ...form, minimumPurchase: parseFloat(e.target.value) || 0 })}
                         className="w-full h-10 px-3 rounded-md border border-input bg-background/50 focus:ring-1 focus:ring-primary outline-none transition-shadow"
                       />
                     </div>

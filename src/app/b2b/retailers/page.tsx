@@ -10,11 +10,37 @@ import { useRoleCheck } from '@/hooks/use-role-check';
 import { createB2bRetailer, getB2bRetailer, listB2bRetailers, updateB2bRetailer } from '@/lib/api';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Eye, Plus, Store, X } from 'lucide-react';
+import { Eye, Pencil, Plus, Store, X } from 'lucide-react';
 
 const EMPTY_FORM = {
   email: '', password: '', companyName: '', firstName: '', lastName: '', phone: '',
   creditLimit: '5000', paymentTerms: '30 Days Net', tier: 'gold' as 'standard' | 'silver' | 'gold' | 'platinum'
+};
+
+type EditForm = {
+  email: string;
+  password: string;
+  companyName: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  creditLimit: string;
+  paymentTerms: string;
+  tier: 'standard' | 'silver' | 'gold' | 'platinum';
+  status: 'active' | 'invited' | 'disabled';
+};
+
+const EMPTY_EDIT: EditForm = {
+  email: '',
+  password: '',
+  companyName: '',
+  firstName: '',
+  lastName: '',
+  phone: '',
+  creditLimit: '0',
+  paymentTerms: '',
+  tier: 'standard',
+  status: 'active'
 };
 
 const FIELDS: { key: keyof typeof EMPTY_FORM; label: string; placeholder: string; type?: string; autoComplete?: string; required?: boolean }[] = [
@@ -28,12 +54,23 @@ const FIELDS: { key: keyof typeof EMPTY_FORM; label: string; placeholder: string
   { key: 'paymentTerms', label: 'Payment terms', placeholder: 'e.g. 30 Days Net' }
 ];
 
+const EDIT_FIELDS: { key: keyof EditForm; label: string; placeholder: string; type?: string; autoComplete?: string; required?: boolean }[] = [
+  { key: 'email', label: 'Login email', placeholder: 'buyer@retailer.co.uk', type: 'email', autoComplete: 'off', required: true },
+  { key: 'password', label: 'New password (optional)', placeholder: 'Leave blank to keep current', type: 'password', autoComplete: 'new-password' },
+  { key: 'companyName', label: 'Company name', placeholder: 'e.g. Stafford Street Stores' },
+  { key: 'firstName', label: 'Contact first name', placeholder: 'First name' },
+  { key: 'lastName', label: 'Contact last name', placeholder: 'Last name' },
+  { key: 'phone', label: 'Phone', placeholder: '+44 7700 900000', type: 'tel' },
+  { key: 'creditLimit', label: 'Credit limit (£)', placeholder: '5000', type: 'number' },
+  { key: 'paymentTerms', label: 'Payment terms', placeholder: 'e.g. 30 Days Net' }
+];
+
 const gbp = (n: any) => `£${Number(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function B2bRetailersPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -42,6 +79,10 @@ export default function B2bRetailersPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>(EMPTY_EDIT);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editCredsUnlocked, setEditCredsUnlocked] = useState(false);
   const orgId = session?.user?.organizationId;
 
   const load = async () => {
@@ -63,10 +104,13 @@ export default function B2bRetailersPage() {
     const next = row.status === 'disabled' ? 'active' : 'disabled';
     setTogglingId(row.id);
     try {
-      const res = await updateB2bRetailer(row.id, { status: next });
+      const res = await updateB2bRetailer(row.id, { organizationId: orgId, status: next });
       const updated = res.data;
       setItems((prev) => prev.map((r) => (r.id === row.id ? { ...r, ...updated, status: updated?.status ?? next } : r)));
       setDetail((d: any) => (d?.id === row.id ? { ...d, status: updated?.status ?? next } : d));
+      if (editTarget?.id === row.id) {
+        setEditForm((f) => ({ ...f, status: (updated?.status ?? next) as EditForm['status'] }));
+      }
       toast.success(next === 'disabled' ? 'Login disabled' : 'Login enabled');
     } catch (e: any) {
       toast.error(e?.response?.data?.error?.message || 'Failed to update login status');
@@ -86,6 +130,67 @@ export default function B2bRetailersPage() {
       toast.error(e?.response?.data?.error?.message || 'Failed to load retailer');
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const openEdit = (row: any) => {
+    const c = row.customer || {};
+    setEditTarget(row);
+    setEditCredsUnlocked(false);
+    setEditForm({
+      email: row.email || '',
+      password: '',
+      companyName: c.companyName || '',
+      firstName: c.firstName || '',
+      lastName: c.lastName || '',
+      phone: c.phone || '',
+      creditLimit: String(c.creditLimit ?? 0),
+      paymentTerms: c.paymentTerms || '',
+      tier: (c.tier || 'standard') as EditForm['tier'],
+      status: (row.status || 'active') as EditForm['status']
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!orgId || !editTarget) return;
+    if (!editForm.email.trim()) {
+      toast.error('Login email is required');
+      return;
+    }
+    if (editForm.password && editForm.password.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    const opt = (v: string) => v.trim();
+    setEditSaving(true);
+    try {
+      const res = await updateB2bRetailer(editTarget.id, {
+        organizationId: orgId,
+        email: editForm.email.trim(),
+        ...(editForm.password ? { password: editForm.password } : {}),
+        companyName: opt(editForm.companyName) || null,
+        firstName: opt(editForm.firstName) || null,
+        lastName: opt(editForm.lastName) || null,
+        phone: opt(editForm.phone) || null,
+        creditLimit: Number(editForm.creditLimit) || 0,
+        paymentTerms: opt(editForm.paymentTerms) || null,
+        tier: editForm.tier,
+        status: editForm.status
+      });
+      const updated = res.data;
+      setItems((prev) => prev.map((r) => (r.id === editTarget.id ? { ...r, ...updated } : r)));
+      setDetail((d: any) => (d?.id === editTarget.id ? { ...d, ...updated } : d));
+      toast.success('Retailer updated');
+      setEditTarget(null);
+      setEditForm(EMPTY_EDIT);
+    } catch (e: any) {
+      const err = e?.response?.data?.error;
+      const fieldMsg = Array.isArray(err?.details)
+        ? err.details.map((i: any) => `${(i.path || []).join('.')}: ${i.message}`).join('; ')
+        : '';
+      toast.error(fieldMsg || err?.message || 'Update failed');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -122,6 +227,12 @@ export default function B2bRetailersPage() {
             onClick={() => openDetail(row.original)}
           >
             <Eye size={14} /> View
+          </button>
+          <button
+            className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:border-primary"
+            onClick={() => openEdit(row.original)}
+          >
+            <Pencil size={14} /> Edit
           </button>
           <button
             disabled={togglingId === row.original.id}
@@ -254,6 +365,72 @@ export default function B2bRetailersPage() {
         </div>
       )}
 
+      {editTarget && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <form
+            autoComplete="off"
+            onSubmit={(e) => { e.preventDefault(); saveEdit(); }}
+            className="bg-card border border-border rounded-2xl w-full max-w-lg p-6 space-y-3 max-h-[90vh] overflow-auto"
+          >
+            <div className="flex justify-between items-center">
+              <h2 className="font-bold">Edit retailer</h2>
+              <button type="button" onClick={() => setEditTarget(null)}><X size={18} /></button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {EDIT_FIELDS.map((f) => (
+                <label key={f.key} className={`block text-xs font-medium text-muted-foreground ${f.key === 'email' || f.key === 'password' || f.key === 'companyName' ? 'sm:col-span-2' : ''}`}>
+                  {f.label}{f.required ? ' *' : ''}
+                  <input
+                    name={`edit-retailer-${f.key}`}
+                    type={f.type || 'text'}
+                    autoComplete={f.autoComplete || 'off'}
+                    readOnly={(f.key === 'email' || f.key === 'password') && !editCredsUnlocked}
+                    onFocus={() => setEditCredsUnlocked(true)}
+                    placeholder={f.placeholder}
+                    min={f.type === 'number' ? 0 : undefined}
+                    className="mt-1 w-full border border-border rounded-lg px-3 py-2 bg-background text-sm text-foreground"
+                    value={editForm[f.key] as string}
+                    onChange={(e) => setEditForm({ ...editForm, [f.key]: e.target.value })}
+                  />
+                </label>
+              ))}
+              <label className="block text-xs font-medium text-muted-foreground">
+                Tier
+                <select
+                  className="mt-1 w-full border border-border rounded-lg px-3 py-2 bg-background text-sm text-foreground"
+                  value={editForm.tier}
+                  onChange={(e) => setEditForm({ ...editForm, tier: e.target.value as EditForm['tier'] })}
+                >
+                  <option value="standard">Standard</option>
+                  <option value="silver">Silver</option>
+                  <option value="gold">Gold</option>
+                  <option value="platinum">Platinum</option>
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Login status
+                <select
+                  className="mt-1 w-full border border-border rounded-lg px-3 py-2 bg-background text-sm text-foreground"
+                  value={editForm.status}
+                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value as EditForm['status'] })}
+                >
+                  <option value="active">Active</option>
+                  <option value="invited">Invited</option>
+                  <option value="disabled">Disabled</option>
+                </select>
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={editSaving}
+              className="w-full bg-primary text-primary-foreground py-2 rounded-xl font-semibold disabled:opacity-50"
+            >
+              {editSaving ? 'Saving…' : 'Save changes'}
+            </button>
+          </form>
+        </div>
+      )}
+
       {detail && (
         <div className="fixed inset-0 bg-black/50 z-50 flex justify-end" onClick={() => setDetail(null)}>
           <div className="bg-card border-l border-border w-full max-w-xl h-full overflow-auto p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
@@ -334,7 +511,13 @@ export default function B2bRetailersPage() {
               </section>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <button
+                className="px-4 py-2 rounded-xl border border-border text-sm font-semibold inline-flex items-center gap-1"
+                onClick={() => openEdit(detail)}
+              >
+                <Pencil size={14} /> Edit
+              </button>
               <button
                 className="px-4 py-2 rounded-xl border border-border text-sm font-semibold"
                 onClick={() => toggleStatus(detail)}

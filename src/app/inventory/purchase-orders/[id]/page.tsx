@@ -109,11 +109,11 @@ export default function PurchaseOrderDetailPage() {
   const canReceive = po && ['submitted', 'confirmed', 'partial_received'].includes(po.status);
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="min-h-screen app-surface">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex flex-col overflow-hidden lg:ml-[280px]">
         <Header title="Inventory · Purchase Order" />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="max-w-6xl mx-auto space-y-6">
             <Link href="/inventory/purchase-orders" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-4 w-4" /> Purchase orders

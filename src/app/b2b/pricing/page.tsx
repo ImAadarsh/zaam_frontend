@@ -13,7 +13,7 @@ import { DollarSign } from 'lucide-react';
 export default function B2bPricingPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [lists, setLists] = useState<any[]>([]);
   const [selected, setSelected] = useState<string>('');
   const [loading, setLoading] = useState(true);

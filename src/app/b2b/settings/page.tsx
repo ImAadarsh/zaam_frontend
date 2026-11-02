@@ -12,7 +12,7 @@ import { Settings } from 'lucide-react';
 export default function B2bSettingsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [loading, setLoading] = useState(true);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [form, setForm] = useState({

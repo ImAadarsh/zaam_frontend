@@ -333,6 +333,7 @@ function VariantsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deepLinkQ = (searchParams.get('q') || '').trim();
+  const catalogItemId = (searchParams.get('catalogItemId') || searchParams.get('catalog_item_id') || '').trim();
   const { session, hydrated } = useSession();
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'SALES_REP']);
   const { can } = useApiAccess();
@@ -394,12 +395,12 @@ function VariantsPage() {
       try {
         // Deep-link ?q= must hit the API search — the list endpoint caps at 40 by
         // default, so client-only filtering of that page misses most SKUs.
+        const params: any = { limit: 100 };
+        if (catalogItemId) params.catalogItemId = catalogItemId;
+        if (deepLinkQ) params.search = deepLinkQ;
+
         const [variantsRes, catalogItemsRes, warehousesRes] = await Promise.all([
-          listVariants(
-            deepLinkQ
-              ? { search: deepLinkQ, limit: 100 }
-              : { limit: 100 }
-          ),
+          listVariants(params),
           listCatalogItems({ organizationId: session?.user?.organizationId }),
           listWarehouses({ organizationId: session?.user?.organizationId }).catch(() => ({ data: [] }))
         ]);
@@ -420,7 +421,7 @@ function VariantsPage() {
         setLoading(false);
       }
     })();
-  }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId, deepLinkQ]);
+  }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId, deepLinkQ, catalogItemId]);
 
   const parsedOptions = useMemo(
     () => optionRows.map((r) => ({ name: r.name.trim(), values: splitValues(r.values) })).filter((o) => o.values.length > 0),
@@ -441,7 +442,10 @@ function VariantsPage() {
   }, [parsedOptions, form.variantSku, form.name]);
 
   function openCreate() {
-    setForm(emptyCreateForm);
+    setForm({
+      ...emptyCreateForm,
+      catalogItemId: catalogItemId || emptyCreateForm.catalogItemId
+    });
     setOptionRows([{ name: '', values: '' }]);
     setImageFiles([]);
     setShowCreate(true);
@@ -472,9 +476,11 @@ function VariantsPage() {
     const stockTouched =
       form.openingQuantity.trim() !== '' ||
       form.reorderLevel.trim() !== '' ||
-      form.reorderQuantity.trim() !== '';
+      form.reorderQuantity.trim() !== '' ||
+      !!form.rackId ||
+      !!form.binId;
     if (stockTouched && !form.warehouseId) {
-      toast.error('Select a warehouse before setting opening qty or reorder fields');
+      toast.error('Select a warehouse before setting rack, bin, opening qty, or reorder fields');
       return;
     }
     const rowsForPayload = optionRows.filter((r) => splitValues(r.values).length > 0);
@@ -510,6 +516,7 @@ function VariantsPage() {
           sellingPrice: form.sellingPrice ? parseFloat(form.sellingPrice) : undefined,
           costCurrency: form.costCurrency,
           warehouseId: form.warehouseId || undefined,
+          rackId: form.rackId || undefined,
           binId: form.binId || undefined,
           openingQuantity: qty,
           reorderLevel: form.reorderLevel.trim() === '' ? undefined : parseInt(form.reorderLevel, 10),
@@ -957,6 +964,24 @@ function VariantsPage() {
               )}
             </div>
 
+            {catalogItemId && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-sm rounded-lg border border-primary/30 bg-primary/10 text-primary px-3 py-2">
+                <span>
+                  Showing variants for catalog item{' '}
+                  <span className="font-semibold underline">
+                    {catalogItems.find((c) => String(c.id) === catalogItemId)?.name || `ID #${catalogItemId}`}
+                  </span>
+                  {catalogItems.find((c) => String(c.id) === catalogItemId)?.sku && (
+                    <span className="font-mono text-xs opacity-80 ml-1">
+                      ({catalogItems.find((c) => String(c.id) === catalogItemId)?.sku})
+                    </span>
+                  )}
+                </span>
+                <button type="button" className="btn btn-outline text-xs ml-auto" onClick={() => router.push('/catalog/variants')}>
+                  Show all variants
+                </button>
+              </div>
+            )}
             {deepLinkQ && (
               <div className="mb-3 flex flex-wrap items-center gap-2 text-sm rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200 px-3 py-2">
                 Showing variants matching <span className="font-mono font-medium">{deepLinkQ}</span>
@@ -968,20 +993,24 @@ function VariantsPage() {
             <RichDataTable
               columns={columns}
               data={
-                deepLinkQ
-                  ? items.filter((v) => {
-                      const q = deepLinkQ.toLowerCase();
-                      return (
-                        v.variantSku?.toLowerCase().includes(q) ||
-                        v.name?.toLowerCase().includes(q) ||
-                        v.catalogItem?.sku?.toLowerCase().includes(q) ||
-                        v.catalogItem?.name?.toLowerCase().includes(q) ||
-                        barcodeLabels(v).some((c) => c.toLowerCase().includes(q)) ||
-                        optionsDisplayLabels(v).some((l) => l.toLowerCase().includes(q)) ||
-                        String(v.id) === deepLinkQ
-                      );
-                    })
-                  : items
+                items.filter((v) => {
+                  if (catalogItemId && String(v.catalogItem?.id || v.catalogItemId) !== catalogItemId) {
+                    return false;
+                  }
+                  if (deepLinkQ) {
+                    const q = deepLinkQ.toLowerCase();
+                    return (
+                      v.variantSku?.toLowerCase().includes(q) ||
+                      v.name?.toLowerCase().includes(q) ||
+                      v.catalogItem?.sku?.toLowerCase().includes(q) ||
+                      v.catalogItem?.name?.toLowerCase().includes(q) ||
+                      barcodeLabels(v).some((c) => c.toLowerCase().includes(q)) ||
+                      optionsDisplayLabels(v).some((l) => l.toLowerCase().includes(q)) ||
+                      String(v.id) === deepLinkQ
+                    );
+                  }
+                  return true;
+                })
               }
               tableId="variants-cols-v4"
               initialColumnVisibility={defaultColumnVisibility}
@@ -1005,7 +1034,7 @@ function VariantsPage() {
                   <form onSubmit={onCreate} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium mb-1.5">Catalog Item *</label>
+                        <label className="block text-sm font-medium mb-1.5">Catalog Item <span className="text-destructive">*</span></label>
                         <SearchableSelect
                           value={form.catalogItemId}
                           onChange={(v) => setForm((prev) => ({ ...prev, catalogItemId: v }))}
@@ -1019,7 +1048,7 @@ function VariantsPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1.5">Variant SKU *</label>
+                        <label className="block text-sm font-medium mb-1.5">Variant SKU <span className="text-destructive">*</span></label>
                         <input
                           type="text"
                           value={form.variantSku}
@@ -1124,7 +1153,14 @@ function VariantsPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1.5">Warehouse</label>
+                        <label className="block text-sm font-medium mb-1.5">
+                          Warehouse
+                          {(form.openingQuantity.trim() !== '' ||
+                            form.reorderLevel.trim() !== '' ||
+                            form.reorderQuantity.trim() !== '' ||
+                            !!form.rackId ||
+                            !!form.binId) && <span className="text-destructive"> *</span>}
+                        </label>
                         <SearchableSelect
                           value={form.warehouseId}
                           onChange={(warehouseId) =>
@@ -1143,7 +1179,19 @@ function VariantsPage() {
                         <label className="block text-sm font-medium mb-1.5">Rack</label>
                         <SearchableSelect
                           value={form.rackId}
-                          onChange={(rackId) => setForm((prev) => ({ ...prev, rackId, binId: '' }))}
+                          onChange={(rackId) =>
+                            setForm((prev) => {
+                              const keepBin =
+                                !!prev.binId &&
+                                (!rackId ||
+                                  bins.some(
+                                    (b) =>
+                                      String(b.id) === String(prev.binId) &&
+                                      String(b.rack?.id || '') === String(rackId)
+                                  ));
+                              return { ...prev, rackId, binId: keepBin ? prev.binId : '' };
+                            })
+                          }
                           disabled={!form.warehouseId}
                           placeholder="Search rack…"
                           emptyLabel="All racks"

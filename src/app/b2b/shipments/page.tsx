@@ -75,7 +75,7 @@ function canCancel(row: any): { ok: boolean; reason: string } {
 export default function B2bShipmentsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dispatch, setDispatch] = useState<DispatchForm | null>(null);

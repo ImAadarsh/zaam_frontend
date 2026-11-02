@@ -36,7 +36,7 @@ const emptyForm = (): MethodForm => ({
 export default function B2bShippingMethodsPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<MethodForm>(emptyForm());

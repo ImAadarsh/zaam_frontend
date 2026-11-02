@@ -26,6 +26,14 @@ function savedPages(role: Role): string[] {
   return Array.isArray(pages) ? pages.filter((p: unknown): p is string => typeof p === 'string' && !!p) : [];
 }
 
+function sessionRoleCodes(session: { user?: { roles?: any[] } } | null): string[] {
+  const roles = session?.user?.roles || [];
+  return roles
+    .map((r: any) => (typeof r === 'string' ? r : r?.code || r?.name || ''))
+    .map((r: string) => String(r).toUpperCase())
+    .filter(Boolean);
+}
+
 export default function RolesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
@@ -34,6 +42,7 @@ export default function RolesPage() {
   const canCreateRole = can('POST', '/api/iam/roles');
   const canEditPages = can('PATCH', '/api/iam/roles/:id');
   const canAssignRole = can('POST', '/api/iam/roles/assign');
+  const isPlatformSuperAdmin = sessionRoleCodes(session).includes('SUPER_ADMIN');
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -49,6 +58,25 @@ export default function RolesPage() {
   const [pagePermissions, setPagePermissions] = useState<Record<string, boolean>>({});
   const [permissionFilter, setPermissionFilter] = useState('');
   const [showingBuiltInPages, setShowingBuiltInPages] = useState(false);
+
+  // Assign-role pickers: own-org users only for org ADMIN; never offer SUPER_ADMIN to non–platform super admins
+  const assignableUsers = useMemo(() => {
+    const orgId = assignForm.organizationId;
+    return (users || []).filter((u) => {
+      const userOrgId = u.organizationId || u.organization?.id;
+      if (orgId && userOrgId && String(userOrgId) !== String(orgId)) return false;
+      return true;
+    });
+  }, [users, assignForm.organizationId]);
+
+  // API already org-scopes / strips SUPER_ADMIN for org ADMIN; UI only hides SUPER_ADMIN as defense-in-depth.
+  // Do not filter roles by organizationId — DEV often seeds the role catalog under the platform org only.
+  const assignableRoles = useMemo(() => {
+    return (roles || []).filter((r) => {
+      if (!isPlatformSuperAdmin && String(r.code).toUpperCase() === 'SUPER_ADMIN') return false;
+      return true;
+    });
+  }, [roles, isPlatformSuperAdmin]);
   // Pages grantable in the editor. Super Admin may assign any panel page (custom roles have no built-ins).
   // Read-only viewers still see the role's built-in set only.
   const roleApiPages = useMemo(() => {
@@ -310,7 +338,7 @@ export default function RolesPage() {
                       <label className="block text-sm font-medium mb-1.5">Organization *</label>
                       <select className="select" required
                         value={assignForm.organizationId} 
-                        onChange={(e) => setAssignForm({ ...assignForm, organizationId: e.target.value, businessUnitId: '', locationId: '' })}>
+                        onChange={(e) => setAssignForm({ ...assignForm, organizationId: e.target.value, businessUnitId: '', locationId: '', userId: '', roleId: '' })}>
                         <option value="">Select organization</option>
                         {organizations.map((org) => (
                           <option key={org.id} value={org.id}>{org.name}</option>
@@ -346,7 +374,7 @@ export default function RolesPage() {
                     <select className="select" required
                       value={assignForm.userId} onChange={(e) => setAssignForm({ ...assignForm, userId: e.target.value })}>
                       <option value="">Select user</option>
-                      {users.map((u) => (
+                      {assignableUsers.map((u) => (
                           <option key={u.id} value={u.id}>{u.email} {u.firstName || u.lastName ? `(${u.firstName || ''} ${u.lastName || ''})`.trim() : ''}</option>
                       ))}
                     </select>
@@ -356,7 +384,7 @@ export default function RolesPage() {
                     <select className="select" required
                       value={assignForm.roleId} onChange={(e) => setAssignForm({ ...assignForm, roleId: e.target.value })}>
                       <option value="">Select role</option>
-                      {roles.map((r) => (
+                      {assignableRoles.map((r) => (
                           <option key={r.id} value={r.id}>{r.code} - {r.name}</option>
                       ))}
                     </select>

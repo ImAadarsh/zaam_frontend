@@ -79,37 +79,19 @@ docker compose up -d
 "
 }
 
-ensure_git_checkout() {
-  log "Ensuring ${app_dir} is a git clone of ${git_repo} (${branch})…"
-  remote "set -euo pipefail
-export GIT_TERMINAL_PROMPT=0
-chown -R root:root '${app_dir}' 2>/dev/null || true
-git config --global --add safe.directory '${app_dir}' 2>/dev/null || true
-if [ -d '${app_dir}/.git' ]; then
-  cd '${app_dir}'
-  git remote set-url origin '${git_repo}' || true
-  git fetch --prune origin
-  git checkout '${branch}'
-  git reset --hard \"origin/${branch}\"
-  echo \"Updated to \$(git rev-parse --short HEAD)\"
-  exit 0
-fi
-ts=\$(date +%Y%m%d%H%M%S)
-tmp=\"${app_dir}.git-new.\$ts\"
-bak=\"${app_dir}.pre-git.\$ts\"
-git clone --branch '${branch}' --single-branch '${git_repo}' \"\$tmp\"
-if [ -d '${app_dir}' ]; then
-  [ -f '${app_dir}/.env' ] && cp -a '${app_dir}/.env' \"\$tmp/.env\" || true
-  [ -f '${app_dir}/.env.production' ] && cp -a '${app_dir}/.env.production' \"\$tmp/.env.production\" || true
-  [ -f '${app_dir}/.env.local' ] && cp -a '${app_dir}/.env.local' \"\$tmp/.env.local\" || true
-  [ -d '${app_dir}/.next' ] && mv '${app_dir}/.next' \"\$tmp/.next\" || true
-  [ -d '${app_dir}/node_modules' ] && mv '${app_dir}/node_modules' \"\$tmp/node_modules\" || true
-  mv '${app_dir}' \"\$bak\"
-fi
-mv \"\$tmp\" '${app_dir}'
-chown -R root:root '${app_dir}'
-echo \"Cloned fresh at ${app_dir}\"
-"
+rsync_source() {
+  log "Rsyncing panels source to ${app_dir}…"
+  remote "mkdir -p '${app_dir}'"
+  rsync -az --delete \
+    --exclude node_modules \
+    --exclude .git \
+    --exclude .next \
+    --exclude .env \
+    --exclude .env.local \
+    --exclude .env.production \
+    --exclude '.DS_Store' \
+    -e "ssh ${ssh_base_opts[*]}" \
+    "$SCRIPT_DIR/" "${ssh_target}:${app_dir}/"
 }
 
 ensure_server_env() {
@@ -184,7 +166,7 @@ exit 1
 [[ "${1:-}" == "--help" ]] && { sed -n '2,16p' "$0"; exit 0; }
 
 ensure_traefik_proxy
-ensure_git_checkout
+rsync_source
 ensure_server_env
 build_and_restart
 health_checks

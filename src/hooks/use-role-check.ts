@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSession } from './use-session';
 import { toast } from 'sonner';
+import { allowedPagesFromSession, canAccessPath } from '@/lib/page-access';
 
 /**
- * Hook to check if user has required roles.
- * Redirects to /modules if user doesn't have required roles.
- * Redirects to /login only when hydration is done and there is no session.
+ * Hook to check if user may open the current page.
+ * Allows SUPER_ADMIN, any of `requiredRoles`, or an explicit IAM page grant for this path
+ * (so custom roles like B2B_M are not blocked after Module Hub already showed the card).
+ * Redirects to /modules when denied; to /login when hydration is done and there is no session.
  */
 export function useRoleCheck(requiredRoles: string[], redirectTo = '/modules') {
   const { session, hydrated } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [hasAccess, setHasAccess] = useState(false);
 
   // Stabilize array identity so the effect doesn't re-fire every render
@@ -37,8 +40,10 @@ export function useRoleCheck(requiredRoles: string[], redirectTo = '/modules') {
     const needed = rolesKey ? rolesKey.split('|') : [];
     const hasRequiredRole =
       roleCodes.includes('SUPER_ADMIN') || needed.some((role) => roleCodes.includes(role));
+    const allowedPages = allowedPagesFromSession(session);
+    const hasPageGrant = canAccessPath(pathname, allowedPages);
 
-    if (!hasRequiredRole) {
+    if (!hasRequiredRole && !hasPageGrant) {
       toast.error('You do not have permission to access this page. Please contact an administrator.');
       setHasAccess(false);
       router.replace(redirectTo);
@@ -46,7 +51,7 @@ export function useRoleCheck(requiredRoles: string[], redirectTo = '/modules') {
     }
 
     setHasAccess(true);
-  }, [hydrated, session, rolesKey, router, redirectTo]);
+  }, [hydrated, session, rolesKey, router, redirectTo, pathname]);
 
   return { hasAccess, hydrated };
 }

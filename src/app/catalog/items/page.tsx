@@ -19,6 +19,7 @@ import {
   deleteProductMedia,
   listClassifications,
   createClassification,
+  listVariants,
   type CatalogClassification,
   type CatalogClassificationType
 } from '@/lib/api';
@@ -30,8 +31,8 @@ import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Upload, Loader2, ImageIcon, Star, RefreshCw, Settings2, Tag, Download } from 'lucide-react';
 import { MediaThumb } from '@/components/catalog/media-preview';
-import { activeWarehouses } from '@/components/inventory/location-status-badge';
-import { KeyValueEditor } from '@/components/key-value-editor';
+import { SearchableSelect } from '@/components/searchable-select';
+import { VariantEditDialog, type VariantEditModel } from '@/components/catalog/variant-edit-dialog';
 import Link from 'next/link';
 
 const CURRENCY_OPTIONS = ['GBP', 'EUR', 'USD', 'AED', 'AUD', 'CAD', 'CHF', 'INR', 'NZD', 'SAR', 'ZAR'];
@@ -41,28 +42,33 @@ type CatalogItem = {
   sku: string;
   name: string;
   description?: string | null;
+  longDescription?: string | null;
   categoryId?: string | null;
   category?: string | null;
   subCategoryId?: string | null;
   subCategory?: string | null;
   brandId?: string | null;
   brand?: string | null;
+  manufacturer?: string | null;
   uomId?: string | null;
   uom?: string | null;
   packSizeId?: string | null;
   packSize?: string | null;
+  /** Decorated from default variant / price list — list filters only. */
   costPrice?: number | null;
   sellingPrice?: number | null;
   currency?: string | null;
   supplierSku?: string | null;
   leadTimeDays?: number | null;
   remarks?: string | null;
-  attributes?: Record<string, any> | null;
+  hsCode?: string | null;
+  countryOfOrigin?: string | null;
   status: 'active' | 'inactive' | 'discontinued';
   createdAt?: string;
   taxCode?: { id: string; code: string; name: string; rate: number } | null;
   organization?: { id: string; name: string };
   businessUnit?: { id: string; name: string } | null;
+  /** Decorated from variants — list filters only. */
   barcode?: string | null;
   variants?: Array<{
     id: string;
@@ -76,9 +82,11 @@ type CatalogItem = {
     option3Name?: string | null;
     option3Value?: string | null;
     attributes?: Record<string, any> | null;
+    imageUrl?: string | null;
   }>;
-  /** Sum across variants — display only; real stock is per variant in stock_items. */
+  /** Sum of stock_items.quantity_on_hand across product variants — list column only. */
   openingQuantity?: number | null;
+  totalQuantity?: number | null;
   variantCount?: number;
   variantStock?: Array<{
     variantId: string;
@@ -89,97 +97,55 @@ type CatalogItem = {
     quantityOnHand: number;
     quantityReserved?: number;
   }>;
-  reorderLevel?: number | null;
-  reorderQuantity?: number | null;
   warehouseId?: string | null;
-  warehouseName?: string | null;
-  binCode?: string | null;
-  supplierName?: string | null;
-  lotNumber?: string | null;
-  expiryDate?: string | null;
 };
 
+/** User-editable `catalog_items` columns only (post-023). */
 type ProductForm = {
   organizationId: string;
   businessUnitId: string;
   sku: string;
-  barcode: string;
   name: string;
   description: string;
-  /** Classification master ids (not display names). */
+  longDescription: string;
   categoryId: string;
   subCategoryId: string;
   brandId: string;
+  manufacturer: string;
   uomId: string;
   packSizeId: string;
-  openingQuantity: string;
-  reorderLevel: string;
-  reorderQuantity: string;
-  costPrice: string;
-  sellingPrice: string;
   currency: string;
   taxCodeId: string;
-  warehouseId: string;
-  binCode: string;
-  supplierName: string;
   supplierSku: string;
   leadTimeDays: string;
-  lotNumber: string;
-  expiryDate: string;
-  status: 'active' | 'inactive' | 'discontinued';
   remarks: string;
-  attributes: string;
+  hsCode: string;
+  countryOfOrigin: string;
+  status: 'active' | 'inactive' | 'discontinued';
 };
 
 const emptyForm: ProductForm = {
   organizationId: '',
   businessUnitId: '',
   sku: '',
-  barcode: '',
   name: '',
   description: '',
+  longDescription: '',
   categoryId: '',
   subCategoryId: '',
   brandId: '',
+  manufacturer: '',
   uomId: '',
   packSizeId: '',
-  openingQuantity: '',
-  reorderLevel: '',
-  reorderQuantity: '',
-  costPrice: '',
-  sellingPrice: '',
   currency: 'GBP',
   taxCodeId: '',
-  warehouseId: '',
-  binCode: '',
-  supplierName: '',
   supplierSku: '',
   leadTimeDays: '',
-  lotNumber: '',
-  expiryDate: '',
-  status: 'active',
   remarks: '',
-  attributes: ''
+  hsCode: '',
+  countryOfOrigin: '',
+  status: 'active'
 };
-
-/** Attribute keys that have dedicated inputs, so they stay out of the JSON box. */
-const MANAGED_ATTRIBUTE_KEYS = ['supplierName', 'warehouseName', 'binCode', 'lotNumber'];
-
-/** Stock/barcode fields are aggregated across variants in list responses, so only send them when edited. */
-const STOCK_SHEET_KEYS = ['barcode', 'openingQuantity', 'reorderLevel', 'reorderQuantity', 'expiryDate'] as const;
-
-/** Matches API WAREHOUSE_REQUIRED_FOR_QTY_MESSAGE — show before submit when qty/stock set without warehouse. */
-const WAREHOUSE_REQUIRED_FOR_QTY_MESSAGE =
-  'Select or update Warehouse / Location first, then set Opening Quantity (or other stock fields). Quantity was not saved.';
-
-const STOCK_VALUE_KEYS = [
-  'openingQuantity',
-  'reorderLevel',
-  'reorderQuantity',
-  'binCode',
-  'lotNumber',
-  'expiryDate'
-] as const;
 
 type WarehouseOption = {
   id: string;
@@ -191,66 +157,36 @@ type WarehouseOption = {
   status?: string | null;
 };
 
-function warehouseOptionLabel(w: WarehouseOption): string {
-  const title = w.code && w.name ? `${w.code} — ${w.name}` : w.name || w.code || `Warehouse ${w.id}`;
-  const addr = [w.addressLine1, w.city, w.postalCode].filter(Boolean).join(', ');
-  return addr ? `${title} · ${addr}` : title;
-}
-
-/** True when stock/qty fields need a warehouse id and none is selected (create, or stock fields changed on edit). */
-function stockNeedsWarehouse(f: ProductForm, original?: ProductForm | null): boolean {
-  if (f.warehouseId.trim()) return false;
-  const hasStockValue = STOCK_VALUE_KEYS.some((k) => f[k].trim() !== '');
-  if (!hasStockValue) return false;
-  if (!original) return true;
-  return STOCK_VALUE_KEYS.some((k) => f[k].trim() !== original[k].trim());
-}
-
 function formFromItem(item: CatalogItem): ProductForm {
-  const shown = { ...(item.attributes ?? {}) } as Record<string, any>;
-  MANAGED_ATTRIBUTE_KEYS.forEach((k) => delete shown[k]);
   const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
   const numStr = (v: unknown) => (v === null || v === undefined || v === '' ? '' : String(Number(v)));
   return {
     organizationId: item.organization?.id || '',
     businessUnitId: item.businessUnit?.id || '',
     sku: item.sku,
-    barcode: str(item.barcode),
     name: item.name,
     description: str(item.description),
+    longDescription: str(item.longDescription),
     categoryId: str(item.categoryId),
     subCategoryId: str(item.subCategoryId),
     brandId: str(item.brandId),
+    manufacturer: str(item.manufacturer),
     uomId: str(item.uomId),
     packSizeId: str(item.packSizeId),
-    openingQuantity: numStr(item.openingQuantity),
-    reorderLevel: numStr(item.reorderLevel),
-    reorderQuantity: numStr(item.reorderQuantity),
-    costPrice: numStr(item.costPrice),
-    sellingPrice: numStr(item.sellingPrice),
     currency: item.currency || 'GBP',
     taxCodeId: item.taxCode?.id || '',
-    warehouseId: str(item.warehouseId),
-    binCode: str(item.binCode),
-    supplierName: str(item.supplierName),
     supplierSku: str(item.supplierSku),
     leadTimeDays: numStr(item.leadTimeDays),
-    lotNumber: str(item.lotNumber),
-    expiryDate: item.expiryDate ? String(item.expiryDate).slice(0, 10) : '',
-    status: item.status,
     remarks: str(item.remarks),
-    attributes: Object.keys(shown).length ? JSON.stringify(shown, null, 2) : ''
+    hsCode: str(item.hsCode),
+    countryOfOrigin: str(item.countryOfOrigin),
+    status: item.status
   };
-}
-
-function num(v: string) {
-  return v.trim() === '' ? undefined : Number(v);
 }
 
 function int(v: string) {
   return v.trim() === '' ? undefined : parseInt(v, 10);
 }
-
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{children}</h4>
@@ -313,22 +249,24 @@ function ClassificationSelect({
   orphanLabel?: string;
 }) {
   const hasOrphan = !!value && !options.some((o) => o.id === value);
+  const selectOptions = [
+    ...(hasOrphan
+      ? [{ value, label: `${orphanLabel || value} (current)`, searchText: orphanLabel || value }]
+      : []),
+    ...options.map((o) => ({ value: o.id, label: o.name, searchText: o.name }))
+  ];
   return (
     <label className="text-sm">
       {label}
-      <select
-        className="mt-1 select w-full"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {allowClear && <option value="">{placeholder || '—'}</option>}
-        {hasOrphan && (
-          <option value={value}>{orphanLabel || value} (current)</option>
-        )}
-        {options.map((o) => (
-          <option key={o.id} value={o.id}>{o.name}</option>
-        ))}
-      </select>
+      <div className="mt-1">
+        <SearchableSelect
+          value={value}
+          onChange={onChange}
+          options={selectOptions}
+          placeholder={placeholder || 'Search…'}
+          emptyLabel={allowClear ? (placeholder || '—') : 'Select…'}
+        />
+      </div>
       {options.length === 0 && emptyHint ? (
         <p className="mt-1 text-xs text-muted-foreground">{emptyHint}</p>
       ) : null}
@@ -343,14 +281,10 @@ function ProductFields({
   organizations,
   businessUnits,
   taxCodes,
-  warehouses,
   onReloadTaxCodes,
   classifications,
   orphanLabels,
-  onQuickCreateClassification,
-  variantCount = 0,
-  variantStock,
-  lockMultiVariantStock
+  onQuickCreateClassification
 }: {
   value: ProductForm;
   onChange: (next: ProductForm) => void;
@@ -358,28 +292,12 @@ function ProductFields({
   organizations: any[];
   businessUnits: any[];
   taxCodes: any[];
-  warehouses: WarehouseOption[];
   onReloadTaxCodes?: () => void;
   classifications: ClassificationBuckets;
-  /** Optional display names for orphan ids (edit form). */
   orphanLabels?: Partial<Record<'category' | 'subCategory' | 'brand' | 'uom' | 'packSize', string>>;
   onQuickCreateClassification?: (type: CatalogClassificationType, name: string) => Promise<string | null>;
-  /** Number of variants on this product (edit). */
-  variantCount?: number;
-  /** Per-variant stock rows from API (edit). */
-  variantStock?: CatalogItem['variantStock'];
-  /** When true, opening qty is read-only total — multi-variant products. */
-  lockMultiVariantStock?: boolean;
 }) {
   const set = (patch: Partial<ProductForm>) => onChange({ ...value, ...patch });
-  const warehouseChoices = useMemo(() => {
-    const active = activeWarehouses(warehouses);
-    if (value.warehouseId && !active.some((w) => String(w.id) === String(value.warehouseId))) {
-      const current = warehouses.find((w) => String(w.id) === String(value.warehouseId));
-      return current ? [...active, current] : active;
-    }
-    return active;
-  }, [warehouses, value.warehouseId]);
 
   const field = (
     label: string,
@@ -405,44 +323,65 @@ function ProductFields({
       {includeOrg && (
         <div className="grid grid-cols-2 gap-4">
           <label className="text-sm">
-            Organization *
-            <select
-              className="mt-1 select w-full"
-              value={value.organizationId}
-              onChange={(e) => set({ organizationId: e.target.value })}
-              required
-            >
-              <option value="">Select…</option>
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
+            Organization <span className="text-destructive">*</span>
+            <div className="mt-1">
+              <SearchableSelect
+                value={value.organizationId}
+                onChange={(organizationId) => set({ organizationId })}
+                required
+                placeholder="Search organisation…"
+                emptyLabel="Select…"
+                options={organizations.map((org) => ({
+                  value: String(org.id),
+                  label: org.name,
+                  searchText: org.name
+                }))}
+              />
+            </div>
           </label>
           <label className="text-sm">
             Business Unit
-            <select
-              className="mt-1 select w-full"
-              value={value.businessUnitId}
-              onChange={(e) => set({ businessUnitId: e.target.value })}
-            >
-              <option value="">None</option>
-              {businessUnits.map((bu) => (
-                <option key={bu.id} value={bu.id}>
-                  {bu.name}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                value={value.businessUnitId}
+                onChange={(businessUnitId) => set({ businessUnitId })}
+                placeholder="Search business unit…"
+                emptyLabel="None"
+                options={businessUnits.map((bu) => ({
+                  value: String(bu.id),
+                  label: bu.name,
+                  searchText: bu.name
+                }))}
+              />
+            </div>
           </label>
         </div>
+      )}
+
+      {!includeOrg && (
+        <label className="text-sm block">
+          Business Unit
+          <div className="mt-1">
+            <SearchableSelect
+              value={value.businessUnitId}
+              onChange={(businessUnitId) => set({ businessUnitId })}
+              placeholder="Search business unit…"
+              emptyLabel="None"
+              options={businessUnits.map((bu) => ({
+                value: String(bu.id),
+                label: bu.name,
+                searchText: bu.name
+              }))}
+            />
+          </div>
+        </label>
       )}
 
       <section>
         <SectionTitle>Identity</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
           <label className="text-sm">
-            Product SKU (catalogue) *
+            Product SKU (catalogue) <span className="text-destructive">*</span>
             <input
               className="mt-1 input w-full"
               value={value.sku}
@@ -450,25 +389,29 @@ function ProductFields({
               required
             />
             <span className="mt-1 block text-xs text-muted-foreground">
-              Product-level code. Sellable / stock SKUs live on Variants (<code className="text-[10px]">variant_sku</code>).
+              Base product code. Sellable SKUs, barcode, cost/sell and stock live on Variants.
             </span>
           </label>
           <label className="text-sm">
-            Barcode on default variant
-            <input
-              className="mt-1 input w-full"
-              value={value.barcode}
-              onChange={(e) => set({ barcode: e.target.value })}
-              placeholder="Optional — saved on the first/default variant, not the product row"
-            />
+            Status
+            <select
+              className="mt-1 select w-full"
+              value={value.status}
+              onChange={(e) => set({ status: e.target.value as ProductForm['status'] })}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="discontinued">Discontinued</option>
+            </select>
           </label>
           <label className="text-sm col-span-2">
-            Product name *
+            Product name <span className="text-destructive">*</span>
             <input
               className="mt-1 input w-full"
               value={value.name}
               onChange={(e) => set({ name: e.target.value })}
               required
+              placeholder="Base product — e.g. iPhone Duo (not 256GB Silver)"
             />
           </label>
           <label className="text-sm col-span-2">
@@ -478,6 +421,15 @@ function ProductFields({
               rows={2}
               value={value.description}
               onChange={(e) => set({ description: e.target.value })}
+            />
+          </label>
+          <label className="text-sm col-span-2">
+            Long description
+            <textarea
+              className="mt-1 input w-full"
+              rows={3}
+              value={value.longDescription}
+              onChange={(e) => set({ longDescription: e.target.value })}
             />
           </label>
         </div>
@@ -532,7 +484,7 @@ function ProductFields({
             }
           />
           <ClassificationSelect
-            label="Brand / Manufacturer"
+            label="Brand"
             value={value.brandId}
             options={classifications.brand}
             orphanLabel={orphanLabels?.brand}
@@ -545,6 +497,7 @@ function ProductFields({
               </>
             }
           />
+          {field('Manufacturer', 'manufacturer', { placeholder: 'Free-text manufacturer' })}
           <ClassificationSelect
             label="Unit of Measure (UOM)"
             value={value.uomId}
@@ -573,26 +526,12 @@ function ProductFields({
               </>
             }
           />
-          <label className="text-sm">
-            Status
-            <select
-              className="mt-1 select w-full"
-              value={value.status}
-              onChange={(e) => set({ status: e.target.value as ProductForm['status'] })}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="discontinued">Discontinued</option>
-            </select>
-          </label>
         </div>
       </section>
 
       <section>
-        <SectionTitle>Pricing &amp; Tax</SectionTitle>
+        <SectionTitle>Supply & trade</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
-          {field('Default unit cost (variant)', 'costPrice', { type: 'number', step: '0.0001' })}
-          {field('Default sell price (price list)', 'sellingPrice', { type: 'number', step: '0.0001' })}
           <label className="text-sm">
             Currency
             <select
@@ -610,6 +549,10 @@ function ProductFields({
               )}
             </select>
           </label>
+          {field('Supplier SKU', 'supplierSku')}
+          {field('Lead Time (Days)', 'leadTimeDays', { type: 'number' })}
+          {field('HS Code', 'hsCode', { maxLength: 20, placeholder: 'Customs / tariff code' })}
+          {field('Country of Origin', 'countryOfOrigin', { maxLength: 2, placeholder: 'ISO-2 e.g. GB' })}
           <div className="text-sm">
             <div className="flex items-center justify-between">
               <span>Tax / VAT</span>
@@ -624,136 +567,23 @@ function ProductFields({
                 </a>
               </span>
             </div>
-            <select
-              className="mt-1 select w-full"
-              value={value.taxCodeId}
-              onChange={(e) => set({ taxCodeId: e.target.value })}
-            >
-              <option value="">None</option>
-              {taxCodes
-                .filter((tc) => tc.status !== 'inactive' || tc.id === value.taxCodeId)
-                .map((tc) => (
-                  <option key={tc.id} value={tc.id}>
-                    {tc.code} — {tc.name} ({Number((Number(tc.rate) * 100).toFixed(2))}%)
-                  </option>
-                ))}
-            </select>
-            {taxCodes.length === 0 && (
-              <p className="mt-1 text-xs text-muted-foreground">No tax codes yet — add VAT/GST rates on the Tax Codes page.</p>
-            )}
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Catalogue cost/sell are defaults. POS and B2B sell prices come from Price Lists (per variant);
-          variant-level cost on Variants overrides catalogue cost when set. Images can also be per variant.
-        </p>
-      </section>
-
-      <section>
-        <SectionTitle>Inventory &amp; Warehouse</SectionTitle>
-        <div className="grid grid-cols-2 gap-4">
-          {lockMultiVariantStock ? (
-            <label className="text-sm">
-              Total stock (all variants)
-              <input
-                className="mt-1 input w-full bg-muted/40"
-                type="number"
-                value={value.openingQuantity}
-                readOnly
-                title="Sum of per-variant stock — not editable here"
+            <div className="mt-1">
+              <SearchableSelect
+                value={value.taxCodeId}
+                onChange={(taxCodeId) => set({ taxCodeId })}
+                placeholder="Search tax code…"
+                emptyLabel="None"
+                options={taxCodes
+                  .filter((tc) => tc.status !== 'inactive' || tc.id === value.taxCodeId)
+                  .map((tc) => ({
+                    value: String(tc.id),
+                    label: `${tc.code} — ${tc.name} (${Number((Number(tc.rate) * 100).toFixed(2))}%)`,
+                    searchText: `${tc.code} ${tc.name}`
+                  }))}
               />
-            </label>
-          ) : (
-            field('Opening quantity (default variant)', 'openingQuantity', { type: 'number' })
-          )}
-          {field('Reorder Level', 'reorderLevel', { type: 'number' })}
-          {field('Reorder Quantity', 'reorderQuantity', { type: 'number' })}
-          <label className="text-sm">
-            Warehouse / Location
-            <select
-              className="mt-1 select w-full"
-              value={value.warehouseId}
-              onChange={(e) => set({ warehouseId: e.target.value })}
-              disabled={lockMultiVariantStock}
-            >
-              <option value="">Select warehouse…</option>
-              {warehouseChoices.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {warehouseOptionLabel(w)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {field('Bin / Rack No.', 'binCode')}
-          {field('Batch / Lot No.', 'lotNumber')}
-          {field('Expiry Date', 'expiryDate', { type: 'date' })}
-        </div>
-        {lockMultiVariantStock ? (
-          <p className="text-xs text-muted-foreground mt-2">
-            This product has {variantCount} variants. Stock is stored per variant × warehouse — the total above is
-            a sum only. Set or change qty on{' '}
-            <Link href="/inventory/stock-items" className="text-primary hover:underline">
-              Inventory → Stock Items
-            </Link>{' '}
-            or open each variant below.
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground mt-2">
-            Opening quantity is saved on a stock row for the default (first) variant and selected warehouse — not
-            on the catalogue master. Select a warehouse before setting quantity. Missing bins and suppliers are
-            created automatically.
-          </p>
-        )}
-        {variantStock && variantStock.length > 0 && (
-          <div className="mt-3 rounded-lg border overflow-hidden">
-            <div className="px-3 py-1.5 text-xs font-medium bg-muted/40 border-b">Stock by variant</div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-muted-foreground border-b">
-                  <th className="px-3 py-1.5 font-medium">Variant SKU</th>
-                  <th className="px-3 py-1.5 font-medium">Warehouse</th>
-                  <th className="px-3 py-1.5 font-medium text-right">Qty</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {variantStock.map((row) => (
-                  <tr key={`${row.variantId}-${row.warehouseId}`}>
-                    <td className="px-3 py-1.5 font-mono">
-                      <Link
-                        href={`/catalog/variants?q=${encodeURIComponent(row.variantSku)}`}
-                        className="text-primary hover:underline"
-                      >
-                        {row.variantSku}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-1.5">{row.warehouseName || '—'}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums">{row.quantityOnHand}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            </div>
           </div>
-        )}
-        {lockMultiVariantStock && (!variantStock || variantStock.length === 0) && (
-          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-            No stock rows yet for these variants. Add quantity per variant on Stock Items.
-          </p>
-        )}
-      </section>
-
-      <section>
-        <SectionTitle>Supplier</SectionTitle>
-        <div className="grid grid-cols-2 gap-4">
-          {field('Supplier Name', 'supplierName')}
-          {field('Supplier SKU', 'supplierSku')}
-          {field('Lead Time (Days)', 'leadTimeDays', { type: 'number' })}
-        </div>
-      </section>
-
-      <section>
-        <SectionTitle>Notes</SectionTitle>
-        <div className="grid grid-cols-1 gap-4">
-          <label className="text-sm">
+          <label className="text-sm col-span-2">
             Remarks
             <textarea
               className="mt-1 input w-full"
@@ -762,22 +592,14 @@ function ProductFields({
               onChange={(e) => set({ remarks: e.target.value })}
             />
           </label>
-          <div className="text-sm space-y-1.5">
-            <span>Extra attributes</span>
-            <p className="text-xs text-muted-foreground">Add key/value pairs (saved as JSON). Example: colour → black</p>
-            <KeyValueEditor
-              value={value.attributes}
-              onChange={(json) => set({ attributes: json })}
-              placeholderKey="e.g. colour"
-              placeholderValue="e.g. black"
-            />
-          </div>
         </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          Cost, sell price, barcode, attributes, weight/dims, reorder and stock belong on Variants.
+        </p>
       </section>
     </div>
   );
 }
-
 const CATALOG_PAGE_SIZE = 500;
 
 /** Every catalogue item: first page, then the remaining pages in parallel. */
@@ -800,6 +622,7 @@ export default function CatalogItemsPage() {
   const canCreate = can('POST', '/api/catalog/items');
   const canUpdate = can('PATCH', '/api/catalog/items/:id');
   const canDelete = can('DELETE', '/api/catalog/items/:id');
+  const canUpdateVariant = can('PATCH', '/api/catalog/variants/:id');
   const canImport = can('POST', '/api/catalog/inventory-import/execute');
   const canAddMedia = can('POST', '/api/catalog/media');
   const canDeleteMedia = can('DELETE', '/api/catalog/media/:id');
@@ -820,9 +643,11 @@ export default function CatalogItemsPage() {
   const [confirmDel, setConfirmDel] = useState<CatalogItem | null>(null);
   const [media, setMedia] = useState<any[]>([]);
   const [editOriginal, setEditOriginal] = useState<ProductForm | null>(null);
-  const [editVariants, setEditVariants] = useState<NonNullable<CatalogItem['variants']>>([]);
+  const [editVariants, setEditVariants] = useState<VariantEditModel[]>([]);
   const [editVariantStock, setEditVariantStock] = useState<NonNullable<CatalogItem['variantStock']>>([]);
+  const [editingVariant, setEditingVariant] = useState<VariantEditModel | null>(null);
   const [loadingEdit, setLoadingEdit] = useState(false);
+  const [loadingVariants, setLoadingVariants] = useState(false);
   const [createImages, setCreateImages] = useState<File[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -866,7 +691,7 @@ export default function CatalogItemsPage() {
         setClassifications(groupClassificationOptions(classRes.data || []));
         if (orgId) {
           setForm((prev) => ({ ...prev, organizationId: orgId }));
-          const busRes = await listBusinessUnits(orgId).catch(() => ({ data: [] }));
+          const busRes = await listBusinessUnits(orgId, { activeOnly: true }).catch(() => ({ data: [] }));
           setBusinessUnits(busRes.data || []);
         }
       } catch (e: any) {
@@ -887,7 +712,7 @@ export default function CatalogItemsPage() {
       setBusinessUnits([]);
       return;
     }
-    listBusinessUnits(form.organizationId)
+    listBusinessUnits(form.organizationId, { activeOnly: true })
       .then((res) => setBusinessUnits(res.data || []))
       .catch(() => setBusinessUnits([]));
     listTaxCodes({ organizationId: form.organizationId })
@@ -949,14 +774,7 @@ export default function CatalogItemsPage() {
     }
   }
 
-  function buildPayload(
-    f: ProductForm,
-    original?: ProductForm | null,
-    opts?: { multiVariant?: boolean }
-  ) {
-    let attributes: Record<string, any> | undefined;
-    if (f.attributes.trim()) attributes = JSON.parse(f.attributes);
-    else if (original?.attributes.trim()) attributes = {};
+  function buildPayload(f: ProductForm, original?: ProductForm | null) {
     const text = (key: keyof ProductForm) => {
       const v = (f[key] as string).trim();
       if (v) return v;
@@ -967,55 +785,33 @@ export default function CatalogItemsPage() {
       if (v) return v;
       return original && original[key].trim() ? '' : undefined;
     };
-    const payload: Record<string, any> = {
+    return {
       sku: f.sku,
       name: f.name,
       description: text('description'),
+      longDescription: text('longDescription'),
       categoryId: idField('categoryId'),
       subCategoryId: idField('subCategoryId'),
       brandId: idField('brandId'),
+      manufacturer: text('manufacturer'),
       uomId: idField('uomId'),
       packSizeId: idField('packSizeId'),
-      costPrice: num(f.costPrice),
-      sellingPrice: num(f.sellingPrice),
       currency: f.currency || undefined,
       taxCodeId: text('taxCodeId'),
       supplierSku: text('supplierSku'),
       leadTimeDays: int(f.leadTimeDays),
       remarks: text('remarks'),
-      status: f.status,
-      attributes,
-      barcode: f.barcode,
-      openingQuantity: num(f.openingQuantity),
-      reorderLevel: num(f.reorderLevel),
-      reorderQuantity: num(f.reorderQuantity),
-      warehouseId: f.warehouseId.trim() || undefined,
-      binCode: text('binCode'),
-      supplierName: text('supplierName'),
-      lotNumber: text('lotNumber'),
-      expiryDate: f.expiryDate || undefined
+      hsCode: text('hsCode'),
+      countryOfOrigin: (() => {
+        const raw = f.countryOfOrigin.trim().toUpperCase();
+        if (raw) return raw;
+        return original && original.countryOfOrigin.trim() ? '' : undefined;
+      })(),
+      status: f.status
     };
-    if (original) {
-      for (const key of STOCK_SHEET_KEYS) {
-        if (f[key].trim() === original[key].trim()) delete payload[key];
-      }
-      // Keep warehouseId whenever any stock field is being saved so the API can attach the stock row.
-      const sendingStock = STOCK_VALUE_KEYS.some(
-        (k) => payload[k] !== undefined && String(payload[k] ?? '').trim() !== ''
-      );
-      if (!sendingStock && f.warehouseId.trim() === original.warehouseId.trim()) {
-        delete payload.warehouseId;
-      }
-    }
-    // Never send aggregated opening qty back when the product has multiple variants.
-    if (opts?.multiVariant) {
-      delete payload.openingQuantity;
-    }
-    return payload;
   }
 
   function saveErrorMessage(e: any, fallback: string) {
-    if (e?.message?.includes('JSON')) return 'Invalid attributes JSON';
     return e?.response?.data?.error?.message ?? fallback;
   }
 
@@ -1025,8 +821,9 @@ export default function CatalogItemsPage() {
       toast.error('Organization, SKU and Name are required');
       return;
     }
-    if (stockNeedsWarehouse(form)) {
-      toast.error(WAREHOUSE_REQUIRED_FOR_QTY_MESSAGE);
+    const coo = form.countryOfOrigin.trim();
+    if (coo && coo.length !== 2) {
+      toast.error('Country of Origin must be a 2-letter ISO code (e.g. GB)');
       return;
     }
     setSaving(true);
@@ -1034,8 +831,6 @@ export default function CatalogItemsPage() {
       const created = await createCatalogItem({
         organizationId: form.organizationId,
         businessUnitId: form.businessUnitId || undefined,
-        sku: form.sku,
-        name: form.name,
         ...buildPayload(form)
       });
       let failedImages = 0;
@@ -1062,15 +857,14 @@ export default function CatalogItemsPage() {
   async function onUpdate(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
-    if (stockNeedsWarehouse(editForm, editOriginal)) {
-      toast.error(WAREHOUSE_REQUIRED_FOR_QTY_MESSAGE);
+    const coo = editForm.countryOfOrigin.trim();
+    if (coo && coo.length !== 2) {
+      toast.error('Country of Origin must be a 2-letter ISO code (e.g. GB)');
       return;
     }
     setSaving(true);
     try {
-      const payload = buildPayload(editForm, editOriginal, {
-        multiVariant: editVariants.length > 1
-      });
+      const payload = buildPayload(editForm, editOriginal);
       const res = await updateCatalogItem(editing.id, {
         businessUnitId: editForm.businessUnitId || (editOriginal?.businessUnitId ? '' : undefined),
         ...payload
@@ -1145,8 +939,21 @@ export default function CatalogItemsPage() {
     setEditOriginal(null);
     setEditVariants([]);
     setEditVariantStock([]);
+    setEditingVariant(null);
     setMedia([]);
     setPendingMediaDeletes([]);
+  }
+
+  async function refreshEditVariants(catalogItemId: string) {
+    setLoadingVariants(true);
+    try {
+      const res = await listVariants({ catalogItemId, limit: 100 });
+      setEditVariants((res.data || []) as VariantEditModel[]);
+    } catch {
+      /* keep existing list */
+    } finally {
+      setLoadingVariants(false);
+    }
   }
 
   function orphanLabelsFromItem(item: CatalogItem) {
@@ -1161,24 +968,33 @@ export default function CatalogItemsPage() {
 
   async function openEdit(item: CatalogItem) {
     setPendingMediaDeletes([]);
+    setEditingVariant(null);
     setEditing(item);
     setEditOrphanLabels(orphanLabelsFromItem(item));
     const initial = formFromItem(item);
     setEditForm(initial);
     setEditOriginal(initial);
-    setEditVariants(item.variants ?? []);
+    setEditVariants(
+      (item.variants || []).map((v) => ({
+        ...v,
+        status: (v.status as VariantEditModel['status']) || 'active',
+        catalogItem: { id: item.id, sku: item.sku, name: item.name }
+      }))
+    );
     setEditVariantStock(item.variantStock ?? []);
     loadMedia(item.id);
     setLoadingEdit(true);
     try {
-      const res = await getCatalogItem(item.id);
-      const fresh = res.data as CatalogItem;
+      const [itemRes] = await Promise.all([
+        getCatalogItem(item.id),
+        refreshEditVariants(item.id)
+      ]);
+      const fresh = itemRes.data as CatalogItem;
       const hydratedForm = formFromItem(fresh);
       setEditing(fresh);
       setEditOrphanLabels(orphanLabelsFromItem(fresh));
       setEditForm(hydratedForm);
       setEditOriginal(hydratedForm);
-      setEditVariants(fresh.variants ?? []);
       setEditVariantStock(fresh.variantStock ?? []);
     } catch {
       toast.error('Could not refresh product details; showing list values');
@@ -1189,98 +1005,23 @@ export default function CatalogItemsPage() {
 
   const isSuperAdmin = !!session?.user?.roles?.includes('SUPER_ADMIN');
 
+  // Product-table columns (+ total qty). Variant-owned cost/sell/barcode/stock-detail are not listed here.
   const columns = useMemo<ColumnDef<CatalogItem>[]>(
     () => [
       {
         accessorKey: 'sku',
-        header: 'Product SKU',
+        header: 'SKU',
         cell: ({ row }) => <span className="font-mono text-xs whitespace-nowrap">{row.original.sku}</span>
       },
       {
-        accessorKey: 'barcode',
-        header: 'Barcode (variant)',
-        cell: ({ row }) => <span className="font-mono text-xs">{row.original.barcode || '—'}</span>
-      },
-      {
         accessorKey: 'name',
-        header: 'Product Name',
+        header: 'Name',
         cell: ({ row }) => (
           <span className="font-medium block max-w-[240px] truncate" title={row.original.name}>
             {row.original.name}
           </span>
         )
       },
-      {
-        accessorKey: 'description',
-        header: 'Description',
-        cell: ({ row }) => (
-          <span
-            className="block max-w-[200px] truncate text-xs text-muted-foreground"
-            title={row.original.description || ''}
-          >
-            {row.original.description || '—'}
-          </span>
-        )
-      },
-      { accessorKey: 'category', header: 'Category', cell: ({ row }) => row.original.category || '—' },
-      { accessorKey: 'subCategory', header: 'Sub-Category', cell: ({ row }) => row.original.subCategory || '—' },
-      { accessorKey: 'brand', header: 'Brand / Manufacturer', cell: ({ row }) => row.original.brand || '—' },
-      { accessorKey: 'uom', header: 'UOM', cell: ({ row }) => row.original.uom || '—' },
-      { accessorKey: 'packSize', header: 'Pack Size', cell: ({ row }) => row.original.packSize || '—' },
-      {
-        accessorKey: 'openingQuantity',
-        header: 'Total stock',
-        cell: ({ row }) => row.original.openingQuantity ?? '—'
-      },
-      { accessorKey: 'reorderLevel', header: 'Reorder Level', cell: ({ row }) => row.original.reorderLevel ?? '—' },
-      {
-        accessorKey: 'reorderQuantity',
-        header: 'Reorder Qty',
-        cell: ({ row }) => row.original.reorderQuantity ?? '—'
-      },
-      {
-        accessorKey: 'costPrice',
-        header: 'Default cost',
-        cell: ({ row }) => (row.original.costPrice != null ? Number(row.original.costPrice).toFixed(2) : '—')
-      },
-      {
-        accessorKey: 'sellingPrice',
-        header: 'Default sell',
-        cell: ({ row }) => (row.original.sellingPrice != null ? Number(row.original.sellingPrice).toFixed(2) : '—')
-      },
-      {
-        id: 'tax',
-        header: 'Tax / GST %',
-        cell: ({ row }) =>
-          row.original.taxCode ? `${Math.round(Number(row.original.taxCode.rate) * 100)}%` : '—'
-      },
-      {
-        accessorKey: 'warehouseName',
-        header: 'Warehouse / Location',
-        cell: ({ row }) => (
-          <span className="block max-w-[180px] truncate" title={row.original.warehouseName || ''}>
-            {row.original.warehouseName || '—'}
-          </span>
-        )
-      },
-      { accessorKey: 'binCode', header: 'Bin / Rack No.', cell: ({ row }) => row.original.binCode || '—' },
-      {
-        accessorKey: 'supplierName',
-        header: 'Supplier Name',
-        cell: ({ row }) => (
-          <span className="block max-w-[180px] truncate" title={row.original.supplierName || ''}>
-            {row.original.supplierName || '—'}
-          </span>
-        )
-      },
-      { accessorKey: 'supplierSku', header: 'Supplier SKU', cell: ({ row }) => row.original.supplierSku || '—' },
-      {
-        accessorKey: 'leadTimeDays',
-        header: 'Lead Time (Days)',
-        cell: ({ row }) => row.original.leadTimeDays ?? '—'
-      },
-      { accessorKey: 'lotNumber', header: 'Batch / Lot No.', cell: ({ row }) => row.original.lotNumber || '—' },
-      { accessorKey: 'expiryDate', header: 'Expiry Date', cell: ({ row }) => row.original.expiryDate || '—' },
       {
         accessorKey: 'status',
         header: 'Status',
@@ -1294,9 +1035,62 @@ export default function CatalogItemsPage() {
           return <span className={`px-2 py-1 rounded text-xs font-medium ${colors[status]}`}>{status}</span>;
         }
       },
+      { accessorKey: 'category', header: 'Category', cell: ({ row }) => row.original.category || '—' },
+      { accessorKey: 'subCategory', header: 'Sub-Category', cell: ({ row }) => row.original.subCategory || '—' },
+      { accessorKey: 'brand', header: 'Brand', cell: ({ row }) => row.original.brand || '—' },
+      {
+        accessorKey: 'manufacturer',
+        header: 'Manufacturer',
+        cell: ({ row }) => row.original.manufacturer || '—'
+      },
+      { accessorKey: 'uom', header: 'UOM', cell: ({ row }) => row.original.uom || '—' },
+      { accessorKey: 'packSize', header: 'Pack Size', cell: ({ row }) => row.original.packSize || '—' },
+      {
+        accessorKey: 'currency',
+        header: 'Currency',
+        cell: ({ row }) => row.original.currency || '—'
+      },
+      {
+        id: 'totalQuantity',
+        accessorFn: (row) => row.totalQuantity ?? row.openingQuantity,
+        header: 'Total Qty',
+        cell: ({ row }) => row.original.totalQuantity ?? row.original.openingQuantity ?? '—'
+      },
+      {
+        accessorKey: 'description',
+        header: 'Description',
+        cell: ({ row }) => (
+          <span
+            className="block max-w-[200px] truncate text-xs text-muted-foreground"
+            title={row.original.description || ''}
+          >
+            {row.original.description || '—'}
+          </span>
+        )
+      },
+      { accessorKey: 'supplierSku', header: 'Supplier SKU', cell: ({ row }) => row.original.supplierSku || '—' },
+      {
+        accessorKey: 'leadTimeDays',
+        header: 'Lead Time (Days)',
+        cell: ({ row }) => row.original.leadTimeDays ?? '—'
+      },
+      { accessorKey: 'hsCode', header: 'HS Code', cell: ({ row }) => row.original.hsCode || '—' },
+      {
+        accessorKey: 'countryOfOrigin',
+        header: 'Country of Origin',
+        cell: ({ row }) => row.original.countryOfOrigin || '—'
+      },
+      {
+        id: 'tax',
+        header: 'Tax',
+        cell: ({ row }) =>
+          row.original.taxCode
+            ? `${row.original.taxCode.code} (${Math.round(Number(row.original.taxCode.rate) * 100)}%)`
+            : '—'
+      },
       {
         id: 'dateAdded',
-        header: 'Date Added',
+        header: 'Created',
         cell: ({ row }) =>
           row.original.createdAt ? new Date(row.original.createdAt).toISOString().slice(0, 10) : '—'
       },
@@ -1345,35 +1139,29 @@ export default function CatalogItemsPage() {
     [canUpdate, canDelete]
   );
 
-  // Default View → Toggle Columns: SKU, Name, Category, SubCategory, Brand, Opening Qty, Price.
-  // Barcode / Description and all other fields stay available to toggle on manually.
+  // Default: SKU, Name, Status, Category, Brand, Total Qty (+ Actions). Listed extras toggle-only.
   const defaultColumnVisibility = useMemo(
     () => ({
       sku: true,
       name: true,
+      status: true,
       category: true,
-      subCategory: true,
       brand: true,
-      openingQuantity: true,
-      sellingPrice: true,
-      barcode: false,
-      description: false,
+      totalQuantity: true,
+      // Hidden by default — still in View → Toggle columns
+      subCategory: false,
+      manufacturer: false,
       uom: false,
       packSize: false,
-      reorderLevel: false,
-      reorderQuantity: false,
-      costPrice: false,
-      tax: false,
-      warehouseName: false,
-      binCode: false,
-      supplierName: false,
+      currency: false,
+      description: false,
       supplierSku: false,
       leadTimeDays: false,
-      lotNumber: false,
-      expiryDate: false,
-      status: false,
+      hsCode: false,
+      countryOfOrigin: false,
+      tax: false,
       dateAdded: false,
-      remarks: false,
+      remarks: false
     }),
     []
   );
@@ -1406,7 +1194,7 @@ export default function CatalogItemsPage() {
               <div>
                 <h1 className="text-3xl font-bold">Catalog Items</h1>
                 <p className="text-muted-foreground mt-1">
-                  Every inventory sheet column, plus images and JSON attributes
+                  Product master fields and total quantity across variants
                 </p>
               </div>
               <div className="flex gap-2">
@@ -1414,10 +1202,16 @@ export default function CatalogItemsPage() {
                   type="button"
                   className="btn btn-outline inline-flex items-center gap-2"
                   onClick={() => {
-                    const cols = ['SKU', 'Name', 'Barcode', 'Category', 'Brand', 'UOM', 'Selling Price', 'Tax', 'Status'];
+                    const cols = ['SKU', 'Name', 'Status', 'Category', 'Brand', 'Manufacturer', 'Currency', 'Total Qty'];
                     const rows = items.map((it) => [
-                      it.sku, it.name, it.barcode || '', it.category || '', it.brand || '', it.uom || '',
-                      it.sellingPrice ?? '', it.taxCode ? `${Math.round(Number(it.taxCode.rate) * 100)}%` : '', it.status
+                      it.sku,
+                      it.name,
+                      it.status,
+                      it.category || '',
+                      it.brand || '',
+                      it.manufacturer || '',
+                      it.currency || '',
+                      it.totalQuantity ?? it.openingQuantity ?? ''
                     ]);
                     const csv = [cols, ...rows]
                       .map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
@@ -1454,20 +1248,21 @@ export default function CatalogItemsPage() {
             </div>
 
             <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card/50 p-3">
-              <label className="text-sm">
+              <label className="text-sm min-w-[200px]">
                 Warehouse
-                <select
-                  className="mt-1 select min-w-[180px]"
-                  value={listFilter.warehouseId}
-                  onChange={(e) => setListFilter((f) => ({ ...f, warehouseId: e.target.value }))}
-                >
-                  <option value="">All warehouses</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={String(w.id)}>
-                      {w.name || w.code}
-                    </option>
-                  ))}
-                </select>
+                <div className="mt-1">
+                  <SearchableSelect
+                    value={listFilter.warehouseId}
+                    onChange={(warehouseId) => setListFilter((f) => ({ ...f, warehouseId }))}
+                    placeholder="Search warehouse…"
+                    emptyLabel="All warehouses"
+                    options={warehouses.map((w) => ({
+                      value: String(w.id),
+                      label: w.code && w.name ? `${w.code} — ${w.name}` : w.name || w.code || String(w.id),
+                      searchText: `${w.code || ''} ${w.name || ''}`
+                    }))}
+                  />
+                </div>
               </label>
               <label className="text-sm">
                 Barcode
@@ -1506,7 +1301,7 @@ export default function CatalogItemsPage() {
 
             <RichDataTable
               columns={columns}
-              tableId="catalog-items-v2"
+              tableId="catalog-items-v4-product"
               initialColumnVisibility={defaultColumnVisibility}
               emptyMessage="No catalog items in this organisation yet. Add an item or import from Excel to get started."
               data={items.filter((it) => {
@@ -1563,7 +1358,6 @@ export default function CatalogItemsPage() {
                       organizations={organizations}
                       businessUnits={businessUnits}
                       taxCodes={taxCodes}
-                      warehouses={warehouses}
                       onReloadTaxCodes={reloadTaxCodes}
                       classifications={classifications}
                       onQuickCreateClassification={quickCreateClassification}
@@ -1648,28 +1442,48 @@ export default function CatalogItemsPage() {
                       organizations={organizations}
                       businessUnits={businessUnits}
                       taxCodes={taxCodes}
-                      warehouses={warehouses}
                       onReloadTaxCodes={reloadTaxCodes}
                       classifications={classifications}
                       onQuickCreateClassification={quickCreateClassification}
-                      variantCount={editVariants.length}
-                      variantStock={editVariantStock}
-                      lockMultiVariantStock={editVariants.length > 1}
                     />
 
                     <div className="border-t pt-4 space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="text-sm font-semibold inline-flex items-center gap-2">
-                          <Tag size={16} /> Variants ({editVariants.length})
+                          <Tag size={16} /> Manage Variants ({editVariants.length})
+                          {loadingVariants && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
                         </h4>
-                        <Link href="/catalog/variants" className="text-xs text-primary hover:underline">
-                          Manage variants
+                        <Link href={`/catalog/variants?catalogItemId=${encodeURIComponent(editing.id)}`} className="text-xs text-primary hover:underline">
+                          Open Variants page
                         </Link>
                       </div>
+                      {editVariantStock.length > 0 && (
+                        <div className="rounded-lg border overflow-hidden mb-2">
+                          <div className="px-3 py-1.5 text-xs font-medium bg-muted/40 border-b">Stock by variant</div>
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-left text-muted-foreground border-b">
+                                <th className="px-3 py-1.5 font-medium">Variant SKU</th>
+                                <th className="px-3 py-1.5 font-medium">Warehouse</th>
+                                <th className="px-3 py-1.5 font-medium text-right">Qty</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                              {editVariantStock.map((row) => (
+                                <tr key={`${row.variantId}-${row.warehouseId}`}>
+                                  <td className="px-3 py-1.5 font-mono">{row.variantSku}</td>
+                                  <td className="px-3 py-1.5">{row.warehouseName || '—'}</td>
+                                  <td className="px-3 py-1.5 text-right tabular-nums">{row.quantityOnHand}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                       {editVariants.length === 0 ? (
                         <p className="text-xs text-muted-foreground">No variants for this product yet.</p>
                       ) : (
-                        <div className="rounded-lg border divide-y text-xs max-h-40 overflow-y-auto">
+                        <div className="rounded-lg border divide-y text-xs max-h-56 overflow-y-auto">
                           {editVariants.map((v) => {
                             const opts = [1, 2, 3]
                               .map((i) => {
@@ -1680,21 +1494,46 @@ export default function CatalogItemsPage() {
                               .filter(Boolean)
                               .join(', ');
                             return (
-                              <Link
+                              <div
                                 key={v.id}
-                                href={`/catalog/variants?q=${encodeURIComponent(v.variantSku)}`}
-                                className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50"
-                                title="Open this variant"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => canUpdateVariant && setEditingVariant(v)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    if (canUpdateVariant) setEditingVariant(v);
+                                  }
+                                }}
+                                className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer"
+                                title="Edit this variant"
                               >
-                                <span className="font-mono text-primary underline-offset-2 hover:underline">{v.variantSku}</span>
-                                <span className="text-muted-foreground truncate mx-2">{opts || v.name || '—'}</span>
-                                <span className="capitalize">{v.status}</span>
-                              </Link>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-mono text-primary">{v.variantSku}</div>
+                                  <div className="text-muted-foreground truncate">{opts || v.name || '—'}</div>
+                                </div>
+                                <span className="capitalize shrink-0">{v.status}</span>
+                                {canUpdateVariant && (
+                                  <button
+                                    type="button"
+                                    className="p-1 hover:bg-muted rounded shrink-0"
+                                    title="Edit variant"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingVariant(v);
+                                    }}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
                       )}
-                      <p className="text-xs text-muted-foreground">Saving this product keeps all of its variants unchanged. Click a variant SKU to open it on the Variants screen.</p>
+                      <p className="text-xs text-muted-foreground">
+                        Click a row or Edit to change variant fields (cost, sell via price list, barcode, stock, image). Saving the product leaves variants unchanged.
+                      </p>
                     </div>
 
                     <div className="border-t pt-4 space-y-3">
@@ -1801,6 +1640,27 @@ export default function CatalogItemsPage() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {editingVariant && (
+              <VariantEditDialog
+                variant={editingVariant}
+                warehouses={warehouses}
+                canAddMedia={canAddMedia}
+                canDeleteMedia={canDeleteMedia}
+                onClose={() => setEditingVariant(null)}
+                onSaved={async () => {
+                  if (editing?.id) {
+                    await refreshEditVariants(editing.id);
+                    try {
+                      const res = await getCatalogItem(editing.id);
+                      setEditVariantStock((res.data as CatalogItem).variantStock ?? []);
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                }}
+              />
             )}
           </div>
         </main>

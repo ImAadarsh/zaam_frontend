@@ -203,7 +203,7 @@ export default function CustomersPage() {
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <User size={16} className="text-muted-foreground" />
-          <span className="font-medium">{row.original.customerNumber || '-'}</span>
+          <span className="font-medium">{row.original.customerNumber || row.original.id || '-'}</span>
         </div>
       )
     },

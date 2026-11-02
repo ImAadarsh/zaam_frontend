@@ -18,7 +18,7 @@ function AffiliatesPage() {
   const channelFilter = searchParams.get('channel');
   const preferB2b = channelFilter === 'b2b' || channelFilter === 'b2b_portal';
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'MARKETING']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'MARKETING', 'B2B_M']);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);

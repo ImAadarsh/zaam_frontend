@@ -13,16 +13,16 @@ import {
   listBusinessUnits,
   createBusinessUnit,
   updateBusinessUnit,
-  deleteBusinessUnit,
+  setBusinessUnitActive,
   listLocations,
   createLocation,
   updateLocation,
-  deleteLocation
+  setLocationActive
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
 import { useApiAccess } from '@/hooks/use-api-access';
-import { Plus, Building2, Edit2, Save, X, Trash2, MapPin, Briefcase, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Building2, Edit2, Save, X, Trash2, MapPin, Briefcase, ChevronDown, ChevronRight, Ban, CheckCircle2 } from 'lucide-react';
 
 // ISO 3166-1 alpha-2 country codes
 const COUNTRY_CODES = [
@@ -252,10 +252,10 @@ export default function OrganizationsPage() {
       setIsSuperAdmin([...sessionRoles, ...assignedRoles].includes('SUPER_ADMIN'));
       
       // Load business units and locations
-      const busRes = await listBusinessUnits();
+      const busRes = await listBusinessUnits(undefined, { activeOnly: false });
       setBusinessUnits(busRes.data || []);
       
-      const locsRes = await listLocations();
+      const locsRes = await listLocations(undefined, undefined, { activeOnly: false });
       setLocations(locsRes.data || []);
     } catch (e: any) {
       toast.error('Failed to load data');
@@ -338,12 +338,14 @@ export default function OrganizationsPage() {
 
   async function handleSaveOrg(id: string | null) {
     try {
+      // Organizations stay active for now — Status is not editable in the UI.
+      const { status: _omitStatus, id: _omitId, createdAt: _c, updatedAt: _u, ...fields } = orgFormData as Organization & Partial<Organization>;
       if (id) {
-        const res = await updateOrganization(id, orgFormData, logoFile || undefined);
+        const res = await updateOrganization(id, fields, logoFile || undefined);
         toast.success('Organization updated');
         setOrganizations(orgs => orgs.map(o => o.id === id ? res.data : o));
       } else {
-        const res = await createOrganization(orgFormData as any, logoFile || undefined);
+        const res = await createOrganization({ ...fields, name: fields.name!, status: 'active' }, logoFile || undefined);
         setOrganizations([res.data, ...organizations]);
         toast.success('Organization created');
         setShowCreateOrg(false);
@@ -438,25 +440,47 @@ export default function OrganizationsPage() {
     }
   }
 
-  async function handleDeleteBU(id: string) {
-    if (!confirm('Are you sure you want to delete this business unit?')) return;
+  async function handleToggleBU(bu: BusinessUnit) {
+    const enabling = bu.status !== 'active';
+    const action = enabling ? 'enable' : 'disable';
+    if (
+      !confirm(
+        enabling
+          ? `Enable business unit "${bu.code}"? It and its active locations will reappear in pickers and lists.`
+          : `Disable business unit "${bu.code}"? It and warehouses under it will be hidden from pickers, catalog, stock and POS — data is kept, not deleted.`
+      )
+    ) {
+      return;
+    }
     try {
-      await deleteBusinessUnit(id);
-      setBusinessUnits(bus => bus.filter(bu => bu.id !== id));
-      toast.success('Business unit deleted');
+      const res = await setBusinessUnitActive(bu.id, enabling);
+      const updated = res.data as BusinessUnit;
+      setBusinessUnits((bus) => bus.map((b) => (b.id === bu.id ? { ...b, ...updated } : b)));
+      toast.success(enabling ? 'Business unit enabled' : 'Business unit disabled');
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message ?? 'Delete failed');
+      toast.error(e?.response?.data?.error?.message ?? `Failed to ${action} business unit`);
     }
   }
 
-  async function handleDeleteLocation(id: string) {
-    if (!confirm('Are you sure you want to delete this location?')) return;
+  async function handleToggleLocation(loc: Location) {
+    const enabling = loc.status !== 'active';
+    const action = enabling ? 'enable' : 'disable';
+    if (
+      !confirm(
+        enabling
+          ? `Enable location "${loc.code}"? It will reappear in warehouse and stock pickers.`
+          : `Disable location "${loc.code}"? Warehouses, bins and stock under it will be hidden from pickers — data is kept, not deleted.`
+      )
+    ) {
+      return;
+    }
     try {
-      await deleteLocation(id);
-      setLocations(locs => locs.filter(loc => loc.id !== id));
-      toast.success('Location deleted');
+      const res = await setLocationActive(loc.id, enabling);
+      const updated = res.data as Location;
+      setLocations((locs) => locs.map((l) => (l.id === loc.id ? { ...l, ...updated } : l)));
+      toast.success(enabling ? 'Location enabled' : 'Location disabled');
     } catch (e: any) {
-      toast.error(e?.response?.data?.error?.message ?? 'Delete failed');
+      toast.error(e?.response?.data?.error?.message ?? `Failed to ${action} location`);
     }
   }
 
@@ -502,7 +526,7 @@ export default function OrganizationsPage() {
             isSuperAdmin && canCreateOrg
               ? [{ label: 'New Organization', onClick: () => { 
                   setShowCreateOrg(true); 
-                  setOrgFormData({ status: 'active' }); 
+                  setOrgFormData({}); 
                   setLogoFile(null);
                   setLogoPreview(null);
                 }, icon: <Plus size={16} /> }]
@@ -567,18 +591,6 @@ export default function OrganizationsPage() {
                                 value={orgFormData.taxId || ''}
                                 onChange={(e) => setOrgFormData({ ...orgFormData, taxId: e.target.value })}
                           />
-                        </div>
-                        <div>
-                              <label className="block text-sm font-medium mb-1.5">Status</label>
-                              <select
-                                className="select"
-                                value={orgFormData.status || 'active'}
-                                onChange={(e) => setOrgFormData({ ...orgFormData, status: e.target.value as any })}
-                              >
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="suspended">Suspended</option>
-                              </select>
                         </div>
                         <div className="md:col-span-2">
                           <label className="block text-sm font-medium mb-1.5">Logo</label>
@@ -702,9 +714,15 @@ export default function OrganizationsPage() {
                             {orgBUs.map((bu) => {
                               const buLocations = getLocationsForBU(bu.id);
                               const isBUExpanded = expandedBUs.has(bu.id);
+                              const buDisabled = bu.status !== 'active';
 
                               return (
-                                <div key={bu.id} className="rounded-lg border border-border bg-card p-4">
+                                <div
+                                  key={bu.id}
+                                  className={`rounded-lg border border-border bg-card p-4 transition-[opacity,filter] ${
+                                    buDisabled ? 'opacity-50 grayscale-[0.35]' : ''
+                                  }`}
+                                >
                                   <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1">
                                       {editingBUId === bu.id ? (
@@ -758,8 +776,13 @@ export default function OrganizationsPage() {
                                             <button className="btn btn-outline btn-xs" onClick={() => { setEditingBUId(bu.id); setBuFormData(bu); }}>
                                               <Edit2 size={12} />
                                             </button>
-                                            <button className="btn btn-outline btn-xs text-destructive" onClick={() => handleDeleteBU(bu.id)}>
-                                              <Trash2 size={12} />
+                                            <button
+                                              className={`btn btn-outline btn-xs ${buDisabled ? 'text-green-600' : 'text-amber-700'}`}
+                                              title={buDisabled ? 'Enable business unit' : 'Disable business unit'}
+                                              onClick={() => handleToggleBU(bu)}
+                                            >
+                                              {buDisabled ? <CheckCircle2 size={12} className="mr-1" /> : <Ban size={12} className="mr-1" />}
+                                              {buDisabled ? 'Enable' : 'Disable'}
                                             </button>
                                           </>
                                         )}
@@ -792,8 +815,15 @@ export default function OrganizationsPage() {
                                       {buLocations.length === 0 ? (
                                         <p className="text-xs text-muted-foreground">No locations</p>
                                       ) : (
-                                        buLocations.map((loc) => (
-                                          <div key={loc.id} className="rounded border border-border bg-muted/50 p-3">
+                                        buLocations.map((loc) => {
+                                          const locDisabled = loc.status !== 'active';
+                                          return (
+                                          <div
+                                            key={loc.id}
+                                            className={`rounded border border-border bg-muted/50 p-3 transition-[opacity,filter] ${
+                                              locDisabled ? 'opacity-50 grayscale-[0.35]' : ''
+                                            }`}
+                                          >
                                             {editingLocationId === loc.id ? (
                                               <div className="space-y-2">
                                                 <div className="grid grid-cols-2 gap-2">
@@ -832,29 +862,40 @@ export default function OrganizationsPage() {
                                                 </div>
                                               </div>
                                             ) : (
-                                              <div className="flex items-start justify-between">
+                                              <div className="flex items-start justify-between gap-2">
                                                 <div>
-                                                  <div className="flex items-center gap-2">
+                                                  <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="text-sm font-medium">{loc.code} - {loc.name}</span>
                                                     <span className="text-xs px-1.5 py-0.5 rounded bg-primary/20 text-primary">{loc.type}</span>
                                                     {loc.isDefault && <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-500">Default</span>}
+                                                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                                      loc.status === 'active' ? 'bg-green-500/20 text-green-500' : 'bg-gray-500/20 text-gray-500'
+                                                    }`}>
+                                                      {loc.status}
+                                                    </span>
                                                   </div>
                                                   {loc.city && <p className="text-xs text-muted-foreground mt-1">{loc.city}, {loc.countryCode}</p>}
                                                 </div>
                                                 {canCreate && (
-                                                  <div className="flex items-center gap-1">
+                                                  <div className="flex items-center gap-1 shrink-0">
                                                     <button className="btn btn-outline btn-xs" onClick={() => { setEditingLocationId(loc.id); setLocationFormData(loc); }}>
                                                       <Edit2 size={12} />
                                                     </button>
-                                                    <button className="btn btn-outline btn-xs text-destructive" onClick={() => handleDeleteLocation(loc.id)}>
-                                                      <Trash2 size={12} />
+                                                    <button
+                                                      className={`btn btn-outline btn-xs ${locDisabled ? 'text-green-600' : 'text-amber-700'}`}
+                                                      title={locDisabled ? 'Enable location' : 'Disable location'}
+                                                      onClick={() => handleToggleLocation(loc)}
+                                                    >
+                                                      {locDisabled ? <CheckCircle2 size={12} className="mr-1" /> : <Ban size={12} className="mr-1" />}
+                                                      {locDisabled ? 'Enable' : 'Disable'}
                                                     </button>
                                                   </div>
                                                 )}
                                               </div>
                                             )}
                                           </div>
-                                        ))
+                                          );
+                                        })
                                       )}
                                     </div>
                                   )}
@@ -916,14 +957,6 @@ export default function OrganizationsPage() {
                     <div>
                       <label className="block text-sm font-medium mb-1.5">Name *</label>
                       <input className="input" value={orgFormData.name || ''} onChange={(e) => setOrgFormData({ ...orgFormData, name: e.target.value })} required />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">Status</label>
-                      <select className="select" value={orgFormData.status || 'active'} onChange={(e) => setOrgFormData({ ...orgFormData, status: e.target.value as any })}>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="suspended">Suspended</option>
-                      </select>
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium mb-1.5">Logo</label>

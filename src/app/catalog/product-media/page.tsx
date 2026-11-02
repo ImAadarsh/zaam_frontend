@@ -15,6 +15,7 @@ import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, Plus, X, Image as ImageIcon, Eye, Loader2 } from 'lucide-react';
 import { MediaThumb, MediaLink, isLegacyStorageUrl, LEGACY_STORAGE_MESSAGE } from '@/components/catalog/media-preview';
+import { SearchableSelect } from '@/components/searchable-select';
 
 type ProductMedia = {
   id: string;
@@ -418,31 +419,37 @@ export default function ProductMediaPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2">
                         <label className="block text-sm font-medium mb-1.5">Catalog Item *</label>
-                        <select
+                        <SearchableSelect
                           value={form.catalogItemId}
-                          onChange={e => setForm(prev => ({ ...prev, catalogItemId: e.target.value, variantId: '' }))}
-                          className="select"
+                          onChange={(v) => setForm((prev) => ({ ...prev, catalogItemId: v, variantId: '' }))}
                           required
-                        >
-                          <option value="">Select...</option>
-                          {catalogItems.map(item => (
-                            <option key={item.id} value={item.id}>{item.sku} - {item.name}</option>
-                          ))}
-                        </select>
+                          placeholder="Search product by SKU or name…"
+                          options={catalogItems.map((item) => ({
+                            value: String(item.id),
+                            label: `${item.sku} — ${item.name}`,
+                            searchText: `${item.sku} ${item.name}`
+                          }))}
+                        />
                       </div>
                       <div className="col-span-2">
                         <label className="block text-sm font-medium mb-1.5">Variant</label>
-                        <select
+                        <SearchableSelect
                           value={form.variantId}
-                          onChange={e => setForm(prev => ({ ...prev, variantId: e.target.value }))}
-                          className="select"
+                          onChange={(v) => setForm((prev) => ({ ...prev, variantId: v }))}
                           disabled={!form.catalogItemId}
-                        >
-                          <option value="">None (Product-level media)</option>
-                          {variants.filter(v => v.catalogItem?.id === form.catalogItemId).map(v => (
-                            <option key={v.id} value={v.id}>{v.variantSku} - {v.name || 'N/A'}</option>
-                          ))}
-                        </select>
+                          placeholder="Search variant… or leave empty for product-level"
+                          emptyLabel="None (Product-level media)"
+                          options={[
+                            { value: '', label: 'None (Product-level media)', searchText: 'none product-level' },
+                            ...variants
+                              .filter((v) => String(v.catalogItem?.id) === String(form.catalogItemId))
+                              .map((v) => ({
+                                value: String(v.id),
+                                label: `${v.variantSku} — ${v.name || 'N/A'}`,
+                                searchText: `${v.variantSku} ${v.name || ''}`
+                              }))
+                          ]}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1.5">Type *</label>
@@ -557,16 +564,22 @@ export default function ProductMediaPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2">
                         <label className="block text-sm font-medium mb-1.5">Variant</label>
-                        <select
+                        <SearchableSelect
                           value={editForm.variantId}
-                          onChange={e => setEditForm(prev => ({ ...prev, variantId: e.target.value }))}
-                          className="select"
-                        >
-                          <option value="">None (Product-level media)</option>
-                          {variants.filter(v => editing?.catalogItem && v.catalogItem?.id === editing.catalogItem.id).map(v => (
-                            <option key={v.id} value={v.id}>{v.variantSku} - {v.name || 'N/A'}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => setEditForm((prev) => ({ ...prev, variantId: v }))}
+                          placeholder="Search variant… or leave empty for product-level"
+                          emptyLabel="None (Product-level media)"
+                          options={[
+                            { value: '', label: 'None (Product-level media)', searchText: 'none product-level' },
+                            ...variants
+                              .filter((v) => editing?.catalogItem && String(v.catalogItem?.id) === String(editing.catalogItem.id))
+                              .map((v) => ({
+                                value: String(v.id),
+                                label: `${v.variantSku} — ${v.name || 'N/A'}`,
+                                searchText: `${v.variantSku} ${v.name || ''}`
+                              }))
+                          ]}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1.5">Type *</label>

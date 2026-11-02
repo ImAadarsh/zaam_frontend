@@ -245,9 +245,18 @@ export function RichDataTable<TData, TValue>({
             setGlobalFilter(typeof saved.globalFilter === 'string' ? saved.globalFilter : '');
             const savedVis =
                 saved.columnVisibility && typeof saved.columnVisibility === 'object'
-                    ? saved.columnVisibility
+                    ? (saved.columnVisibility as VisibilityState)
                     : null;
-            setColumnVisibility(savedVis && Object.keys(savedVis).length > 0 ? savedVis : fallbackVisibility);
+            // Merge: keep known saved keys, apply defaults for new columns, drop unknown ids.
+            if (savedVis && Object.keys(savedVis).length > 0) {
+                const merged: VisibilityState = { ...fallbackVisibility };
+                for (const [id, visible] of Object.entries(savedVis)) {
+                    if (ids.has(id)) merged[id] = visible;
+                }
+                setColumnVisibility(merged);
+            } else {
+                setColumnVisibility(fallbackVisibility);
+            }
         } else {
             setColumnVisibility(fallbackVisibility);
         }
@@ -353,12 +362,17 @@ export function RichDataTable<TData, TValue>({
                                 <div className="text-xs font-medium text-muted-foreground mb-2 px-2 uppercase tracking-wider">Toggle Columns</div>
                                 <div className="max-h-64 overflow-y-auto space-y-1">
                                     {table.getAllLeafColumns().filter((column) => column.getCanHide()).map((column) => {
+                                        const def = column.columnDef as ColumnDef<any, any>;
+                                        const label =
+                                            typeof def.header === 'string'
+                                                ? def.header
+                                                : column.id;
                                         return (
                                             <div key={column.id} className="flex items-center px-2 py-1.5 hover:bg-muted rounded-lg cursor-pointer transition-colors" onClick={column.getToggleVisibilityHandler()}>
                                                 <div className={`w-4 h-4 mr-2 rounded border flex items-center justify-center transition-colors ${column.getIsVisible() ? 'bg-primary border-primary' : 'border-muted-foreground'}`}>
                                                     {column.getIsVisible() && <div className="w-2 h-2 bg-white rounded-sm" />}
                                                 </div>
-                                                <span className="text-sm capitalize">{column.id}</span>
+                                                <span className="text-sm">{label}</span>
                                             </div>
                                         );
                                     })}

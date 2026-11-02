@@ -44,6 +44,8 @@ export function allowedPagesFromSession(session: Session | null): AllowedPages {
   if (!user) return null;
   const roles = (user.roles || []).map((r: any) => String(typeof r === 'string' ? r : r?.code || '').toUpperCase());
   if (roles.includes('SUPER_ADMIN')) return null;
+  // API contract: null = unrestricted; string[] = explicit grants; undefined = not loaded yet → built-ins.
+  if (user.pages === null) return null;
   if (Array.isArray(user.pages)) return new Set(user.pages);
   return new Set(builtInPagesForRoles(roles));
 }

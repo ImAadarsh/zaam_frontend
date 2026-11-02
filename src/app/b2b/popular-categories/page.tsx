@@ -36,7 +36,7 @@ function newTile(order: number): Tile {
 export default function B2bPopularCategoriesPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [loading, setLoading] = useState(true);

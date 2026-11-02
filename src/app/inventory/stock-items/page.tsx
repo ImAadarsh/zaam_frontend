@@ -10,6 +10,7 @@ import {
   deleteStockItem,
   listWarehouses,
   listBins,
+  listRacks,
   listVariants
 } from '@/lib/api';
 import { toast } from 'sonner';
@@ -20,6 +21,7 @@ import { useApiAccess } from '@/hooks/use-api-access';
 import { ColumnDef } from '@tanstack/react-table';
 import { Package2, Plus, X, Pencil, Trash2, Search } from 'lucide-react';
 import { activeWarehouses } from '@/components/inventory/location-status-badge';
+import { SearchableSelect } from '@/components/searchable-select';
 
 type StockItem = {
   id: string;
@@ -81,6 +83,7 @@ export default function StockItemsPage() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [bins, setBins] = useState<any[]>([]);
+  const [racks, setRacks] = useState<any[]>([]);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<StockItem | null>(null);
@@ -92,6 +95,7 @@ export default function StockItemsPage() {
   const [form, setForm] = useState({
     variantId: '',
     warehouseId: '',
+    rackId: '',
     binId: '',
     quantityOnHand: '',
     lotNumber: '',
@@ -138,27 +142,38 @@ export default function StockItemsPage() {
     }
   }
 
-  async function loadBins(warehouseId: string) {
+  async function loadLocationOptions(warehouseId: string) {
     if (!warehouseId) {
       setBins([]);
+      setRacks([]);
       return;
     }
     try {
-      const binsRes = await listBins({ warehouseId });
+      const [binsRes, racksRes] = await Promise.all([
+        listBins({ warehouseId, limit: 200 }),
+        listRacks({ warehouseId, limit: 200 })
+      ]);
       setBins(binsRes.data || []);
+      setRacks(racksRes.data || []);
     } catch (e: any) {
-      toast.error('Failed to load bins');
+      toast.error('Failed to load racks/bins');
     }
   }
 
   useEffect(() => {
     if (form.warehouseId) {
-      loadBins(form.warehouseId);
+      loadLocationOptions(form.warehouseId);
     } else {
       setBins([]);
-      setForm(prev => ({ ...prev, binId: '' }));
+      setRacks([]);
+      setForm((prev) => ({ ...prev, rackId: '', binId: '' }));
     }
   }, [form.warehouseId]);
+
+  const filteredBins = useMemo(() => {
+    if (!form.rackId) return bins;
+    return bins.filter((b) => String(b.rack?.id || b.rackId || '') === String(form.rackId));
+  }, [bins, form.rackId]);
 
   useEffect(() => {
     if (variantSearch) {
@@ -269,6 +284,7 @@ export default function StockItemsPage() {
     setForm({
       variantId: '',
       warehouseId: '',
+      rackId: '',
       binId: '',
       quantityOnHand: '',
       lotNumber: '',
@@ -284,6 +300,7 @@ export default function StockItemsPage() {
     setSelectedVariant(null);
     setVariantSearch('');
     setBins([]);
+    setRacks([]);
   }
 
   function selectVariant(variant: Variant) {
@@ -392,6 +409,7 @@ export default function StockItemsPage() {
               setForm({
                 variantId: item.variant?.id || '',
                 warehouseId: item.warehouse?.id || '',
+                rackId: (item.bin as any)?.rack?.id || (item.bin as any)?.rackId || '',
                 binId: item.bin?.id || '',
                 quantityOnHand: item.quantityOnHand?.toString() || '',
                 lotNumber: item.lotNumber || '',
@@ -405,7 +423,7 @@ export default function StockItemsPage() {
                 status: (item.status || 'available') as any
               });
               if (item.warehouse?.id) {
-                loadBins(item.warehouse.id);
+                loadLocationOptions(item.warehouse.id);
               }
             }}
             className="p-1 hover:bg-muted rounded"
@@ -586,31 +604,56 @@ export default function StockItemsPage() {
                         <label className="block text-sm font-medium mb-2">
                           Warehouse <span className="text-destructive">*</span>
                         </label>
-                        <select
+                        <SearchableSelect
                           value={form.warehouseId}
-                          onChange={e => setForm(prev => ({ ...prev, warehouseId: e.target.value, binId: '' }))}
-                          className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                          onChange={(warehouseId) =>
+                            setForm((prev) => ({ ...prev, warehouseId, rackId: '', binId: '' }))
+                          }
                           required
-                        >
-                          <option value="">Select warehouse...</option>
-                          {activeWarehouses(warehouses).map(w => (
-                            <option key={w.id} value={w.id}>{w.name}</option>
-                          ))}
-                        </select>
+                          placeholder="Search warehouse…"
+                          emptyLabel="Select warehouse…"
+                          options={activeWarehouses(warehouses).map((w) => ({
+                            value: String(w.id),
+                            label: w.name,
+                            searchText: `${w.code || ''} ${w.name || ''}`
+                          }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Rack</label>
+                        <SearchableSelect
+                          value={form.rackId}
+                          onChange={(rackId) => setForm((prev) => ({ ...prev, rackId, binId: '' }))}
+                          disabled={!form.warehouseId}
+                          placeholder="Search rack…"
+                          emptyLabel="All racks"
+                          options={racks
+                            .filter((r) => r.status === 'active' || r.id === form.rackId)
+                            .map((r) => ({
+                              value: String(r.id),
+                              label: r.name && r.name !== r.code ? `${r.code} — ${r.name}` : r.code,
+                              searchText: `${r.code || ''} ${r.name || ''}`
+                            }))}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Bin</label>
-                        <select
+                        <SearchableSelect
                           value={form.binId}
-                          onChange={e => setForm(prev => ({ ...prev, binId: e.target.value }))}
-                          className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                          onChange={(binId) => setForm((prev) => ({ ...prev, binId }))}
                           disabled={!form.warehouseId}
-                        >
-                          <option value="">No bin</option>
-                          {bins.filter(b => b.status === 'active' || b.id === form.binId).map(b => (
-                            <option key={b.id} value={b.id}>{b.code} {b.name ? `- ${b.name}` : ''}</option>
-                          ))}
-                        </select>
+                          placeholder="Search bin…"
+                          emptyLabel="No bin"
+                          options={filteredBins
+                            .filter((b) => b.status === 'active' || b.id === form.binId)
+                            .map((b) => ({
+                              value: String(b.id),
+                              label: [b.code, b.name, b.rack?.code ? `rack ${b.rack.code}` : null]
+                                .filter(Boolean)
+                                .join(' — '),
+                              searchText: `${b.code || ''} ${b.name || ''} ${b.rack?.code || ''}`
+                            }))}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">
@@ -765,17 +808,38 @@ export default function StockItemsPage() {
                         </div>
                       </div>
                       <div>
+                        <label className="block text-sm font-medium mb-2">Rack</label>
+                        <SearchableSelect
+                          value={form.rackId}
+                          onChange={(rackId) => setForm((prev) => ({ ...prev, rackId, binId: '' }))}
+                          placeholder="Search rack…"
+                          emptyLabel="All racks"
+                          options={racks
+                            .filter((r) => r.status === 'active' || r.id === form.rackId)
+                            .map((r) => ({
+                              value: String(r.id),
+                              label: r.name && r.name !== r.code ? `${r.code} — ${r.name}` : r.code,
+                              searchText: `${r.code || ''} ${r.name || ''}`
+                            }))}
+                        />
+                      </div>
+                      <div>
                         <label className="block text-sm font-medium mb-2">Bin</label>
-                        <select
+                        <SearchableSelect
                           value={form.binId}
-                          onChange={e => setForm(prev => ({ ...prev, binId: e.target.value }))}
-                          className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                        >
-                          <option value="">No bin</option>
-                          {bins.filter(b => b.status === 'active' || b.id === form.binId).map(b => (
-                            <option key={b.id} value={b.id}>{b.code} {b.name ? `- ${b.name}` : ''}</option>
-                          ))}
-                        </select>
+                          onChange={(binId) => setForm((prev) => ({ ...prev, binId }))}
+                          placeholder="Search bin…"
+                          emptyLabel="No bin"
+                          options={filteredBins
+                            .filter((b) => b.status === 'active' || b.id === form.binId)
+                            .map((b) => ({
+                              value: String(b.id),
+                              label: [b.code, b.name, b.rack?.code ? `rack ${b.rack.code}` : null]
+                                .filter(Boolean)
+                                .join(' — '),
+                              searchText: `${b.code || ''} ${b.name || ''} ${b.rack?.code || ''}`
+                            }))}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Quantity On Hand</label>

@@ -60,7 +60,7 @@ export default function InventoryDashboard() {
   }, [hydrated, hasAccess, router, session?.accessToken, session?.user?.organizationId]);
 
   const stats = useMemo(() => {
-    const { warehouses, stockItems, suppliers, purchaseOrders, grns, adjustments, transfers } = raw;
+    const { warehouses, stockItems, suppliers, purchaseOrders, grns, transfers } = raw;
     const posInRange = purchaseOrders.filter((po: any) => inRange(po.orderDate || po.createdAt, range));
     const grnsInRange = grns.filter((g: any) => inRange(g.receivedDate || g.createdAt, range));
     return {
@@ -81,8 +81,7 @@ export default function InventoryDashboard() {
         (sum: number, g: any) => sum + (g.lines || []).reduce((s: number, l: any) => s + Number(l.quantityReceived || 0), 0),
         0
       ),
-      transfersInRange: transfers.filter((t: any) => inRange(t.transferDate || t.createdAt, range)).length,
-      adjustmentsInRange: adjustments.filter((a: any) => inRange(a.adjustmentDate || a.createdAt, range)).length
+      transfersInRange: transfers.filter((t: any) => inRange(t.transferDate || t.createdAt, range)).length
     };
   }, [raw, range]);
 
@@ -225,14 +224,6 @@ export default function InventoryDashboard() {
                   value={stats.transfersInRange.toString()}
                   icon={<ArrowRightLeft className="h-5 w-5" />}
                   hint="Transfers in selected period"
-                />
-              </Link>
-              <Link href="/inventory/stock-adjustments">
-                <StatCard
-                  title="Stock Adjustments"
-                  value={stats.adjustmentsInRange.toString()}
-                  icon={<Boxes className="h-5 w-5" />}
-                  hint="Adjustments in selected period"
                 />
               </Link>
             </motion.div>

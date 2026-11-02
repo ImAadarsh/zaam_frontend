@@ -74,20 +74,20 @@ function ModuleNavSections({ pathname, hasRole }: NavCtx) {
           <Item href="/catalog/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/catalog/dashboard'} />
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER', 'SALES_REP']) && (
             <>
-              <Item href="/catalog/items" icon={<Package2 size={18} />} label="Catalog Items" active={pathname?.startsWith('/catalog/items')} />
-              <Item href="/catalog/classifications" icon={<FolderTree size={18} />} label="Classifications" active={pathname?.startsWith('/catalog/classifications')} />
-              <Item href="/catalog/variants" icon={<Tag size={18} />} label="Variants" active={pathname?.startsWith('/catalog/variants')} />
-              <Item href="/catalog/product-media" icon={<ImageIcon size={18} />} label="Product Media" active={pathname?.startsWith('/catalog/product-media')} />
+              <Item href="/catalog/items" icon={<Package2 size={18} />} label="Catalog item" active={pathname?.startsWith('/catalog/items')} />
+              <Item href="/catalog/variants" icon={<Tag size={18} />} label="Variant(s)" active={pathname?.startsWith('/catalog/variants')} />
+              <Item href="/catalog/classifications" icon={<FolderTree size={18} />} label="Classification(s)" active={pathname?.startsWith('/catalog/classifications')} />
+              <Item href="/catalog/product-media" icon={<ImageIcon size={18} />} label="Product media" active={pathname?.startsWith('/catalog/product-media')} />
             </>
           )}
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'FINANCE']) && (
-            <Item href="/catalog/price-lists" icon={<DollarSign size={18} />} label="Price Lists" active={pathname?.startsWith('/catalog/price-lists')} />
+            <Item href="/catalog/price-lists" icon={<DollarSign size={18} />} label="Price list(s)" active={pathname?.startsWith('/catalog/price-lists')} />
           )}
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
-            <Item href="/catalog/tax-codes" icon={<Receipt size={18} />} label="Tax Codes" active={pathname?.startsWith('/catalog/tax-codes')} />
+            <Item href="/catalog/tax-codes" icon={<Receipt size={18} />} label="Tax codes" active={pathname?.startsWith('/catalog/tax-codes')} />
           )}
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'WAREHOUSE_MANAGER']) && (
-            <Item href="/catalog/compliance-documents" icon={<FileText size={18} />} label="Compliance Documents" active={pathname?.startsWith('/catalog/compliance-documents')} />
+            <Item href="/catalog/compliance-documents" icon={<FileText size={18} />} label="Compliance document(s)" active={pathname?.startsWith('/catalog/compliance-documents')} />
           )}
         </>
       )}
@@ -131,8 +131,7 @@ function ModuleNavSections({ pathname, hasRole }: NavCtx) {
             <>
               <Item href="/inventory/grn" icon={<Receipt size={18} />} label="GRN" active={pathname?.startsWith('/inventory/grn')} />
               <Item href="/inventory/stock-transfers" icon={<ArrowRightLeft size={18} />} label="Stock Transfers" active={pathname?.startsWith('/inventory/stock-transfers')} />
-              <Item href="/inventory/stock-adjustments" icon={<TrendingUp size={18} />} label="Stock Adjustments" active={pathname?.startsWith('/inventory/stock-adjustments')} />
-              <Item href="/inventory/cycle-counts" icon={<ClipboardList size={18} />} label="Cycle Counts" active={pathname?.startsWith('/inventory/cycle-counts')} />
+              {/* Soft-hidden for now: Stock Adjustments + Cycle Counts remain reachable by direct URL */}
             </>
           )}
         </>
@@ -155,9 +154,9 @@ function ModuleNavSections({ pathname, hasRole }: NavCtx) {
       {isB2b && (
         <>
           <SectionHeader label="B2B Sale Channel" />
-          <Item href="/b2b/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/b2b/dashboard'} />
-          {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']) && (
+          {hasRole(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']) && (
             <>
+              <Item href="/b2b/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/b2b/dashboard'} />
               <Item href="/b2b/products" icon={<Package2 size={18} />} label="Products" active={pathname?.startsWith('/b2b/products')} />
               <Item href="/b2b/retailers" icon={<Store size={18} />} label="Retailers" active={pathname?.startsWith('/b2b/retailers')} />
               <Item href="/b2b/orders" icon={<ShoppingCart size={18} />} label="Orders" active={pathname?.startsWith('/b2b/orders')} />
@@ -364,7 +363,13 @@ export function Sidebar() {
   const hasRole = (requiredRoles: string[]) => {
     if (!hydrated) return false;
     const roleCodes = userRoles.map((r: any) => typeof r === 'string' ? r : (r?.code || r?.name || '')).map((r: string) => r.toUpperCase());
-    return roleCodes.includes('SUPER_ADMIN') || requiredRoles.some(role => roleCodes.includes(role.toUpperCase()));
+    if (roleCodes.includes('SUPER_ADMIN') || requiredRoles.some(role => roleCodes.includes(role.toUpperCase()))) {
+      return true;
+    }
+    // Custom / IAM page grants: open the role gate; each <Item> still filters via canAccessPath.
+    const pages = session?.user?.pages;
+    if (pages === null) return true;
+    return Array.isArray(pages) && pages.length > 0;
   };
 
   function doLogout() {

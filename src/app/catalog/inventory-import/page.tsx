@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner';
 import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
+import { SearchableSelect } from '@/components/searchable-select';
 import {
   Upload,
   FileSpreadsheet,
@@ -20,6 +21,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Package2,
+  Layers,
   Warehouse,
   Users,
   X,
@@ -39,7 +41,6 @@ function friendlyImportError(e: any, fallback: string): string {
     return 'That file type is not supported. Upload an .xlsx or .xls Excel workbook.';
   }
   if (status === 400 && raw) {
-    // Strip Zod / stack noise; keep the first sentence.
     return raw.split('\n')[0].slice(0, 280);
   }
   if (status === 401 || status === 403) {
@@ -51,9 +52,16 @@ function friendlyImportError(e: any, fallback: string): string {
   return raw || fallback;
 }
 
+type PreviewRow = Record<string, unknown>;
+
 type PreviewData = {
+  mode?: 'legacy' | 'catalog_variant';
   rowCount: number;
-  sample: Array<Record<string, unknown>>;
+  catalogCount?: number;
+  variantCount?: number;
+  catalogSample?: PreviewRow[];
+  variantSample?: PreviewRow[];
+  sample: PreviewRow[];
   categories: string[];
   warehouses: string[];
   suppliers: string[];
@@ -61,15 +69,19 @@ type PreviewData = {
   warningCount?: number;
 };
 
-function formatSheetDate(value: unknown): string {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return '-';
-  const [y, m, d] = value.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC'
-  });
+function cell(row: PreviewRow, key: string, fallback = '-'): string {
+  const v = row[key];
+  if (v == null || v === '') return fallback;
+  return String(v);
+}
+
+function formatOptions(row: PreviewRow): string {
+  const parts = [
+    row.option1Value,
+    row.option2Value,
+    row.option3Value
+  ].filter((v) => v != null && String(v).trim());
+  return parts.length ? parts.map(String).join(' / ') : '-';
 }
 
 type ImportResult = {
@@ -80,12 +92,23 @@ type ImportResult = {
   barcodesCreated: number;
   warehousesCreated: number;
   binsCreated: number;
+  racksCreated?: number;
   suppliersCreated: number;
   stockItemsCreated: number;
   stockItemsUpdated: number;
   taxCodesCreated: number;
   errors: Array<{ sku: string; rowNumber: number; message: string }>;
 };
+
+function previewSummaryToast(data: PreviewData): string {
+  const mode = data.mode || 'legacy';
+  const catalog = data.catalogCount ?? data.rowCount;
+  const variants = data.variantCount ?? 0;
+  if (mode === 'catalog_variant') {
+    return `Preview ready · ${catalog} catalog · ${variants} variant${variants === 1 ? '' : 's'}`;
+  }
+  return `Preview ready · ${catalog} product row(s)`;
+}
 
 export default function InventoryImportPage() {
   const router = useRouter();
@@ -104,6 +127,22 @@ export default function InventoryImportPage() {
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
 
+  const orgOptions = useMemo(
+    () => organizations.map((o) => ({ value: String(o.id), label: o.name, searchText: o.name })),
+    [organizations]
+  );
+  const buOptions = useMemo(
+    () => [
+      { value: '', label: 'None', searchText: 'none' },
+      ...businessUnits.map((bu) => ({
+        value: String(bu.id),
+        label: bu.name,
+        searchText: bu.name
+      }))
+    ],
+    [businessUnits]
+  );
+
   useEffect(() => {
     if (!hydrated) return;
     if (!session?.accessToken) {
@@ -121,7 +160,7 @@ export default function InventoryImportPage() {
         const defaultOrg = session.user?.organizationId ?? orgRes.data?.[0]?.id ?? '';
         setOrganizationId(defaultOrg);
         if (defaultOrg) {
-          const buRes = await listBusinessUnits(defaultOrg).catch(() => ({ data: [] }));
+          const buRes = await listBusinessUnits(defaultOrg, { activeOnly: true }).catch(() => ({ data: [] }));
           setBusinessUnits(buRes.data ?? []);
           if (buRes.data?.[0]?.id) setBusinessUnitId(buRes.data[0].id);
         }
@@ -138,7 +177,7 @@ export default function InventoryImportPage() {
       setBusinessUnits([]);
       return;
     }
-    listBusinessUnits(organizationId)
+    listBusinessUnits(organizationId, { activeOnly: true })
       .then((res) => {
         setBusinessUnits(res.data ?? []);
         setBusinessUnitId((prev) => prev || res.data?.[0]?.id || '');
@@ -156,7 +195,7 @@ export default function InventoryImportPage() {
     try {
       const res = await previewInventoryExcelImport(file);
       setPreview(res.data);
-      toast.success(`Preview ready · ${res.data.rowCount} product row(s)`);
+      toast.success(previewSummaryToast(res.data));
     } catch (e: any) {
       toast.error(friendlyImportError(e, 'Could not read that Excel file. Check it is .xlsx/.xls and try again.'));
       setPreview(null);
@@ -209,17 +248,34 @@ export default function InventoryImportPage() {
     );
   }
 
+  const isCatalogVariant = preview?.mode === 'catalog_variant';
+  // Prefer dedicated samples; fall back so stale APIs that only send `sample` still render rows.
+  const catalogRows = preview?.catalogSample?.length
+    ? preview.catalogSample
+    : preview?.sample?.length
+      ? isCatalogVariant
+        ? preview.sample.filter((r) => r.productOnly === true || r.sheetName === 'Catalog')
+        : preview.sample
+      : [];
+  const variantRows = preview?.variantSample?.length
+    ? preview.variantSample
+    : preview?.sample?.length
+      ? isCatalogVariant
+        ? preview.sample.filter((r) => r.productOnly !== true && r.sheetName !== 'Catalog')
+        : preview.sample
+      : [];
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 lg:ml-[280px]">
         <Header title="Catalog · Inventory Import" />
-        <div className="p-6 space-y-6 max-w-5xl">
+        <div className="p-6 space-y-6 max-w-6xl">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold">Import Inventory Excel</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Upload the Zaam inventory sheet to create products, barcodes, warehouses, bins, suppliers, and stock levels.
+                Prefer the two-sheet <strong>Catalog</strong> + <strong>Variant</strong> workbook. Legacy single-sheet files still work.
               </p>
             </div>
             <a
@@ -237,16 +293,16 @@ export default function InventoryImportPage() {
               <label className="text-sm">
                 Organization *
                 {session?.user?.roles?.includes('SUPER_ADMIN') ? (
-                  <select
-                    className="mt-1 select w-full"
-                    value={organizationId}
-                    onChange={(e) => setOrganizationId(e.target.value)}
-                  >
-                    <option value="">Select…</option>
-                    {organizations.map((o) => (
-                      <option key={o.id} value={o.id}>{o.name}</option>
-                    ))}
-                  </select>
+                  <div className="mt-1">
+                    <SearchableSelect
+                      value={organizationId}
+                      onChange={setOrganizationId}
+                      options={orgOptions}
+                      placeholder="Search organisation…"
+                      emptyLabel="Select organisation…"
+                      required
+                    />
+                  </div>
                 ) : (
                   <input
                     className="mt-1 input w-full"
@@ -257,16 +313,15 @@ export default function InventoryImportPage() {
               </label>
               <label className="text-sm">
                 Business Unit
-                <select
-                  className="mt-1 select w-full"
-                  value={businessUnitId}
-                  onChange={(e) => setBusinessUnitId(e.target.value)}
-                >
-                  <option value="">None</option>
-                  {businessUnits.map((bu) => (
-                    <option key={bu.id} value={bu.id}>{bu.name}</option>
-                  ))}
-                </select>
+                <div className="mt-1">
+                  <SearchableSelect
+                    value={businessUnitId}
+                    onChange={setBusinessUnitId}
+                    options={buOptions}
+                    placeholder="Search business unit…"
+                    emptyLabel="None"
+                  />
+                </div>
               </label>
               <label className="text-sm">
                 Duplicate SKUs
@@ -299,14 +354,14 @@ export default function InventoryImportPage() {
                 {file ? file.name : 'Drop inventory Excel here or choose a file'}
               </p>
               <p className="text-xs text-muted-foreground mb-1">
-                Required columns: <strong>SKU / Item Code</strong> and <strong>Product Name</strong>. Optional: Barcode, Category, Brand, UOM, Pack Size, Qty, Prices, Tax, Warehouse, Bin, Supplier, Batch, Expiry, Status, Remarks…
+                Two-sheet format: <strong>Catalog</strong> (SKU, Product Name, Category, Brand…) then <strong>Variant</strong> (Catalog SKU, Variant SKU, Options, Warehouse, Qty, Bin, Rack…).
               </p>
               <p className="text-xs text-muted-foreground mb-4">
                 Not sure of the format?{' '}
                 <a href={TEMPLATE_URL} download className="underline text-primary">
                   Download the sample Excel
                 </a>{' '}
-                (example rows + an Instructions sheet). Dates are read as UK day/month: dd/mm/yyyy (e.g. 07/10/2026 = 7 Oct 2026).
+                (Catalog + Variant sheets + Instructions). Dates are UK day/month: dd/mm/yyyy.
               </p>
               <input
                 type="file"
@@ -356,14 +411,27 @@ export default function InventoryImportPage() {
           </div>
 
           {preview && (
-            <div className="rounded-xl border bg-card p-5 space-y-4">
+            <div className="rounded-xl border bg-card p-5 space-y-5">
               <h2 className="font-semibold">Preview</h2>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border p-3 flex items-center gap-3">
                   <Package2 className="text-primary" size={20} />
                   <div>
-                    <div className="text-lg font-semibold">{preview.rowCount}</div>
-                    <div className="text-xs text-muted-foreground">Product rows</div>
+                    <div className="text-lg font-semibold">{preview.catalogCount ?? preview.rowCount}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {isCatalogVariant ? 'Catalog products' : 'Product rows'}
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg border p-3 flex items-center gap-3">
+                  <Layers className="text-primary" size={20} />
+                  <div>
+                    <div className="text-lg font-semibold">
+                      {isCatalogVariant ? (preview.variantCount ?? 0) : (preview.variantCount ?? preview.rowCount)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {isCatalogVariant ? 'Variants' : 'Variant / stock rows'}
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-lg border p-3 flex items-center gap-3">
@@ -397,35 +465,112 @@ export default function InventoryImportPage() {
                 </div>
               )}
 
-              <div className="overflow-auto rounded-lg border">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-3 py-2 text-left">SKU</th>
-                      <th className="px-3 py-2 text-left">Name</th>
-                      <th className="px-3 py-2 text-left">Category</th>
-                      <th className="px-3 py-2 text-left">Warehouse</th>
-                      <th className="px-3 py-2 text-right">Qty</th>
-                      <th className="px-3 py-2 text-right">Cost</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">Expiry</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">Date Added</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.sample.map((row, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-3 py-2 font-mono">{String(row.sku ?? '')}</td>
-                        <td className="px-3 py-2 max-w-[220px] truncate">{String(row.name ?? '')}</td>
-                        <td className="px-3 py-2">{String(row.category ?? '-')}</td>
-                        <td className="px-3 py-2 max-w-[160px] truncate">{String(row.warehouseName ?? '-')}</td>
-                        <td className="px-3 py-2 text-right">{String(row.openingQuantity ?? '-')}</td>
-                        <td className="px-3 py-2 text-right">{String(row.costPrice ?? '-')}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{formatSheetDate(row.expiryDate)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{formatSheetDate(row.dateAdded)}</td>
+              {/* Catalog table first */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">
+                  Catalog
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {preview.catalogCount ?? catalogRows.length} row(s)
+                    {catalogRows.length < (preview.catalogCount ?? 0) ? ` · showing ${catalogRows.length}` : ''}
+                  </span>
+                </h3>
+                <div className="overflow-auto rounded-lg border">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-3 py-2 text-left">SKU</th>
+                        <th className="px-3 py-2 text-left">Product Name</th>
+                        <th className="px-3 py-2 text-left">Category</th>
+                        <th className="px-3 py-2 text-left">Brand</th>
+                        <th className="px-3 py-2 text-left">UOM</th>
+                        <th className="px-3 py-2 text-left">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {catalogRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">
+                            No catalog rows
+                          </td>
+                        </tr>
+                      ) : (
+                        catalogRows.map((row, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="px-3 py-2 font-mono">{cell(row, 'sku')}</td>
+                            <td className="px-3 py-2 max-w-[220px] truncate">{cell(row, 'name')}</td>
+                            <td className="px-3 py-2">{cell(row, 'category')}</td>
+                            <td className="px-3 py-2">{cell(row, 'brand')}</td>
+                            <td className="px-3 py-2">{cell(row, 'uom')}</td>
+                            <td className="px-3 py-2 capitalize">{cell(row, 'status')}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Variants table below */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">
+                  Variants
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {isCatalogVariant ? (preview.variantCount ?? variantRows.length) : (preview.variantCount ?? catalogRows.length)} row(s)
+                    {isCatalogVariant && variantRows.length < (preview.variantCount ?? 0)
+                      ? ` · showing ${variantRows.length}`
+                      : ''}
+                  </span>
+                </h3>
+                <div className="overflow-auto rounded-lg border">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Catalog SKU</th>
+                        <th className="px-3 py-2 text-left">Variant SKU</th>
+                        <th className="px-3 py-2 text-left">Variant Name</th>
+                        <th className="px-3 py-2 text-left">Options</th>
+                        <th className="px-3 py-2 text-left">Barcode</th>
+                        <th className="px-3 py-2 text-left">Warehouse</th>
+                        <th className="px-3 py-2 text-left">Bin</th>
+                        <th className="px-3 py-2 text-left">Rack</th>
+                        <th className="px-3 py-2 text-right">Qty</th>
+                        <th className="px-3 py-2 text-right">Cost</th>
+                        <th className="px-3 py-2 text-right">Selling</th>
+                        <th className="px-3 py-2 text-right">Reorder</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {variantRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={12} className="px-3 py-4 text-center text-muted-foreground">
+                            No variant rows
+                          </td>
+                        </tr>
+                      ) : (
+                        variantRows.map((row, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="px-3 py-2 font-mono">
+                              {cell(row, 'catalogSku', cell(row, 'sku'))}
+                            </td>
+                            <td className="px-3 py-2 font-mono">
+                              {cell(row, 'variantSku', cell(row, 'sku'))}
+                            </td>
+                            <td className="px-3 py-2 max-w-[180px] truncate">{cell(row, 'name')}</td>
+                            <td className="px-3 py-2 max-w-[140px] truncate">{formatOptions(row)}</td>
+                            <td className="px-3 py-2 font-mono">{cell(row, 'barcode')}</td>
+                            <td className="px-3 py-2 max-w-[140px] truncate">{cell(row, 'warehouseName')}</td>
+                            <td className="px-3 py-2 font-mono">{cell(row, 'binCode')}</td>
+                            <td className="px-3 py-2 font-mono">{cell(row, 'rackCode')}</td>
+                            <td className="px-3 py-2 text-right">{cell(row, 'openingQuantity')}</td>
+                            <td className="px-3 py-2 text-right">{cell(row, 'costPrice')}</td>
+                            <td className="px-3 py-2 text-right">{cell(row, 'sellingPrice')}</td>
+                            <td className="px-3 py-2 text-right">{cell(row, 'reorderLevel')}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -446,6 +591,9 @@ export default function InventoryImportPage() {
                 <div>Warehouses created: <strong>{result.warehousesCreated}</strong></div>
                 <div>Suppliers created: <strong>{result.suppliersCreated}</strong></div>
                 <div>Bins created: <strong>{result.binsCreated}</strong></div>
+                {result.racksCreated != null && (
+                  <div>Racks created: <strong>{result.racksCreated}</strong></div>
+                )}
                 <div>Tax codes created: <strong>{result.taxCodesCreated}</strong></div>
                 <div>Errors: <strong>{result.errors.length}</strong></div>
               </div>

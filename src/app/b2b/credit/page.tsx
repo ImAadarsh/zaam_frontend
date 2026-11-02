@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 export default function B2bCreditPage() {
   const router = useRouter();
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [credits, setCredits] = useState<any[]>([]);
   const orgId = session?.user?.organizationId;
 

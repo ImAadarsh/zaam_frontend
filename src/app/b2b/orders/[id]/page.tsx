@@ -22,7 +22,7 @@ export default function B2bOrderDetailPage() {
   const params = useParams();
   const id = String(params?.id || '');
   const { session, hydrated } = useSession();
-  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP']);
+  const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'SALES_REP', 'B2B_M']);
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const orgId = session?.user?.organizationId;

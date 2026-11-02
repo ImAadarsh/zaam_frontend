@@ -90,7 +90,18 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "catalog.items",
         "path": "/catalog/items",
-        "label": "Catalog Items",
+        "label": "Catalog item",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "WAREHOUSE_MANAGER",
+          "SALES_REP"
+        ]
+      },
+      {
+        "key": "catalog.variants",
+        "path": "/catalog/variants",
+        "label": "Variant(s)",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -101,7 +112,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "catalog.classifications",
         "path": "/catalog/classifications",
-        "label": "Classifications",
+        "label": "Classification(s)",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -109,20 +120,9 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "catalog.variants",
-        "path": "/catalog/variants",
-        "label": "Variants",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "WAREHOUSE_MANAGER",
-          "SALES_REP"
-        ]
-      },
-      {
         "key": "catalog.product-media",
         "path": "/catalog/product-media",
-        "label": "Product Media",
+        "label": "Product media",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -133,7 +133,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "catalog.price-lists",
         "path": "/catalog/price-lists",
-        "label": "Price Lists",
+        "label": "Price list(s)",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -144,7 +144,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "catalog.tax-codes",
         "path": "/catalog/tax-codes",
-        "label": "Tax Codes",
+        "label": "Tax codes",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -154,7 +154,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "catalog.compliance-documents",
         "path": "/catalog/compliance-documents",
-        "label": "Compliance Documents",
+        "label": "Compliance document(s)",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -330,26 +330,6 @@ export const NAV_MODULES: NavModule[] = [
           "SUPER_ADMIN",
           "WAREHOUSE_MANAGER"
         ]
-      },
-      {
-        "key": "inventory.stock-adjustments",
-        "path": "/inventory/stock-adjustments",
-        "label": "Stock Adjustments",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "WAREHOUSE_MANAGER"
-        ]
-      },
-      {
-        "key": "inventory.cycle-counts",
-        "path": "/inventory/cycle-counts",
-        "label": "Cycle Counts",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "WAREHOUSE_MANAGER"
-        ]
       }
     ]
   },
@@ -413,7 +393,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -423,7 +404,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -433,7 +415,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -443,7 +426,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -453,7 +437,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -463,7 +448,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -473,7 +459,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -482,7 +469,8 @@ export const NAV_MODULES: NavModule[] = [
         "label": "Affiliates & Referrals",
         "roles": [
           "ADMIN",
-          "SUPER_ADMIN"
+          "SUPER_ADMIN",
+          "B2B_M"
         ]
       },
       {
@@ -492,7 +480,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -502,7 +491,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -512,7 +502,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       },
       {
@@ -522,7 +513,8 @@ export const NAV_MODULES: NavModule[] = [
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
-          "SALES_REP"
+          "SALES_REP",
+          "B2B_M"
         ]
       }
     ]

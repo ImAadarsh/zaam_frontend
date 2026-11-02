@@ -30,11 +30,13 @@ export default function ModulesPage() {
     router.back();
   };
 
-  const filteredModules = modules.filter(m =>
-    hasModuleAccess(m.slug, allowedPages) && (
-    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredModules = modules.filter(m => {
+    const landing = firstAllowedPath(allowedPages, m.slug);
+    // Only show a card when the user can open at least one page in the module.
+    if (!landing || !hasModuleAccess(m.slug, allowedPages)) return false;
+    const q = searchQuery.toLowerCase();
+    return m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -119,7 +121,7 @@ export default function ModulesPage() {
                   }}
                 >
                   <ModuleCard
-                    href={firstAllowedPath(allowedPages, m.slug) ?? `/${m.slug}/dashboard`}
+                    href={firstAllowedPath(allowedPages, m.slug)!}
                     title={m.name}
                     description={m.description}
                     Icon={m.icon}
