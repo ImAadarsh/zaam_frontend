@@ -51,6 +51,23 @@
 | EPOS / GoodTill | `/catalog/epos-channels` |
 | Order Channel Sync | `/orders/channel-sync` |
 
+### HR & Payroll (categorized)
+
+Categorized into logical workflow subheaders using `<NavSubHeader />`:
+- **People & Talent**: Employees, Recruitment, Onboarding, Documents
+- **Time & Attendance**: Attendance, Leave
+- **Payroll & Pension**: Payroll, Pension
+- **Compliance & Reports**: Immigration & RTW, Reports & Compliance
+- **Employee Portal**: Self-service
+
+### CRM & Customer Service (categorized)
+
+Categorized into logical workflow subheaders using `<NavSubHeader />`:
+- **Overview**: Dashboard landing (`/crm/dashboard`)
+- **Sales & Pipeline**: Accounts, Leads, Pipeline, Forecast, Activities
+- **Customer Service**: Tickets, Canned Responses
+- **Settings & Configuration**: Customer Tiers, Integrations, Settings
+
 ### Catalog (trimmed)
 
 Overview, Catalog Items, Classifications, Variants, Product Media, Price Lists, Tax Codes, Compliance Documents.

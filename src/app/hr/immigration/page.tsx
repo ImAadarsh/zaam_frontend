@@ -20,7 +20,7 @@ import { HrModal, HrField, HrModalActions, hrInputClass, hrTextareaClass } from 
 import { FileUploadField } from '@/components/file-upload-field';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { AlertTriangle, Eye, Plus, ShieldCheck, Upload } from 'lucide-react';
+import { AlertTriangle, Clock, Eye, FileText, Pencil, Plus, ShieldCheck, Upload } from 'lucide-react';
 
 export default function ImmigrationRtwPage() {
   const router = useRouter();
@@ -28,22 +28,26 @@ export default function ImmigrationRtwPage() {
   const { hasAccess } = useRoleCheck(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']);
   const [loading, setLoading] = useState(true);
   const [apiMissing, setApiMissing] = useState(false);
+  const [immigrations, setImmigrations] = useState<any[]>([]);
   const [board, setBoard] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [rtw, setRtw] = useState<any[]>([]);
   const [withinDays, setWithinDays] = useState(90);
+  const [activeTab, setActiveTab] = useState<'records' | 'board' | 'reminders' | 'documents'>('records');
   const [immOpen, setImmOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [immForm, setImmForm] = useState({
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const emptyImmForm = {
     employeeId: '',
     status: 'skilled_worker',
     visaType: '',
     visaExpiry: '',
     shareCode: '',
     notes: '',
-  });
+  };
+  const [immForm, setImmForm] = useState(emptyImmForm);
   const emptyUploadForm = { employeeId: '', docType: 'passport', documentName: '', expiresAt: '', documentUrl: '' };
   const [uploadForm, setUploadForm] = useState(emptyUploadForm);
 
@@ -56,14 +60,16 @@ export default function ImmigrationRtwPage() {
       setEmployees(empRes.data || []);
 
       try {
-        const [v, a, r] = await Promise.all([
-          listVisaExpiring({ organizationId: orgId, withinDays, limit: 100 }),
-          listComplianceAlerts({ organizationId: orgId, limit: 200 }),
-          listRtwDocuments({ limit: 200 }),
+        const [v, a, r, imm] = await Promise.all([
+          listVisaExpiring({ organizationId: orgId, withinDays: withinDays === 9999 ? 365 : withinDays, limit: 100 }).catch(() => ({ data: [] })),
+          listComplianceAlerts({ organizationId: orgId, limit: 200 }).catch(() => ({ data: [] })),
+          listRtwDocuments({ limit: 200 }).catch(() => ({ data: [] })),
+          listImmigration({ limit: 200 }).catch(() => ({ data: [] })),
         ]);
         setBoard(Array.isArray(v.data) ? v.data : []);
         setAlerts(a.data || []);
         setRtw(r.data || []);
+        setImmigrations(Array.isArray(imm.data) ? imm.data : []);
         setApiMissing(false);
       } catch (err) {
         if (isApiMissing(err)) {
@@ -82,9 +88,11 @@ export default function ImmigrationRtwPage() {
                 status: 'from_document',
               }));
             setBoard(withExpiry);
+            setImmigrations(withExpiry);
             setRtw(docs.data || []);
           } catch {
             setBoard([]);
+            setImmigrations([]);
             setRtw([]);
           }
           setAlerts([]);
@@ -113,7 +121,9 @@ export default function ImmigrationRtwPage() {
     setSaving(true);
     try {
       await createImmigration({ ...immForm, organizationId: orgId });
-      toast.success('Immigration record created');
+      toast.success(editingId ? 'Immigration record updated' : 'Immigration record created');
+      setImmForm(emptyImmForm);
+      setEditingId(null);
       setImmOpen(false);
       void load();
     } catch (err) {
@@ -164,6 +174,130 @@ export default function ImmigrationRtwPage() {
       setSaving(false);
     }
   }
+
+  const immigrationColumns = useMemo<ColumnDef<any>[]>(() => [
+    {
+      accessorKey: 'employee',
+      header: 'Employee',
+      cell: ({ row }) => {
+        const eid = row.original.employeeId || row.original.employee?.id;
+        return (
+          <Link href={`/hr/employees/${eid}`} className="text-[#D4A017] hover:underline font-medium">
+            {row.original.employeeName || employeeName(row.original.employee || row.original)}
+          </Link>
+        );
+      },
+    },
+    {
+      accessorKey: 'status',
+      header: 'Immigration status',
+      cell: ({ row }) => (
+        <span className="capitalize px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/5 border border-white/10">
+          {(row.original.status || '—').replace(/_/g, ' ')}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'visaType',
+      header: 'Visa type',
+      cell: ({ row }) => <span className="font-medium">{row.original.visaType || '—'}</span>,
+    },
+    {
+      accessorKey: 'shareCode',
+      header: 'Share code',
+      cell: ({ row }) => (
+        row.original.shareCode ? (
+          <code className="font-mono text-xs px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[#D4A017]">
+            {row.original.shareCode}
+          </code>
+        ) : <span className="text-muted-foreground">—</span>
+      ),
+    },
+    {
+      accessorKey: 'visaExpiry',
+      header: 'Visa expiry',
+      cell: ({ row }) => {
+        const exp = row.original.visaExpiry || row.original.expiryDate;
+        return exp ? formatDate(exp) : <span className="text-muted-foreground">Indefinite / No expiry</span>;
+      },
+    },
+    {
+      id: 'validity',
+      header: 'Validity',
+      cell: ({ row }) => {
+        const exp = row.original.visaExpiry || row.original.expiryDate;
+        if (!exp) {
+          return (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Settled / RTW
+            </span>
+          );
+        }
+        const days = daysUntil(exp);
+        return (
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${visaRiskClass(days)}`}>
+            {days == null ? '—' : days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
+          </span>
+        );
+      },
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => {
+        const eid = row.original.employeeId || row.original.employee?.id;
+        return (
+          <div className="flex items-center gap-1 justify-end">
+            <button
+              type="button"
+              title="Edit visa / RTW record"
+              onClick={() => {
+                setImmForm({
+                  employeeId: String(eid || ''),
+                  status: row.original.status || 'skilled_worker',
+                  visaType: row.original.visaType || '',
+                  visaExpiry: String(row.original.visaExpiry || '').slice(0, 10),
+                  shareCode: row.original.shareCode || '',
+                  notes: row.original.notes || '',
+                });
+                setEditingId(row.original.id);
+                setImmOpen(true);
+              }}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-[#D4A017] transition-colors"
+            >
+              <Pencil size={15} />
+            </button>
+            {eid && (
+              <Link
+                href={`/hr/employees/${eid}`}
+                title="View Employee Profile"
+                className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-[#D4A017] transition-colors"
+              >
+                <Eye size={15} />
+              </Link>
+            )}
+          </div>
+        );
+      },
+    },
+  ], []);
+
+  const displayedBoard = useMemo(() => {
+    if (withinDays === 9999) {
+      return immigrations
+        .filter((i) => i.visaExpiry)
+        .map((i) => ({
+          id: i.id,
+          employee: i.employee,
+          employeeId: i.employeeId || i.employee?.id,
+          employeeName: employeeName(i.employee),
+          visaType: i.visaType || i.status,
+          visaExpiry: i.visaExpiry,
+          status: i.status,
+        }));
+    }
+    return board;
+  }, [withinDays, immigrations, board]);
 
   const columns = useMemo<ColumnDef<any>[]>(() => [
     {
@@ -319,72 +453,204 @@ export default function ImmigrationRtwPage() {
             </div>
           )}
 
+          {/* Top Actions & Filters */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Within</label>
-              <select
-                className="h-10 rounded-xl border border-border/80 bg-background px-3 text-sm"
-                value={withinDays}
-                onChange={(e) => setWithinDays(Number(e.target.value))}
-              >
-                <option value={30}>30 days</option>
-                <option value={60}>60 days</option>
-                <option value={90}>90 days</option>
-                <option value={180}>180 days</option>
-              </select>
+              <span className="text-xs text-muted-foreground">
+                Track Right-to-Work, visa types, Home Office share codes & statutory expiries.
+              </span>
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => { setUploadForm(emptyUploadForm); setUploadOpen(true); }} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium hover:border-[#D4A017]/40">
+              <button
+                type="button"
+                onClick={() => { setUploadForm(emptyUploadForm); setUploadOpen(true); }}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium hover:border-[#D4A017]/40"
+              >
                 <Upload size={14} /> Upload RTW
               </button>
-              <button type="button" onClick={() => setImmOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+              <button
+                type="button"
+                onClick={() => { setImmForm(emptyImmForm); setEditingId(null); setImmOpen(true); }}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20"
+              >
                 <Plus size={14} /> Add visa / RTW record
               </button>
             </div>
           </div>
 
-          <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-            <div className="px-5 py-4 border-b border-border/50 flex items-center gap-2 font-semibold">
-              <ShieldCheck size={16} className="text-[#D4A017]" /> Visa expiry compliance board
-            </div>
-            <div className="p-4">
-              <RichDataTable columns={columns} data={board} searchPlaceholder="Search visa board…" />
-            </div>
-          </section>
+          {/* Navigation Tabs */}
+          <div className="flex border-b border-border/50 gap-2 overflow-x-auto pb-px">
+            <button
+              type="button"
+              onClick={() => setActiveTab('records')}
+              className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'records'
+                  ? 'border-[#D4A017] text-[#D4A017]'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+              }`}
+            >
+              <ShieldCheck size={16} /> Visa & RTW Records
+              <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-white/10 text-foreground font-semibold">
+                {immigrations.length}
+              </span>
+            </button>
 
-          <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-            <div className="px-5 py-4 border-b border-border/50 font-semibold text-sm">Renewal reminders</div>
-            <div className="p-4">
-              <RichDataTable columns={alertColumns} data={alerts} searchPlaceholder="Search reminders…" />
-            </div>
-          </section>
-          <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-            <div className="px-5 py-4 border-b border-border/50 font-semibold text-sm">Recent RTW / ID documents</div>
-            <div className="p-4">
-              <RichDataTable columns={rtwColumns} data={rtw} searchPlaceholder="Search RTW documents…" />
-            </div>
-          </section>
+            <button
+              type="button"
+              onClick={() => setActiveTab('board')}
+              className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'board'
+                  ? 'border-[#D4A017] text-[#D4A017]'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+              }`}
+            >
+              <Clock size={16} /> Visa Expiry Board
+              <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-white/10 text-foreground font-semibold">
+                {displayedBoard.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('reminders')}
+              className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'reminders'
+                  ? 'border-[#D4A017] text-[#D4A017]'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+              }`}
+            >
+              <AlertTriangle size={16} /> Renewal Reminders
+              <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-white/10 text-foreground font-semibold">
+                {alerts.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('documents')}
+              className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'documents'
+                  ? 'border-[#D4A017] text-[#D4A017]'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+              }`}
+            >
+              <FileText size={16} /> RTW Documents
+              <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-white/10 text-foreground font-semibold">
+                {rtw.length}
+              </span>
+            </button>
+          </div>
+
+          {/* TAB 1: ALL IMMIGRATION & RTW RECORDS */}
+          {activeTab === 'records' && (
+            <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
+              <div className="px-5 py-4 border-b border-border/50 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-semibold">
+                  <ShieldCheck size={16} className="text-[#D4A017]" /> All Visa & RTW Records
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {immigrations.length} {immigrations.length === 1 ? 'record' : 'records'}
+                </span>
+              </div>
+              <div className="p-4">
+                {immigrations.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground text-sm">
+                    No immigration records found. Click <strong>Add visa / RTW record</strong> to create one.
+                  </div>
+                ) : (
+                  <RichDataTable columns={immigrationColumns} data={immigrations} searchPlaceholder="Search visa & RTW records…" />
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* TAB 2: VISA EXPIRY BOARD */}
+          {activeTab === 'board' && (
+            <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
+              <div className="px-5 py-4 border-b border-border/50 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 font-semibold">
+                  <Clock size={16} className="text-[#D4A017]" /> Visa Expiry Compliance Board
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Within</label>
+                  <select
+                    className="h-9 rounded-xl border border-border/80 bg-background px-3 text-sm"
+                    value={withinDays}
+                    onChange={(e) => setWithinDays(Number(e.target.value))}
+                  >
+                    <option value={30}>30 days</option>
+                    <option value={60}>60 days</option>
+                    <option value={90}>90 days</option>
+                    <option value={180}>180 days</option>
+                    <option value={365}>1 year</option>
+                    <option value={9999}>All upcoming</option>
+                  </select>
+                </div>
+              </div>
+              <div className="p-4">
+                <RichDataTable columns={columns} data={displayedBoard} searchPlaceholder="Search visa board…" />
+              </div>
+            </section>
+          )}
+
+          {/* TAB 3: RENEWAL REMINDERS */}
+          {activeTab === 'reminders' && (
+            <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
+              <div className="px-5 py-4 border-b border-border/50 font-semibold text-sm flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-500" /> Renewal Reminders
+              </div>
+              <div className="p-4">
+                <RichDataTable columns={alertColumns} data={alerts} searchPlaceholder="Search reminders…" />
+              </div>
+            </section>
+          )}
+
+          {/* TAB 4: RTW DOCUMENTS */}
+          {activeTab === 'documents' && (
+            <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
+              <div className="px-5 py-4 border-b border-border/50 font-semibold text-sm flex items-center gap-2">
+                <FileText size={16} className="text-[#D4A017]" /> Recent RTW / ID Documents
+              </div>
+              <div className="p-4">
+                <RichDataTable columns={rtwColumns} data={rtw} searchPlaceholder="Search RTW documents…" />
+              </div>
+            </section>
+          )}
         </main>
       </div>
 
-      <HrModal open={immOpen} onClose={() => setImmOpen(false)} title="Add immigration record" icon={ShieldCheck}>
+      <HrModal
+        open={immOpen}
+        onClose={() => { setImmOpen(false); setEditingId(null); }}
+        title={editingId ? 'Edit immigration / RTW record' : 'Add immigration record'}
+        icon={ShieldCheck}
+      >
         <form onSubmit={saveImmigration} className="space-y-4">
           <HrField label="Employee">
-            <select className={hrInputClass} required value={immForm.employeeId} onChange={(e) => setImmForm({ ...immForm, employeeId: e.target.value })}>
+            <select
+              className={hrInputClass}
+              required
+              value={immForm.employeeId}
+              onChange={(e) => setImmForm({ ...immForm, employeeId: e.target.value })}
+            >
               <option value="">Select…</option>
               {employees.map((e) => <option key={e.id} value={e.id}>{employeeName(e)}</option>)}
             </select>
           </HrField>
           <HrField label="Immigration status">
-            <select className={hrInputClass} value={immForm.status} onChange={(e) => setImmForm({ ...immForm, status: e.target.value })}>
+            <select
+              className={hrInputClass}
+              value={immForm.status}
+              onChange={(e) => setImmForm({ ...immForm, status: e.target.value })}
+            >
               {VISA_TYPES.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
             </select>
           </HrField>
-          <HrField label="Visa type"><input className={hrInputClass} value={immForm.visaType} onChange={(e) => setImmForm({ ...immForm, visaType: e.target.value })} /></HrField>
+          <HrField label="Visa type"><input className={hrInputClass} value={immForm.visaType} onChange={(e) => setImmForm({ ...immForm, visaType: e.target.value })} placeholder="e.g. Skilled Worker, Business, Student" /></HrField>
           <HrField label="Visa expiry"><input type="date" className={hrInputClass} value={immForm.visaExpiry} onChange={(e) => setImmForm({ ...immForm, visaExpiry: e.target.value })} /></HrField>
-          <HrField label="Share code"><input className={hrInputClass} value={immForm.shareCode} onChange={(e) => setImmForm({ ...immForm, shareCode: e.target.value })} /></HrField>
-          <HrField label="Notes"><textarea className={hrTextareaClass} value={immForm.notes} onChange={(e) => setImmForm({ ...immForm, notes: e.target.value })} /></HrField>
-          <HrModalActions onCancel={() => setImmOpen(false)} submitLabel="Save" submitting={saving} />
+          <HrField label="Share code"><input className={hrInputClass} value={immForm.shareCode} onChange={(e) => setImmForm({ ...immForm, shareCode: e.target.value })} placeholder="Home Office share code" /></HrField>
+          <HrField label="Notes"><textarea className={hrTextareaClass} value={immForm.notes} onChange={(e) => setImmForm({ ...immForm, notes: e.target.value })} placeholder="Additional notes or check references…" /></HrField>
+          <HrModalActions onCancel={() => { setImmOpen(false); setEditingId(null); }} submitLabel={editingId ? 'Update' : 'Save'} submitting={saving} />
         </form>
       </HrModal>
 

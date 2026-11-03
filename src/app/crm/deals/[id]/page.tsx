@@ -8,7 +8,8 @@ import { useSession } from '@/hooks/use-session';
 import { getCrmDeal, updateCrmDeal, moveCrmDeal, listCrmPipelines, createCrmActivity } from '@/lib/api';
 import { crmApiError, formatMoney } from '@/lib/crm-utils';
 import { toast } from 'sonner';
-import { ArrowLeft, X, Pencil, ArrowRight, PhoneCall } from 'lucide-react';
+import { ArrowLeft, Pencil, ArrowRight, PhoneCall } from 'lucide-react';
+import { CrmModal, CrmField, CrmModalActions, crmInputClass } from '@/components/crm/crm-modal';
 
 export default function CrmDealDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -195,81 +196,149 @@ export default function CrmDealDetailPage() {
         </main>
       </div>
 
-      {editOpen && (
-        <Modal title="Edit deal" onClose={() => setEditOpen(false)}>
-          <form onSubmit={handleSave} className="space-y-4">
-            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" placeholder="Name" />
-            <input type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input" placeholder="Amount" />
-            <input type="date" value={form.expectedClose} onChange={(e) => setForm({ ...form, expectedClose: e.target.value })} className="input" />
+      <CrmModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Edit Deal"
+        icon={Pencil}
+      >
+        <form onSubmit={handleSave} className="space-y-4">
+          <CrmField label="Deal Name">
             <input
-              type="number"
-              min={0}
-              max={100}
-              value={form.probabilityOverride}
-              onChange={(e) => setForm({ ...form, probabilityOverride: e.target.value })}
-              className="input"
-              placeholder={`Probability override (stage: ${deal?.stage?.probability ?? '—'}%)`}
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Enterprise License Expansion"
             />
-            <p className="text-[11px] text-muted-foreground -mt-2">Leave blank to use stage probability.</p>
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="input">
-              <option value="open">Open</option>
-              <option value="won">Won</option>
-              <option value="lost">Lost</option>
-            </select>
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setEditOpen(false)} className="btn flex-1 bg-muted">Cancel</button>
-              <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Saving…' : 'Save'}</button>
-            </div>
-          </form>
-        </Modal>
-      )}
+          </CrmField>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Amount">
+              <input
+                type="number"
+                step="0.01"
+                value={form.amount}
+                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                className={crmInputClass}
+                placeholder="0.00"
+              />
+            </CrmField>
+            <CrmField label="Expected Close">
+              <input
+                type="date"
+                value={form.expectedClose}
+                onChange={(e) => setForm({ ...form, expectedClose: e.target.value })}
+                className={crmInputClass}
+              />
+            </CrmField>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmField label="Status">
+              <select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                className={crmInputClass}
+              >
+                <option value="open">Open</option>
+                <option value="won">Won</option>
+                <option value="lost">Lost</option>
+              </select>
+            </CrmField>
+            <CrmField
+              label="Probability Override (%)"
+              hint={`Stage default: ${deal?.stage?.probability ?? '—'}%`}
+            >
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={form.probabilityOverride}
+                onChange={(e) => setForm({ ...form, probabilityOverride: e.target.value })}
+                className={crmInputClass}
+                placeholder="Stage default"
+              />
+            </CrmField>
+          </div>
+          <CrmModalActions
+            onCancel={() => setEditOpen(false)}
+            submitLabel="Save Deal"
+            submitting={saving}
+          />
+        </form>
+      </CrmModal>
 
-      {moveOpen && (
-        <Modal title="Move stage" onClose={() => setMoveOpen(false)}>
-          <form onSubmit={handleMove} className="space-y-4">
-            <select required value={stageId} onChange={(e) => setStageId(e.target.value)} className="input">
-              {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+      <CrmModal
+        open={moveOpen}
+        onClose={() => setMoveOpen(false)}
+        title="Move Stage"
+        icon={ArrowRight}
+      >
+        <form onSubmit={handleMove} className="space-y-4">
+          <CrmField label="Pipeline Stage" hint="Select the new pipeline stage for this deal">
+            <select
+              required
+              value={stageId}
+              onChange={(e) => setStageId(e.target.value)}
+              className={crmInputClass}
+            >
+              {stages.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.probability ?? 0}%)
+                </option>
+              ))}
             </select>
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setMoveOpen(false)} className="btn flex-1 bg-muted">Cancel</button>
-              <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Moving…' : 'Move'}</button>
-            </div>
-          </form>
-        </Modal>
-      )}
+          </CrmField>
+          <CrmModalActions
+            onCancel={() => setMoveOpen(false)}
+            submitLabel="Move Deal"
+            submitting={saving}
+          />
+        </form>
+      </CrmModal>
 
-      {activityOpen && (
-        <Modal title="Log activity" onClose={() => setActivityOpen(false)}>
-          <form onSubmit={handleActivity} className="space-y-4">
-            <select value={activityForm.type} onChange={(e) => setActivityForm({ ...activityForm, type: e.target.value as any })} className="input">
-              <option value="task">Task</option>
+      <CrmModal
+        open={activityOpen}
+        onClose={() => setActivityOpen(false)}
+        title="Log Activity"
+        icon={PhoneCall}
+      >
+        <form onSubmit={handleActivity} className="space-y-4">
+          <CrmField label="Activity Type">
+            <select
+              value={activityForm.type}
+              onChange={(e) => setActivityForm({ ...activityForm, type: e.target.value as any })}
+              className={crmInputClass}
+            >
               <option value="call">Call</option>
+              <option value="task">Task</option>
               <option value="meeting">Meeting</option>
               <option value="note">Note</option>
             </select>
-            <input required value={activityForm.subject} onChange={(e) => setActivityForm({ ...activityForm, subject: e.target.value })} className="input" placeholder="Subject" />
-            <input type="datetime-local" value={activityForm.dueAt} onChange={(e) => setActivityForm({ ...activityForm, dueAt: e.target.value })} className="input" />
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setActivityOpen(false)} className="btn flex-1 bg-muted">Cancel</button>
-              <button type="submit" disabled={saving} className="btn btn-primary flex-1">{saving ? 'Saving…' : 'Create'}</button>
-            </div>
-          </form>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="glass-card w-full max-w-md overflow-hidden">
-        <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
-          <h2 className="text-lg font-bold">{title}</h2>
-          <button type="button" onClick={onClose} className="p-2 hover:bg-muted rounded-full"><X size={18} /></button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
+          </CrmField>
+          <CrmField label="Subject">
+            <input
+              required
+              value={activityForm.subject}
+              onChange={(e) => setActivityForm({ ...activityForm, subject: e.target.value })}
+              className={crmInputClass}
+              placeholder="e.g. Call regarding quotation"
+            />
+          </CrmField>
+          <CrmField label="Scheduled / Due At" hint="Optional schedule or due date for this activity">
+            <input
+              type="datetime-local"
+              value={activityForm.dueAt}
+              onChange={(e) => setActivityForm({ ...activityForm, dueAt: e.target.value })}
+              className={crmInputClass}
+            />
+          </CrmField>
+          <CrmModalActions
+            onCancel={() => setActivityOpen(false)}
+            submitLabel="Create Activity"
+            submitting={saving}
+          />
+        </form>
+      </CrmModal>
     </div>
   );
 }

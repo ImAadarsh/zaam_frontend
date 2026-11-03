@@ -8,13 +8,13 @@ import { useSession } from '@/hooks/use-session';
 import { useRoleCheck } from '@/hooks/use-role-check';
 import {
   listHrAttendance, upsertHrAttendance, listHrOvertime, createHrOvertime, updateHrOvertime,
-  listEmployees,
+  listEmployees, getHrAttendanceSettings, updateHrAttendanceSettings,
 } from '@/lib/api';
 import { employeeName, formatDate, hrApiError, statusBadgeClass } from '@/lib/hr-utils';
 import { HrModal, HrField, HrModalActions, hrInputClass, hrTextareaClass } from '@/components/hr/hr-modal';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Check, Clock, Plus } from 'lucide-react';
+import { Check, Clock, Plus, Sliders } from 'lucide-react';
 
 type AttendanceRow = {
   id: string;
@@ -39,6 +39,14 @@ export default function AttendancePage() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    autoClockOutHours: 8,
+    standardShiftHours: 8,
+    autoClockOutEnabled: true,
+    gracePeriodMinutes: 15,
+  });
   const [form, setForm] = useState({
     employeeId: '',
     workDate: '',
@@ -55,10 +63,11 @@ export default function AttendancePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [att, ot, e] = await Promise.all([
+      const [att, ot, e, sett] = await Promise.all([
         listHrAttendance({ limit: 200 }),
         listHrOvertime({ limit: 200 }),
         listEmployees({ organizationId: orgId }),
+        getHrAttendanceSettings().catch(() => ({ data: { autoClockOutHours: 8, standardShiftHours: 8, autoClockOutEnabled: true, gracePeriodMinutes: 15 } })),
       ]);
       const attendanceRows: AttendanceRow[] = (att.data || []).map((r: any) => ({
         id: `a-${r.id}`,
@@ -89,6 +98,14 @@ export default function AttendancePage() {
         String(b.workDate || '').localeCompare(String(a.workDate || ''))
       ));
       setEmployees(e.data || []);
+      if (sett?.data) {
+        setSettingsForm({
+          autoClockOutHours: Number(sett.data.autoClockOutHours) || 8,
+          standardShiftHours: Number(sett.data.standardShiftHours) || 8,
+          autoClockOutEnabled: Boolean(sett.data.autoClockOutEnabled),
+          gracePeriodMinutes: Number(sett.data.gracePeriodMinutes) || 15,
+        });
+      }
     } catch (err) {
       toast.error(hrApiError(err, 'Failed to load attendance'));
     } finally {
@@ -134,6 +151,21 @@ export default function AttendancePage() {
       toast.error(hrApiError(err, 'Failed to save entry'));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onSaveSettings(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingSettings(true);
+    try {
+      await updateHrAttendanceSettings(settingsForm);
+      toast.success('Shift & auto clock-out settings updated');
+      setSettingsOpen(false);
+      void load();
+    } catch (err) {
+      toast.error(hrApiError(err, 'Failed to save settings'));
+    } finally {
+      setSavingSettings(false);
     }
   }
 
@@ -219,9 +251,19 @@ export default function AttendancePage() {
               <span className="font-bold text-[#D4A017]">{overtimeTotal.toFixed(1)}h</span>
               {loading && <span className="ml-2 text-muted-foreground text-xs">Loading…</span>}
             </div>
-            <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
-              <Plus size={14} /> Add attendance / overtime
-            </button>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card hover:bg-muted text-sm font-medium transition-colors"
+              >
+                <Sliders size={14} className="text-[#D4A017]" />
+                Shift & Auto Clock-Out ({settingsForm.autoClockOutHours}h)
+              </button>
+              <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#D4A017] hover:bg-[#c49415] text-white text-sm font-medium shadow-lg shadow-[#D4A017]/20">
+                <Plus size={14} /> Add attendance / overtime
+              </button>
+            </div>
           </div>
           {!loading && items.length === 0 ? (
             <div className="glass-panel rounded-2xl border border-border/50 p-10 text-center">
@@ -266,6 +308,90 @@ export default function AttendancePage() {
           </HrField>
           <HrField label="Notes"><textarea className={hrTextareaClass} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></HrField>
           <HrModalActions onCancel={() => setOpen(false)} submitLabel="Save" submitting={saving} />
+        </form>
+      </HrModal>
+
+      <HrModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title="Shift & Auto Clock-Out Settings"
+        icon={Sliders}
+      >
+        <form onSubmit={onSaveSettings} className="space-y-4">
+          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800">
+            <strong>Auto Clock-Out Rule:</strong> Automatically clocks out open shifts after the configured duration. This prevents unclosed shifts overnight and ensures compliance with UK Working Time Regulations.
+          </div>
+
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-muted/40 border border-border/40">
+            <div>
+              <div className="text-sm font-semibold">Enable Auto Clock-Out</div>
+              <div className="text-xs text-muted-foreground">Auto clock-out employees when maximum shift duration is reached</div>
+            </div>
+            <input
+              type="checkbox"
+              className="w-5 h-5 rounded accent-[#D4A017] cursor-pointer"
+              checked={settingsForm.autoClockOutEnabled}
+              onChange={(e) => setSettingsForm({ ...settingsForm, autoClockOutEnabled: e.target.checked })}
+            />
+          </div>
+
+          <HrField label="Auto Clock-Out Duration (hours)" hint="Default 8.0 hours. Open shifts will auto-close after this limit.">
+            <div className="space-y-2">
+              <input
+                type="number"
+                step="0.5"
+                min="1"
+                max="24"
+                className={hrInputClass}
+                required
+                value={settingsForm.autoClockOutHours}
+                onChange={(e) => setSettingsForm({ ...settingsForm, autoClockOutHours: Number(e.target.value) })}
+              />
+              <div className="flex flex-wrap gap-2">
+                {[7.5, 8.0, 9.0, 10.0, 12.0].map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => setSettingsForm({ ...settingsForm, autoClockOutHours: h })}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                      settingsForm.autoClockOutHours === h
+                        ? 'bg-[#D4A017] text-white border-[#D4A017]'
+                        : 'border-border/60 bg-card hover:bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {h} hrs
+                  </button>
+                ))}
+              </div>
+            </div>
+          </HrField>
+
+          <HrField label="Standard Shift Duration (hours)" hint="Used as standard full-time shift baseline for reports.">
+            <input
+              type="number"
+              step="0.5"
+              min="1"
+              max="24"
+              className={hrInputClass}
+              required
+              value={settingsForm.standardShiftHours}
+              onChange={(e) => setSettingsForm({ ...settingsForm, standardShiftHours: Number(e.target.value) })}
+            />
+          </HrField>
+
+          <HrField label="Grace Period (minutes)" hint="Allowable leeway before marking tardy.">
+            <input
+              type="number"
+              step="5"
+              min="0"
+              max="120"
+              className={hrInputClass}
+              value={settingsForm.gracePeriodMinutes}
+              onChange={(e) => setSettingsForm({ ...settingsForm, gracePeriodMinutes: Number(e.target.value) })}
+            />
+          </HrField>
+
+          <HrModalActions onCancel={() => setSettingsOpen(false)} submitLabel="Save settings" submitting={savingSettings} />
         </form>
       </HrModal>
     </div>

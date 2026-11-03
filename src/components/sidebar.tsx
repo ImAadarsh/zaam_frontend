@@ -27,6 +27,15 @@ function SectionHeader({ label }: { label: string }) {
   );
 }
 
+function NavSubHeader({ label }: { label: string }) {
+  return (
+    <div className="mt-5 mb-1.5 px-3 flex items-center gap-2 select-none">
+      <span className="text-[10px] uppercase font-semibold tracking-wider text-white/40">{label}</span>
+      <div className="h-px flex-1 bg-white/10" />
+    </div>
+  );
+}
+
 function ModuleNavSections({ pathname, hasRole }: NavCtx) {
   const root = (pathname || '/').split('/')[1] || '';
   const onChannels = isChannelsPath(pathname);
@@ -178,19 +187,28 @@ function ModuleNavSections({ pathname, hasRole }: NavCtx) {
           <Item href="/finance/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/finance/dashboard'} />
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE']) && (
             <>
+              <NavSubHeader label="Invoicing & Billing" />
               <Item href="/finance/invoices" icon={<Receipt size={18} />} label="Invoices" active={pathname?.startsWith('/finance/invoices')} />
+
+              <NavSubHeader label="Payment Processing" />
               <Item href="/finance/payment-dashboard" icon={<CreditCard size={18} />} label="Payment Dashboard" active={pathname?.startsWith('/finance/payment-dashboard')} />
               <Item href="/finance/payments" icon={<CreditCard size={18} />} label="Payments" active={pathname === '/finance/payments' || pathname?.startsWith('/finance/payments/')} />
               <Item href="/finance/gateways" icon={<Wallet size={18} />} label="Payment Gateways" active={pathname?.startsWith('/finance/gateways')} />
-              <Item href="/finance/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/finance/chart-of-accounts')} />
-              <Item href="/finance/ledger-accounts" icon={<FileTextIcon size={18} />} label="Ledger Accounts" active={pathname?.startsWith('/finance/ledger-accounts')} />
-              <Item href="/finance/cost-centers" icon={<Coins size={18} />} label="Cost Centers" active={pathname?.startsWith('/finance/cost-centers')} />
-              <Item href="/finance/fiscal-periods" icon={<Calendar size={18} />} label="Fiscal Periods" active={pathname?.startsWith('/finance/fiscal-periods')} />
-              <Item href="/finance/journal-entries" icon={<FileCheck size={18} />} label="Journal Entries" active={pathname?.startsWith('/finance/journal-entries')} />
+
+              <NavSubHeader label="Banking & Cash Flow" />
               <Item href="/finance/bank-accounts" icon={<Wallet size={18} />} label="Bank Accounts" active={pathname?.startsWith('/finance/bank-accounts')} />
               <Item href="/finance/bank-transactions" icon={<CreditCard size={18} />} label="Bank Transactions" active={pathname?.startsWith('/finance/bank-transactions')} />
-              <Item href="/finance/vat-returns" icon={<Receipt size={18} />} label="VAT Returns" active={pathname?.startsWith('/finance/vat-returns')} />
+
+              <NavSubHeader label="General Ledger (ERP)" />
+              <Item href="/finance/chart-of-accounts" icon={<BookOpen size={18} />} label="Chart of Accounts" active={pathname?.startsWith('/finance/chart-of-accounts')} />
+              <Item href="/finance/ledger-accounts" icon={<FileTextIcon size={18} />} label="Ledger Accounts" active={pathname?.startsWith('/finance/ledger-accounts')} />
+              <Item href="/finance/journal-entries" icon={<FileCheck size={18} />} label="Journal Entries" active={pathname?.startsWith('/finance/journal-entries')} />
+              <Item href="/finance/fiscal-periods" icon={<Calendar size={18} />} label="Fiscal Periods" active={pathname?.startsWith('/finance/fiscal-periods')} />
+              <Item href="/finance/cost-centers" icon={<Coins size={18} />} label="Cost Centers" active={pathname?.startsWith('/finance/cost-centers')} />
               <Item href="/finance/budget-lines" icon={<BarChart size={18} />} label="Budget Lines" active={pathname?.startsWith('/finance/budget-lines')} />
+
+              <NavSubHeader label="Filing & Compliance" />
+              <Item href="/finance/vat-returns" icon={<Receipt size={18} />} label="VAT Returns" active={pathname?.startsWith('/finance/vat-returns')} />
             </>
           )}
         </>
@@ -201,19 +219,28 @@ function ModuleNavSections({ pathname, hasRole }: NavCtx) {
           <Item href="/accounting/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === '/accounting/dashboard'} />
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'ACCOUNTANT']) && (
             <>
-              <Item href="/accounting/sales" icon={<Receipt size={18} />} label="Sales / Invoicing" active={pathname?.startsWith('/accounting/sales')} />
-              <Item href="/accounting/purchases" icon={<ShoppingCart size={18} />} label="Purchases / Bills" active={pathname?.startsWith('/accounting/purchases')} />
-              <Item href="/accounting/banking" icon={<Landmark size={18} />} label="Banking" active={pathname?.startsWith('/accounting/banking') || pathname?.startsWith('/accounting/bank-accounts')} />
-              <Item href="/accounting/ledger" icon={<BookOpen size={18} />} label="Accounting" active={pathname?.startsWith('/accounting/ledger') || pathname?.startsWith('/accounting/chart-of-accounts') || pathname?.startsWith('/accounting/journal-entries') || pathname?.startsWith('/accounting/general-ledger') || pathname?.startsWith('/accounting/trial-balance')} />
-              <Item href="/accounting/vat" icon={<Percent size={18} />} label="VAT" active={pathname?.startsWith('/accounting/vat')} />
-              <Item href="/accounting/payroll" icon={<Banknote size={18} />} label="Payroll" active={pathname?.startsWith('/accounting/payroll')} />
+              <NavSubHeader label="Core Bookkeeping" />
+              <Item href="/accounting/ledger" icon={<BookOpen size={18} />} label="General Ledger & Journals" active={pathname?.startsWith('/accounting/ledger') || pathname?.startsWith('/accounting/chart-of-accounts') || pathname?.startsWith('/accounting/journal-entries') || pathname?.startsWith('/accounting/general-ledger') || pathname?.startsWith('/accounting/trial-balance')} />
+              <Item href="/accounting/banking" icon={<Landmark size={18} />} label="Banking & Reconciliation" active={pathname?.startsWith('/accounting/banking') || pathname?.startsWith('/accounting/bank-accounts')} />
+
+              <NavSubHeader label="Sales & Purchases (AP/AR)" />
+              <Item href="/accounting/sales" icon={<Receipt size={18} />} label="Sales Invoices" active={pathname?.startsWith('/accounting/sales')} />
+              <Item href="/accounting/purchases" icon={<ShoppingCart size={18} />} label="Purchases & Bills" active={pathname?.startsWith('/accounting/purchases')} />
               <Item href="/accounting/expenses" icon={<Wallet size={18} />} label="Expenses" active={pathname?.startsWith('/accounting/expenses')} />
+
+              <NavSubHeader label="Tax & Assets" />
+              <Item href="/accounting/vat" icon={<Percent size={18} />} label="VAT (MTD Return)" active={pathname?.startsWith('/accounting/vat')} />
+              <Item href="/accounting/tax" icon={<Calculator size={18} />} label="Corporation Tax" active={pathname?.startsWith('/accounting/tax')} />
               <Item href="/accounting/fixed-assets" icon={<Building size={18} />} label="Fixed Assets" active={pathname?.startsWith('/accounting/fixed-assets')} />
-              <Item href="/accounting/tax" icon={<Calculator size={18} />} label="Tax" active={pathname?.startsWith('/accounting/tax')} />
-              <Item href="/accounting/reporting" icon={<BarChart3 size={18} />} label="Reporting" active={pathname?.startsWith('/accounting/reporting')} />
-              <Item href="/accounting/documents" icon={<Paperclip size={18} />} label="Documents" active={pathname?.startsWith('/accounting/documents')} />
+
+              <NavSubHeader label="Workforce & Labor" />
+              <Item href="/accounting/payroll" icon={<Banknote size={18} />} label="Payroll Ledger Posting" active={pathname?.startsWith('/accounting/payroll')} />
+
+              <NavSubHeader label="Reports & Governance" />
+              <Item href="/accounting/reporting" icon={<BarChart3 size={18} />} label="Financial Reporting (P&L)" active={pathname?.startsWith('/accounting/reporting')} />
+              <Item href="/accounting/documents" icon={<Paperclip size={18} />} label="Receipts & Documents" active={pathname?.startsWith('/accounting/documents')} />
               <Item href="/accounting/audit-trail" icon={<History size={18} />} label="Audit Trail" active={pathname?.startsWith('/accounting/audit-trail')} />
-              <Item href="/accounting/settings" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/accounting/settings')} />
+              <Item href="/accounting/settings" icon={<Settings size={18} />} label="Accounting Settings" active={pathname?.startsWith('/accounting/settings')} />
             </>
           )}
         </>
@@ -224,27 +251,37 @@ function ModuleNavSections({ pathname, hasRole }: NavCtx) {
           <Item href="/hr/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={pathname === '/hr/dashboard'} />
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']) && (
             <>
+              <NavSubHeader label="People & Talent" />
               <Item href="/hr/employees" icon={<Users size={18} />} label="Employees" active={pathname?.startsWith('/hr/employees')} />
-              <Item href="/hr/immigration" icon={<ShieldCheck size={18} />} label="Immigration & RTW" active={pathname?.startsWith('/hr/immigration')} />
-              <Item href="/hr/leave" icon={<Calendar size={18} />} label="Leave" active={pathname?.startsWith('/hr/leave')} />
-              <Item href="/hr/attendance" icon={<Clock size={18} />} label="Attendance" active={pathname?.startsWith('/hr/attendance') || pathname?.startsWith('/hr/time-entries')} />
+              <Item href="/hr/recruitment" icon={<Briefcase size={18} />} label="Recruitment & Hiring" active={pathname?.startsWith('/hr/recruitment')} />
+              <Item href="/hr/onboarding" icon={<ClipboardList size={18} />} label="Onboarding" active={pathname?.startsWith('/hr/onboarding')} />
+              <Item href="/hr/documents" icon={<FileTextIcon size={18} />} label="Documents" active={pathname?.startsWith('/hr/documents')} />
+
+              <NavSubHeader label="Time & Attendance" />
+              <Item href="/hr/attendance" icon={<Clock size={18} />} label="Attendance & Clocking" active={pathname?.startsWith('/hr/attendance') || pathname?.startsWith('/hr/time-entries')} />
+              <Item href="/hr/leave" icon={<Calendar size={18} />} label="Leave & Absence" active={pathname?.startsWith('/hr/leave')} />
             </>
           )}
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'FINANCE', 'HR_MANAGER', 'HR_ADMIN']) && (
-            <Item href="/hr/payroll" icon={<DollarSign size={18} />} label="Payroll" active={pathname?.startsWith('/hr/payroll') || pathname?.startsWith('/hr/payroll-runs')} />
-          )}
-          {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']) && (
             <>
-              <Item href="/hr/pension" icon={<PiggyBank size={18} />} label="Pension" active={pathname?.startsWith('/hr/pension')} />
-              <Item href="/hr/documents" icon={<FileTextIcon size={18} />} label="Documents" active={pathname?.startsWith('/hr/documents')} />
-              <Item href="/hr/recruitment" icon={<Briefcase size={18} />} label="Recruitment" active={pathname?.startsWith('/hr/recruitment')} />
-              <Item href="/hr/onboarding" icon={<ClipboardList size={18} />} label="Onboarding" active={pathname?.startsWith('/hr/onboarding')} />
+              <NavSubHeader label="Payroll & Pension" />
+              <Item href="/hr/payroll" icon={<DollarSign size={18} />} label="Payroll Runs & Slips" active={pathname?.startsWith('/hr/payroll') || pathname?.startsWith('/hr/payroll-runs')} />
             </>
           )}
-          <Item href="/hr/self-service" icon={<UserCheck size={18} />} label="Self-service" active={pathname?.startsWith('/hr/self-service')} />
-          {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN', 'FINANCE']) && (
-            <Item href="/hr/reports" icon={<BarChart3 size={18} />} label="Reports & Compliance" active={pathname?.startsWith('/hr/reports')} />
+          {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']) && (
+            <Item href="/hr/pension" icon={<PiggyBank size={18} />} label="Workplace Pension" active={pathname?.startsWith('/hr/pension')} />
           )}
+          {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN', 'FINANCE']) && (
+            <NavSubHeader label="Compliance & Reports" />
+          )}
+          {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN']) && (
+            <Item href="/hr/immigration" icon={<ShieldCheck size={18} />} label="Immigration & RTW" active={pathname?.startsWith('/hr/immigration')} />
+          )}
+          {hasRole(['ADMIN', 'SUPER_ADMIN', 'HR_MANAGER', 'HR_ADMIN', 'FINANCE']) && (
+            <Item href="/hr/reports" icon={<BarChart3 size={18} />} label="Reports & Analytics" active={pathname?.startsWith('/hr/reports')} />
+          )}
+          <NavSubHeader label="Employee Portal" />
+          <Item href="/hr/self-service" icon={<UserCheck size={18} />} label="Self-Service Portal" active={pathname?.startsWith('/hr/self-service')} />
         </>
       )}
       {isAnalytics && (
@@ -292,6 +329,7 @@ function ModuleNavSections({ pathname, hasRole }: NavCtx) {
           <Item href="/crm/dashboard" icon={<LayoutDashboard size={18} />} label="Overview" active={pathname === '/crm/dashboard'} />
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'SALES_REP', 'CUSTOMER_SERVICE']) && (
             <>
+              <NavSubHeader label="Sales & Pipeline" />
               <Item href="/crm/accounts" icon={<Building2 size={18} />} label="Accounts" active={pathname?.startsWith('/crm/accounts')} />
               <Item href="/crm/leads" icon={<Target size={18} />} label="Leads" active={pathname?.startsWith('/crm/leads')} />
               <Item href="/crm/pipeline" icon={<Columns3 size={18} />} label="Pipeline" active={pathname?.startsWith('/crm/pipeline') || pathname?.startsWith('/crm/deals')} />
@@ -301,6 +339,7 @@ function ModuleNavSections({ pathname, hasRole }: NavCtx) {
           )}
           {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'CUSTOMER_SERVICE', 'SALES_REP']) && (
             <>
+              <NavSubHeader label="Customer Service" />
               <Item href="/crm/tickets" icon={<MessageSquare size={18} />} label="Tickets" active={pathname?.startsWith('/crm/tickets')} />
               {hasRole(['ADMIN', 'SUPER_ADMIN', 'CS_AGENT', 'CUSTOMER_SERVICE']) && (
                 <Item href="/crm/canned-responses" icon={<FileText size={18} />} label="Canned Responses" active={pathname?.startsWith('/crm/canned-responses')} />
@@ -309,7 +348,8 @@ function ModuleNavSections({ pathname, hasRole }: NavCtx) {
           )}
           {hasRole(['ADMIN', 'SUPER_ADMIN']) && (
             <>
-              <Item href="/crm/customer-tiers" icon={<Star size={18} />} label="Customer Tiers" active={pathname?.startsWith('/crm/customer-tiers')} />
+              <NavSubHeader label="Settings & Configuration" />
+              {/* Soft-hidden: Customer Tiers page remains intact & reachable by direct URL */}
               <Item href="/crm/integrations" icon={<Plug size={18} />} label="Integrations" active={pathname?.startsWith('/crm/integrations')} />
               <Item href="/crm/settings/pipelines" icon={<Settings size={18} />} label="Settings" active={pathname?.startsWith('/crm/settings')} />
             </>

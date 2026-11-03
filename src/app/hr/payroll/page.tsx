@@ -242,21 +242,51 @@ export default function PayrollPage() {
             <>
               <RichDataTable columns={runColumns} data={runs} searchPlaceholder="Search runs…" />
               {selectedRun && (
-                <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
-                  <div className="px-5 py-3 border-b border-border/40 flex justify-between">
-                    <span className="font-semibold text-sm">Payroll lines</span>
-                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSelectedRun(null)}>Close</button>
-                  </div>
-                  {lines.length === 0 && <div className="p-6 text-sm text-muted-foreground">No lines for this run.</div>}
-                  {lines.map((l: any) => (
-                    <div key={l.id} className="px-5 py-3 border-b border-border/30 last:border-0 text-sm grid grid-cols-2 md:grid-cols-5 gap-2">
-                      <div className="font-medium">{employeeName(l.employee)}</div>
-                      <div>Gross {formatMoney(l.grossPay)}</div>
-                      <div>PAYE {formatMoney(l.taxDeduction)}</div>
-                      <div>NI {formatMoney(l.nationalInsurance)}</div>
-                      <div>Pension {formatMoney(l.pensionDeduction)}</div>
+                <section className="glass-panel rounded-2xl border border-border/50 overflow-hidden mt-6">
+                  <div className="px-5 py-4 border-b border-border/40 flex items-center justify-between">
+                    <div>
+                      <span className="font-semibold text-sm">Payroll Run Breakdown</span>
+                      <span className="text-xs text-muted-foreground ml-2">({lines.length} employee lines)</span>
                     </div>
-                  ))}
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground font-medium" onClick={() => setSelectedRun(null)}>Close</button>
+                  </div>
+                  {lines.length === 0 ? (
+                    <div className="p-6 text-sm text-muted-foreground">No lines for this run.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-muted/40 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                          <tr>
+                            <th className="px-5 py-3">Employee</th>
+                            <th className="px-5 py-3">Gross Pay</th>
+                            <th className="px-5 py-3">PAYE Tax</th>
+                            <th className="px-5 py-3">Employee NI</th>
+                            <th className="px-5 py-3">Pension (5%)</th>
+                            <th className="px-5 py-3">Net Pay</th>
+                            <th className="px-5 py-3">Employer Costs</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/20">
+                          {lines.map((l: any) => (
+                            <tr key={l.id} className="hover:bg-muted/20">
+                              <td className="px-5 py-3.5 font-medium">
+                                <div>{employeeName(l.employee)}</div>
+                                <div className="text-xs text-muted-foreground">{l.employee?.jobTitle || l.notes || '—'}</div>
+                              </td>
+                              <td className="px-5 py-3.5 font-medium">{formatMoney(l.grossPay)}</td>
+                              <td className="px-5 py-3.5 text-rose-600 font-mono">-{formatMoney(l.taxDeduction)}</td>
+                              <td className="px-5 py-3.5 text-rose-600 font-mono">-{formatMoney(l.nationalInsurance)}</td>
+                              <td className="px-5 py-3.5 text-rose-600 font-mono">-{formatMoney(l.pensionDeduction)}</td>
+                              <td className="px-5 py-3.5 font-bold text-[#D4A017]">{formatMoney(l.netPay ?? (Number(l.grossPay) - Number(l.taxDeduction || 0) - Number(l.nationalInsurance || 0) - Number(l.pensionDeduction || 0)))}</td>
+                              <td className="px-5 py-3.5 text-xs text-muted-foreground">
+                                NI: {formatMoney(l.employerNi)} · Pen: {formatMoney(l.employerPension)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </section>
               )}
             </>
@@ -266,14 +296,21 @@ export default function PayrollPage() {
             <div className="glass-panel rounded-2xl border border-border/50 overflow-hidden">
               {payslips.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">No payslips yet.</div>}
               {payslips.map((p: any) => (
-                <div key={p.id} className="px-5 py-3 border-b border-border/30 last:border-0 flex justify-between gap-3 text-sm">
+                <div key={p.id} className="px-5 py-4 border-b border-border/30 last:border-0 flex items-center justify-between gap-3 text-sm">
                   <div>
-                    <div className="font-medium">{employeeName(p.employee)}</div>
-                    <div className="text-xs text-muted-foreground">{p.periodLabel || p.payrollRun?.payrollNumber || '—'}</div>
+                    <div className="font-semibold text-base">{employeeName(p.employee)}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {p.periodLabel || (p.payPeriodStart ? `${formatDate(p.payPeriodStart)} – ${formatDate(p.payPeriodEnd)} (${p.taxYear || '2026/27'})` : p.payrollRun?.payrollNumber || 'Monthly Period')}
+                      {p.grossPay && <span className="ml-2 font-medium">· Gross {formatMoney(p.grossPay)}</span>}
+                    </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold text-[#D4A017]">{formatMoney(p.netPay ?? p.net)}</div>
-                    {p.payslipUrl && <a href={p.payslipUrl} target="_blank" rel="noreferrer" className="text-xs text-[#D4A017] hover:underline">Open</a>}
+                    <div className="font-bold text-base text-[#D4A017]">{formatMoney(p.netPay ?? p.net)}</div>
+                    {(p.documentUrl || p.payslipUrl) && (
+                      <a href={p.documentUrl || p.payslipUrl} target="_blank" rel="noreferrer" className="text-xs text-[#D4A017] font-semibold hover:underline inline-flex items-center gap-1 mt-0.5">
+                        Download / View Payslip →
+                      </a>
+                    )}
                   </div>
                 </div>
               ))}

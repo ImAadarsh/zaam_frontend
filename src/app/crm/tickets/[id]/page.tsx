@@ -1,10 +1,19 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { getTicket, addTicketMessage, assignTicket, listCannedResponses, incrementCannedResponseUsage } from '@/lib/api';
+import {
+    getTicket,
+    addTicketMessage,
+    assignTicket,
+    listCannedResponses,
+    incrementCannedResponseUsage,
+    listCrmAssignableUsers
+} from '@/lib/api';
+import { displayName, crmApiError } from '@/lib/crm-utils';
+import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 import { toast } from 'sonner';
 import {
     MessageSquare,
@@ -36,6 +45,13 @@ export default function TicketDetailPage() {
     const [isInternal, setIsInternal] = useState(false);
     const [cannedResponses, setCannedResponses] = useState<any[]>([]);
     const [showReplyForm, setShowReplyForm] = useState(true);
+
+    const [assignOpen, setAssignOpen] = useState(false);
+    const [assignableUsers, setAssignableUsers] = useState<any[]>([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    const [selectedAssignee, setSelectedAssignee] = useState('');
+    const [assignNotes, setAssignNotes] = useState('');
+    const [assigning, setAssigning] = useState(false);
 
     useEffect(() => {
         const s = getSession();
@@ -106,6 +122,65 @@ export default function TicketDetailPage() {
         }
     }
 
+    const orgId = ticket?.organizationId || ticket?.organization?.id || getSession()?.user?.organizationId;
+
+    const loadAssignableUsers = useCallback(async () => {
+        if (!orgId) return;
+        setLoadingUsers(true);
+        try {
+            const res = await listCrmAssignableUsers({ organizationId: orgId });
+            setAssignableUsers(res.data || []);
+        } catch (err) {
+            console.error('Failed to load assignable users', err);
+            toast.error('Failed to load staff list');
+        } finally {
+            setLoadingUsers(false);
+        }
+    }, [orgId]);
+
+    function openAssignModal() {
+        const currentAssigneeId = ticket?.assignedTo?.id || ticket?.assignedToId;
+        setSelectedAssignee(currentAssigneeId ? String(currentAssigneeId) : '');
+        setAssignNotes('');
+        setAssignOpen(true);
+        void loadAssignableUsers();
+    }
+
+    async function handleAssign(e: React.FormEvent) {
+        e.preventDefault();
+        if (!selectedAssignee) {
+            toast.error('Please select an agent to assign');
+            return;
+        }
+
+        setAssigning(true);
+        try {
+            const res = await assignTicket(id as string, {
+                assignedTo: selectedAssignee,
+                notes: assignNotes.trim() || undefined
+            });
+
+            const assignedUser = assignableUsers.find((u) => String(u.id) === String(selectedAssignee));
+            setTicket((prev: any) => ({
+                ...prev,
+                assignedTo: assignedUser || res.data?.assignedTo || prev.assignedTo,
+                status: prev.status === 'new' ? 'open' : prev.status
+            }));
+
+            toast.success(
+                assignedUser
+                    ? `Ticket assigned to ${displayName(assignedUser)}`
+                    : 'Ticket assigned successfully'
+            );
+            setAssignOpen(false);
+            setAssignNotes('');
+        } catch (err) {
+            toast.error(crmApiError(err, 'Failed to assign ticket'));
+        } finally {
+            setAssigning(false);
+        }
+    }
+
     if (loading) {
         return (
             <div className="min-h-screen app-surface flex items-center justify-center">
@@ -145,7 +220,11 @@ export default function TicketDetailPage() {
                 <Header
                     title={`Ticket #${ticket.ticketNumber} - ${ticket.subject}`}
                     actions={canAssign ? [
-                        { label: 'Assign', onClick: () => { }, icon: <UserPlus size={18} /> }
+                        {
+                            label: ticket.assignedTo ? 'Reassign' : 'Assign',
+                            onClick: openAssignModal,
+                            icon: <UserPlus size={18} />
+                        }
                     ] : []}
                 />
 
@@ -322,15 +401,54 @@ export default function TicketDetailPage() {
                             <div className="h-px bg-border" />
 
                             <div className="space-y-4">
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-xs text-muted-foreground">Assigned To</span>
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-6 w-6 rounded-full bg-primary/20 text-primary flex items-center justify-center">
-                                            <User size={12} />
+                                <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Assigned Agent</span>
+                                        {canAssign && (
+                                            <button
+                                                type="button"
+                                                onClick={openAssignModal}
+                                                className="text-xs font-semibold text-[#D4A017] hover:text-[#c49415] hover:underline transition"
+                                            >
+                                                {ticket.assignedTo ? 'Change' : 'Assign'}
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/40 border border-border/50">
+                                        <div className="h-8 w-8 rounded-full bg-[#D4A017]/15 text-[#D4A017] flex items-center justify-center font-bold text-xs ring-1 ring-[#D4A017]/30">
+                                            {ticket.assignedTo?.firstName?.[0]?.toUpperCase() || <User size={14} />}
                                         </div>
-                                        <span className="text-sm font-medium text-foreground">{ticket.assignedAgent?.firstName || 'Unassigned'}</span>
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-sm font-semibold text-foreground truncate">
+                                                {displayName(ticket.assignedTo) !== '—'
+                                                    ? displayName(ticket.assignedTo)
+                                                    : ticket.assignedAgent?.firstName || 'Unassigned'}
+                                            </span>
+                                            <span className="text-[11px] text-muted-foreground truncate">
+                                                {ticket.assignedTo?.email || (ticket.assignedTo ? 'Staff' : 'Not assigned to any agent yet')}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
+
+                                {(ticket.assignments || []).length > 0 && (
+                                    <div className="pt-2">
+                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-2">Assignment History</span>
+                                        <ul className="space-y-2 text-xs text-muted-foreground">
+                                            {ticket.assignments.map((a: any) => (
+                                                <li key={a.id} className="flex flex-col border-l-2 border-[#D4A017]/40 pl-2.5 py-0.5">
+                                                    <div className="flex items-center justify-between text-foreground font-medium">
+                                                        <span>{displayName(a.assignedTo)}</span>
+                                                        <span className="text-[10px] text-muted-foreground font-normal">
+                                                            {a.assignedAt ? new Date(a.assignedAt).toLocaleDateString() : '—'}
+                                                        </span>
+                                                    </div>
+                                                    {a.notes && <p className="text-[11px] text-muted-foreground mt-0.5 italic">"{a.notes}"</p>}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -353,6 +471,64 @@ export default function TicketDetailPage() {
                     </div>
                 </main>
             </div>
+
+            <CrmModal
+                open={assignOpen}
+                onClose={() => setAssignOpen(false)}
+                title={ticket.assignedTo ? "Reassign Support Ticket" : "Assign Support Ticket"}
+                icon={UserPlus}
+            >
+                <form onSubmit={handleAssign} className="space-y-4">
+                    <CrmField
+                        label="Assign Agent"
+                        hint="Only users with CRM & Customer Service permissions in your organization are shown."
+                    >
+                        {loadingUsers ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground italic py-2">
+                                <div className="h-4 w-4 border-2 border-[#D4A017] border-t-transparent rounded-full animate-spin" />
+                                Loading CRM staff…
+                            </div>
+                        ) : assignableUsers.length === 0 ? (
+                            <div className="text-sm text-amber-500 py-2">No assignable CRM staff found for this organization.</div>
+                        ) : (
+                            <select
+                                required
+                                value={selectedAssignee}
+                                onChange={(e) => setSelectedAssignee(e.target.value)}
+                                className={crmInputClass}
+                            >
+                                <option value="">Select an agent…</option>
+                                {assignableUsers.map((u) => {
+                                    const roleBadge = u.roleCode || u.role || 'Staff';
+                                    const name = displayName(u);
+                                    return (
+                                        <option key={u.id} value={u.id}>
+                                            {name !== '—' ? `${name} (${roleBadge}) - ${u.email}` : `${u.email} (${roleBadge})`}
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                        )}
+                    </CrmField>
+
+                    <CrmField label="Internal Assignment Note (Optional)" hint="Add context, instructions, or priority notes for the agent">
+                        <textarea
+                            rows={3}
+                            value={assignNotes}
+                            onChange={(e) => setAssignNotes(e.target.value)}
+                            className={crmTextareaClass}
+                            placeholder="e.g. Customer has VIP tier; please call back regarding product delay."
+                            maxLength={500}
+                        />
+                    </CrmField>
+
+                    <CrmModalActions
+                        onCancel={() => setAssignOpen(false)}
+                        submitLabel={ticket.assignedTo ? "Reassign Ticket" : "Assign Ticket"}
+                        submitting={assigning}
+                    />
+                </form>
+            </CrmModal>
         </div>
     );
 }

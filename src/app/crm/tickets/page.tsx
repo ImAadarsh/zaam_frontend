@@ -4,14 +4,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { listTickets, listCustomers, createTicket } from '@/lib/api';
+import { listTickets, listCustomers, createTicket, assignTicket, listCrmAssignableUsers } from '@/lib/api';
 import { RichDataTable } from '@/components/rich-data-table';
 import { FilterBar, type FilterField } from '@/components/filter-bar';
-import { Plus, Eye, Send, MessageSquare } from 'lucide-react';
+import { Plus, Eye, Send, MessageSquare, User } from 'lucide-react';
 import { ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { crmApiError } from '@/lib/crm-utils';
+import { crmApiError, displayName } from '@/lib/crm-utils';
 import { useApiAccess } from '@/hooks/use-api-access';
 import { CrmModal, CrmField, CrmModalActions, crmInputClass, crmTextareaClass } from '@/components/crm/crm-modal';
 import { CrmCustomerSelect, customerOptionFromRecord } from '@/components/crm/crm-customer-select';
@@ -33,6 +33,7 @@ function TicketsPageInner() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(searchParams.get('new') === 'true');
   const [customers, setCustomers] = useState<any[]>([]);
+  const [assignableUsers, setAssignableUsers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -43,6 +44,7 @@ function TicketsPageInner() {
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     category: 'general' as any,
     channel: 'web_form' as any,
+    assignedTo: '',
   });
 
   const customerOptions = useMemo(() => customers.map(customerOptionFromRecord), [customers]);
@@ -50,25 +52,40 @@ function TicketsPageInner() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [ticketsRes, customersRes] = await Promise.all([
+      const s = getSession();
+      const orgId = s?.user?.organizationId;
+      const [ticketsRes, customersRes, usersRes] = await Promise.all([
         listTickets({
           status: filters.status || undefined,
           priority: filters.priority || undefined,
           category: filters.category || undefined,
         }),
         listCustomers(),
+        orgId ? listCrmAssignableUsers({ organizationId: orgId }).catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
       let rows = ticketsRes.data || [];
       if (search.trim()) {
         const q = search.trim().toLowerCase();
         rows = rows.filter((t: any) =>
-          [t.ticketNumber, t.subject, t.status, t.priority, t.customer?.firstName, t.customer?.lastName, t.customer?.email]
+          [
+            t.ticketNumber,
+            t.subject,
+            t.status,
+            t.priority,
+            t.customer?.firstName,
+            t.customer?.lastName,
+            t.customer?.email,
+            t.assignedTo?.firstName,
+            t.assignedTo?.lastName,
+            t.assignedTo?.email
+          ]
             .filter(Boolean)
             .some((v) => String(v).toLowerCase().includes(q))
         );
       }
       setTickets(rows);
       setCustomers(customersRes.data || []);
+      setAssignableUsers(usersRes.data || []);
     } catch (err) {
       toast.error(crmApiError(err, 'Failed to load tickets'));
     } finally {
@@ -97,9 +114,23 @@ function TicketsPageInner() {
     setSaving(true);
     try {
       const res = await createTicket({
-        ...form,
         organizationId: s.user.organizationId,
+        customerId: form.customerId,
+        subject: form.subject,
+        description: form.description,
+        priority: form.priority,
+        category: form.category,
+        channel: form.channel,
       });
+
+      if (form.assignedTo && res.data?.id) {
+        try {
+          await assignTicket(res.data.id, { assignedTo: form.assignedTo });
+        } catch {
+          // ticket created, user can retry assignment on detail page
+        }
+      }
+
       setShowCreate(false);
       setForm({
         customerId: '',
@@ -108,6 +139,7 @@ function TicketsPageInner() {
         priority: 'medium',
         category: 'general',
         channel: 'web_form',
+        assignedTo: '',
       });
       toast.success('Ticket created successfully');
       router.push(`/crm/tickets/${res.data.id}`);
@@ -202,6 +234,24 @@ function TicketsPageInner() {
             val === 'new' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-500 border-blue-500/20' :
             'bg-muted text-muted-foreground border-border'
           }`}>{val.replace(/_/g, ' ')}</span>
+        );
+      },
+    },
+    {
+      id: 'assignedTo',
+      header: 'Assigned To',
+      cell: (info) => {
+        const a = info.row.original.assignedTo;
+        if (!a) {
+          return <span className="text-xs text-muted-foreground/60 italic">Unassigned</span>;
+        }
+        return (
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-[#D4A017]/15 text-[#D4A017] flex items-center justify-center text-[10px] font-bold ring-1 ring-[#D4A017]/25">
+              {a.firstName?.[0]?.toUpperCase() || <User size={12} />}
+            </div>
+            <span className="text-sm font-medium text-foreground">{displayName(a)}</span>
+          </div>
         );
       },
     },
@@ -325,6 +375,27 @@ function TicketsPageInner() {
               placeholder="Provide detailed information…"
             />
           </CrmField>
+
+          {assignableUsers.length > 0 && (
+            <CrmField label="Assign Agent (Optional)" hint="Only users with CRM & Customer Service access are shown">
+              <select
+                value={form.assignedTo}
+                onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
+                className={crmInputClass}
+              >
+                <option value="">Unassigned (General Queue)</option>
+                {assignableUsers.map((u) => {
+                  const roleBadge = u.roleCode || u.role || 'Staff';
+                  const name = displayName(u);
+                  return (
+                    <option key={u.id} value={u.id}>
+                      {name !== '—' ? `${name} (${roleBadge}) - ${u.email}` : `${u.email} (${roleBadge})`}
+                    </option>
+                  );
+                })}
+              </select>
+            </CrmField>
+          )}
 
           <CrmModalActions
             onCancel={() => setShowCreate(false)}

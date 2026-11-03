@@ -573,56 +573,6 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "finance.chart-of-accounts",
-        "path": "/finance/chart-of-accounts",
-        "label": "Chart of Accounts",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "FINANCE"
-        ]
-      },
-      {
-        "key": "finance.ledger-accounts",
-        "path": "/finance/ledger-accounts",
-        "label": "Ledger Accounts",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "FINANCE"
-        ]
-      },
-      {
-        "key": "finance.cost-centers",
-        "path": "/finance/cost-centers",
-        "label": "Cost Centers",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "FINANCE"
-        ]
-      },
-      {
-        "key": "finance.fiscal-periods",
-        "path": "/finance/fiscal-periods",
-        "label": "Fiscal Periods",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "FINANCE"
-        ]
-      },
-      {
-        "key": "finance.journal-entries",
-        "path": "/finance/journal-entries",
-        "label": "Journal Entries",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "FINANCE"
-        ]
-      },
-      {
         "key": "finance.bank-accounts",
         "path": "/finance/bank-accounts",
         "label": "Bank Accounts",
@@ -643,9 +593,49 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "finance.vat-returns",
-        "path": "/finance/vat-returns",
-        "label": "VAT Returns",
+        "key": "finance.chart-of-accounts",
+        "path": "/finance/chart-of-accounts",
+        "label": "Chart of Accounts",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "FINANCE"
+        ]
+      },
+      {
+        "key": "finance.ledger-accounts",
+        "path": "/finance/ledger-accounts",
+        "label": "Ledger Accounts",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "FINANCE"
+        ]
+      },
+      {
+        "key": "finance.journal-entries",
+        "path": "/finance/journal-entries",
+        "label": "Journal Entries",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "FINANCE"
+        ]
+      },
+      {
+        "key": "finance.fiscal-periods",
+        "path": "/finance/fiscal-periods",
+        "label": "Fiscal Periods",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "FINANCE"
+        ]
+      },
+      {
+        "key": "finance.cost-centers",
+        "path": "/finance/cost-centers",
+        "label": "Cost Centers",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -656,6 +646,16 @@ export const NAV_MODULES: NavModule[] = [
         "key": "finance.budget-lines",
         "path": "/finance/budget-lines",
         "label": "Budget Lines",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "FINANCE"
+        ]
+      },
+      {
+        "key": "finance.vat-returns",
+        "path": "/finance/vat-returns",
+        "label": "VAT Returns",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -679,20 +679,9 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "accounting.sales",
-        "path": "/accounting/sales",
-        "label": "Sales / Invoicing",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "FINANCE",
-          "ACCOUNTANT"
-        ]
-      },
-      {
-        "key": "accounting.purchases",
-        "path": "/accounting/purchases",
-        "label": "Purchases / Bills",
+        "key": "accounting.ledger",
+        "path": "/accounting/ledger",
+        "label": "General Ledger & Journals",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -703,7 +692,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "accounting.banking",
         "path": "/accounting/banking",
-        "label": "Banking",
+        "label": "Banking & Reconciliation",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -712,9 +701,9 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "accounting.ledger",
-        "path": "/accounting/ledger",
-        "label": "Accounting",
+        "key": "accounting.sales",
+        "path": "/accounting/sales",
+        "label": "Sales Invoices",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -723,20 +712,9 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "accounting.vat",
-        "path": "/accounting/vat",
-        "label": "VAT",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "FINANCE",
-          "ACCOUNTANT"
-        ]
-      },
-      {
-        "key": "accounting.payroll",
-        "path": "/accounting/payroll",
-        "label": "Payroll",
+        "key": "accounting.purchases",
+        "path": "/accounting/purchases",
+        "label": "Purchases & Bills",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -756,6 +734,28 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
+        "key": "accounting.vat",
+        "path": "/accounting/vat",
+        "label": "VAT (MTD Return)",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "FINANCE",
+          "ACCOUNTANT"
+        ]
+      },
+      {
+        "key": "accounting.tax",
+        "path": "/accounting/tax",
+        "label": "Corporation Tax",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "FINANCE",
+          "ACCOUNTANT"
+        ]
+      },
+      {
         "key": "accounting.fixed-assets",
         "path": "/accounting/fixed-assets",
         "label": "Fixed Assets",
@@ -767,9 +767,9 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "accounting.tax",
-        "path": "/accounting/tax",
-        "label": "Tax",
+        "key": "accounting.payroll",
+        "path": "/accounting/payroll",
+        "label": "Payroll Ledger Posting",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -780,7 +780,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "accounting.reporting",
         "path": "/accounting/reporting",
-        "label": "Reporting",
+        "label": "Financial Reporting (P&L)",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -791,7 +791,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "accounting.documents",
         "path": "/accounting/documents",
-        "label": "Documents",
+        "label": "Receipts & Documents",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -813,7 +813,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         "key": "accounting.settings",
         "path": "/accounting/settings",
-        "label": "Settings",
+        "label": "Accounting Settings",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -850,76 +850,9 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "hr.immigration",
-        "path": "/hr/immigration",
-        "label": "Immigration & RTW",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "HR_MANAGER",
-          "HR_ADMIN"
-        ]
-      },
-      {
-        "key": "hr.leave",
-        "path": "/hr/leave",
-        "label": "Leave",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "HR_MANAGER",
-          "HR_ADMIN"
-        ]
-      },
-      {
-        "key": "hr.attendance",
-        "path": "/hr/attendance",
-        "label": "Attendance",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "HR_MANAGER",
-          "HR_ADMIN"
-        ]
-      },
-      {
-        "key": "hr.payroll",
-        "path": "/hr/payroll",
-        "label": "Payroll",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "FINANCE",
-          "HR_MANAGER",
-          "HR_ADMIN"
-        ]
-      },
-      {
-        "key": "hr.pension",
-        "path": "/hr/pension",
-        "label": "Pension",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "HR_MANAGER",
-          "HR_ADMIN"
-        ]
-      },
-      {
-        "key": "hr.documents",
-        "path": "/hr/documents",
-        "label": "Documents",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN",
-          "HR_MANAGER",
-          "HR_ADMIN"
-        ]
-      },
-      {
         "key": "hr.recruitment",
         "path": "/hr/recruitment",
-        "label": "Recruitment",
+        "label": "Recruitment & Hiring",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -939,14 +872,76 @@ export const NAV_MODULES: NavModule[] = [
         ]
       },
       {
-        "key": "hr.self-service",
-        "path": "/hr/self-service",
-        "label": "Self-service"
+        "key": "hr.documents",
+        "path": "/hr/documents",
+        "label": "Documents",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "HR_MANAGER",
+          "HR_ADMIN"
+        ]
+      },
+      {
+        "key": "hr.attendance",
+        "path": "/hr/attendance",
+        "label": "Attendance & Clocking",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "HR_MANAGER",
+          "HR_ADMIN"
+        ]
+      },
+      {
+        "key": "hr.leave",
+        "path": "/hr/leave",
+        "label": "Leave & Absence",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "HR_MANAGER",
+          "HR_ADMIN"
+        ]
+      },
+      {
+        "key": "hr.payroll",
+        "path": "/hr/payroll",
+        "label": "Payroll Runs & Slips",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "FINANCE",
+          "HR_MANAGER",
+          "HR_ADMIN"
+        ]
+      },
+      {
+        "key": "hr.pension",
+        "path": "/hr/pension",
+        "label": "Workplace Pension",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "HR_MANAGER",
+          "HR_ADMIN"
+        ]
+      },
+      {
+        "key": "hr.immigration",
+        "path": "/hr/immigration",
+        "label": "Immigration & RTW",
+        "roles": [
+          "ADMIN",
+          "SUPER_ADMIN",
+          "HR_MANAGER",
+          "HR_ADMIN"
+        ]
       },
       {
         "key": "hr.reports",
         "path": "/hr/reports",
-        "label": "Reports & Compliance",
+        "label": "Reports & Analytics",
         "roles": [
           "ADMIN",
           "SUPER_ADMIN",
@@ -954,6 +949,11 @@ export const NAV_MODULES: NavModule[] = [
           "HR_ADMIN",
           "FINANCE"
         ]
+      },
+      {
+        "key": "hr.self-service",
+        "path": "/hr/self-service",
+        "label": "Self-Service Portal"
       }
     ]
   },
@@ -1184,15 +1184,6 @@ export const NAV_MODULES: NavModule[] = [
           "SUPER_ADMIN",
           "CS_AGENT",
           "CUSTOMER_SERVICE"
-        ]
-      },
-      {
-        "key": "crm.customer-tiers",
-        "path": "/crm/customer-tiers",
-        "label": "Customer Tiers",
-        "roles": [
-          "ADMIN",
-          "SUPER_ADMIN"
         ]
       },
       {

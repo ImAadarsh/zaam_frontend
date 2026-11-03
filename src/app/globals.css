@@ -110,6 +110,14 @@
   @apply bg-card/80 backdrop-blur-xl rounded-card border border-border/50 shadow-card transition-all duration-300 hover:shadow-elev-2;
 }
 
+.glass-panel {
+  @apply bg-card/80 backdrop-blur-xl rounded-2xl border border-border/50 shadow-sm;
+}
+
+.glass-card {
+  @apply bg-card backdrop-blur-xl rounded-2xl border border-border/60 shadow-xl;
+}
+
 .input {
   @apply flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200;
 }

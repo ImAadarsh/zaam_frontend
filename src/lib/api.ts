@@ -7344,6 +7344,15 @@ export async function updateApplicant(id: string, payload: Record<string, any>) 
   return data as { data: any };
 }
 
+export async function convertApplicantToEmployee(id: string, payload: Record<string, any>) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/hr/applicants/${id}/convert-to-employee`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any; message?: string };
+}
+
 export async function listOnboardingChecklists(params?: {
   employeeId?: string;
   organizationId?: string;
@@ -7418,6 +7427,78 @@ export async function listHrMeDocuments(params?: { page?: number; limit?: number
     { headers: authHeaders() }
   );
   return data as { data: any[]; meta?: any };
+}
+
+export async function getHrMeImmigration() {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/me/immigration`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function getHrMeOnboarding() {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/me/onboarding`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[] };
+}
+
+export async function updateHrMeOnboarding(id: string, payload: { isDone: boolean }) {
+  const { data } = await axios.patch(
+    `${API_BASE}/api/hr/me/onboarding/${id}`,
+    payload,
+    { headers: authHeaders() }
+  );
+  return data as { data: any };
+}
+
+export async function getHrMeAttendance() {
+  const { data } = await axios.get(
+    `${API_BASE}/api/hr/me/attendance`,
+    { headers: authHeaders() }
+  );
+  return data as { data: any[]; settings?: { autoClockOutHours: number; standardShiftHours: number; autoClockOutEnabled: boolean; gracePeriodMinutes: number } };
+}
+
+export async function clockHrMeAttendance(payload?: { action?: 'clock_in' | 'clock_out'; autoClockOut?: boolean }) {
+  const { data } = await axios.post(
+    `${API_BASE}/api/hr/me/attendance/clock`,
+    payload || {},
+    { headers: authHeaders() }
+  );
+  return data as { data: any; settings?: { autoClockOutHours: number; standardShiftHours: number; autoClockOutEnabled: boolean; gracePeriodMinutes: number } };
+}
+
+export async function getHrAttendanceSettings() {
+  const { data } = await axios.get(`${API_BASE}/api/hr/attendance/settings`, { headers: authHeaders() });
+  return data as { data: { autoClockOutHours: number; standardShiftHours: number; autoClockOutEnabled: boolean; gracePeriodMinutes: number } };
+}
+
+export async function updateHrAttendanceSettings(payload: {
+  autoClockOutHours?: number;
+  standardShiftHours?: number;
+  autoClockOutEnabled?: boolean;
+  gracePeriodMinutes?: number;
+}) {
+  const { data } = await axios.patch(`${API_BASE}/api/hr/attendance/settings`, payload, { headers: authHeaders() });
+  return data as { data: { autoClockOutHours: number; standardShiftHours: number; autoClockOutEnabled: boolean; gracePeriodMinutes: number } };
+}
+
+export async function listPublicJobs() {
+  const { data } = await axios.get(`${API_BASE}/api/hr/public/jobs`);
+  return data as { data: any[] };
+}
+
+export async function getPublicJob(id: string) {
+  const { data } = await axios.get(`${API_BASE}/api/hr/public/jobs/${id}`);
+  return data as { data: any };
+}
+
+export async function applyPublicJob(id: string, payload: Record<string, any>) {
+  const { data } = await axios.post(`${API_BASE}/api/hr/public/jobs/${id}/apply`, payload);
+  return data as { data: any; message?: string };
 }
 
 /** UK HR attendance (`hr_attendance`) — preferred over legacy `/time-entries`. */

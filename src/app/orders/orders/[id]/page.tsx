@@ -593,6 +593,52 @@ export default function OrderDetailPage() {
                   ))}
                 </div>
               )}
+              {/* Financial Totals */}
+              <div className="mt-4 pt-4 border-t border-border flex justify-end">
+                <div className="w-full max-w-xs space-y-1.5 text-sm">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span className="font-medium text-foreground">
+                      {order.currency || 'GBP'}{' '}
+                      {parseFloat(String(order.subtotal || total || '0')).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {parseFloat(String(order.discountAmount || '0')) > 0 && (
+                    <div className="flex justify-between text-emerald-500 font-medium">
+                      <span>Discount</span>
+                      <span>
+                        −{order.currency || 'GBP'}{' '}
+                        {parseFloat(String(order.discountAmount)).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                  {parseFloat(String(order.shippingAmount || '0')) > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Shipping</span>
+                      <span className="font-medium text-foreground">
+                        {order.currency || 'GBP'}{' '}
+                        {parseFloat(String(order.shippingAmount)).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                  {parseFloat(String(order.taxAmount || '0')) > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>VAT</span>
+                      <span className="font-medium text-foreground">
+                        {order.currency || 'GBP'}{' '}
+                        {parseFloat(String(order.taxAmount)).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-2 border-t border-border font-bold text-base text-foreground">
+                    <span>Total</span>
+                    <span className="text-[#D4A017]">
+                      {order.currency || 'GBP'}{' '}
+                      {parseFloat(String(order.total || total || '0')).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Addresses */}
